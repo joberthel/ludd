@@ -6,7 +6,7 @@ import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initProject } from '../../store/project-store.js'
+import { initProject, slugifyProjectName } from '../../store/project-store.js'
 import ProjectInit from './init.js'
 
 describe('project init command', () => {
@@ -70,7 +70,7 @@ describe('project init command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.red('[ERROR]'))
-      expect(frame).toContain('already initialized as project "Existing Project"')
+      expect(frame.replace(/\s+/g, ' ')).toContain('already initialized as project "Existing Project"')
       expect(frame).not.toContain('Project name:')
       expect(process.exitCode).toBe(1)
     })
@@ -94,13 +94,14 @@ describe('project init command', () => {
     stdin.write('\r')
 
     const folderName = path.basename(path.resolve(tempWorkDir))
+    const expectedSlug = slugifyProjectName(folderName)
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })
 
-    const projectFile = path.join(tempProjectsDir, folderName, 'project.json')
+    const projectFile = path.join(tempProjectsDir, expectedSlug, 'project.json')
     const content = JSON.parse(await readFile(projectFile, 'utf8'))
     expect(content.name).toBe(folderName)
     expect(content.description).toBe('Some description')
@@ -173,13 +174,14 @@ describe('project init command', () => {
     stdin.write('\r')
 
     const folderName = path.basename(path.resolve(tempWorkDir))
+    const expectedSlug = slugifyProjectName(folderName)
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })
 
-    const projectFile = path.join(tempProjectsDir, folderName, 'project.json')
+    const projectFile = path.join(tempProjectsDir, expectedSlug, 'project.json')
     const content = JSON.parse(await readFile(projectFile, 'utf8'))
     expect(content.name).toBe(folderName)
     expect(content.description).toBe('desc')
