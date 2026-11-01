@@ -59,7 +59,7 @@ describe('config write command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.red('[ERROR]'))
-      expect(frame).toContain('dummyNumber: Expected number, received string')
+      expect(frame).toContain('dummyNumber: Invalid input: expected number, received string')
       expect(frame).not.toContain('at ')
       expect(process.exitCode).toBe(1)
     })

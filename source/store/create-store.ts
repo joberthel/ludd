@@ -4,18 +4,18 @@ import path from 'node:path'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
 
-export interface Store<TSchema extends z.ZodTypeAny> {
+export interface Store<TSchema extends z.ZodType> {
   readonly filePath: string
   read: () => Promise<z.output<TSchema>>
   write: (data: z.input<TSchema>) => Promise<z.output<TSchema>>
   update: (updater: (current: z.output<TSchema>) => z.input<TSchema>) => Promise<z.output<TSchema>>
 }
 
-export function createStore<TSchema extends z.ZodTypeAny>(
+export function createStore<TSchema extends z.ZodType>(
   filePath: string,
   schema: TSchema,
 ): Store<TSchema> {
-  const defaultData = schema.parse({}) as z.output<TSchema>
+  const defaultData = schema.parse({})
   const adapter = new JSONFile<z.output<TSchema>>(filePath)
   const db = new Low<z.output<TSchema>>(adapter, defaultData)
 
@@ -31,10 +31,10 @@ export function createStore<TSchema extends z.ZodTypeAny>(
         return initial
       }
       await db.read()
-      return schema.parse(db.data) as z.output<TSchema>
+      return schema.parse(db.data)
     },
     async write(data) {
-      const validated = schema.parse(data) as z.output<TSchema>
+      const validated = schema.parse(data)
       await mkdir(path.dirname(filePath), { recursive: true })
       db.data = validated
       await db.write()

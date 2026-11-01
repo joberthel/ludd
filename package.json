@@ -8,7 +8,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc",
@@ -21,11 +21,12 @@
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
-    "ink": "^4.1.0",
+    "@inkjs/ui": "^2.0.0",
+    "ink": "^8.0.0",
     "lowdb": "^7.0.1",
-    "pastel": "^2.0.0",
-    "react": "^18.2.0",
-    "zod": "^3.21.4"
+    "pastel": "^4.0.1",
+    "react": "^19.3.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^10.0.0",
@@ -34,7 +35,7 @@
     "@eslint-react/eslint-plugin": "^5.28.8",
     "@sindresorhus/tsconfig": "^3.0.1",
     "@types/node": "^26.6.6",
-    "@types/react": "^18.0.32",
+    "@types/react": "^19.3.0",
     "chalk": "^6.0.1",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",

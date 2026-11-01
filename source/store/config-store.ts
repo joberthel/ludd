@@ -12,8 +12,8 @@ export const ConfigSchema = zod.object({
   dummyObject: zod.object({
     nestedString: zod.string().default('nested-hello'),
     nestedBoolean: zod.boolean().default(false),
-  }).strict().default({}),
-}).strict().default({})
+  }).strict().prefault({}),
+}).strict().prefault({})
 
 export type Config = zod.infer<typeof ConfigSchema>
 
