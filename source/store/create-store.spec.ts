@@ -103,7 +103,7 @@ describe('createStore', () => {
 
     const store = createStore(filePath, testSchema)
 
-    await expect(store.read()).rejects.toThrowError(ZodError)
+    await expect(store.read()).rejects.toThrow(ZodError)
 
     const rawAfter = await readFile(filePath, 'utf8')
     expect(rawAfter).toBe(invalidSchemaContent)
@@ -116,7 +116,7 @@ describe('createStore', () => {
     const store = createStore(filePath, testSchema)
 
     // @ts-expect-error Intentionally invalid payload for test
-    await expect(store.write({ name: 12345, count: 'bad' })).rejects.toThrowError(ZodError)
+    await expect(store.write({ name: 12345, count: 'bad' })).rejects.toThrow(ZodError)
 
     const rawAfter = await readFile(filePath, 'utf8')
     expect(JSON.parse(rawAfter)).toEqual({ name: 'original', count: 1 })

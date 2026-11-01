@@ -41,7 +41,7 @@ describe('configStore', () => {
     })
 
     it('rejects unknown root keys due to .strict()', () => {
-      expect(() => ConfigSchema.parse({ unknownField: 'test' })).toThrowError(ZodError)
+      expect(() => ConfigSchema.parse({ unknownField: 'test' })).toThrow(ZodError)
     })
 
     it('rejects unknown nested keys inside dummyObject due to .strict()', () => {
@@ -51,11 +51,11 @@ describe('configStore', () => {
           nestedBoolean: true,
           extra: 'bad',
         },
-      })).toThrowError(ZodError)
+      })).toThrow(ZodError)
     })
 
     it('rejects invalid enum values', () => {
-      expect(() => ConfigSchema.parse({ dummyEnum: 'invalid' })).toThrowError(ZodError)
+      expect(() => ConfigSchema.parse({ dummyEnum: 'invalid' })).toThrow(ZodError)
     })
   })
 
@@ -239,8 +239,8 @@ describe('configStore', () => {
 
       const diskBefore = await readFile(testConfigPath, 'utf8')
 
-      await expect(writeConfigKey(store, 'dummyNumber', 'not-a-number')).rejects.toThrowError(ZodError)
-      await expect(writeConfigKey(store, 'dummyEnum', 'invalid-enum')).rejects.toThrowError(ZodError)
+      await expect(writeConfigKey(store, 'dummyNumber', 'not-a-number')).rejects.toThrow(ZodError)
+      await expect(writeConfigKey(store, 'dummyEnum', 'invalid-enum')).rejects.toThrow(ZodError)
 
       const diskAfter = await readFile(testConfigPath, 'utf8')
       expect(diskAfter).toBe(diskBefore)
