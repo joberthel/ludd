@@ -13,9 +13,7 @@ A terminal-based (TUI) orchestrator and control plane for managing parallel back
 
 ### Global Installation
 
-```bash
-npm install --global ludd
-```
+TBD
 
 ### Local Development
 
