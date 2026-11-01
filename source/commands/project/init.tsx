@@ -16,13 +16,13 @@ export const options = zod.object({
   description: zod.string().optional().describe('Project description (prompts interactively if omitted)'),
 })
 
-type Step
-  = | 'checking'
-    | 'promptName'
-    | 'promptDescription'
-    | 'saving'
-    | 'done'
-    | 'error'
+type State
+  = | { status: 'checking' }
+    | { status: 'promptName' }
+    | { name: string, status: 'promptDescription' }
+    | { description: string, name: string, status: 'saving' }
+    | { result: InitProjectResult, status: 'done' }
+    | { message: string, status: 'error' }
 
 interface Props {
   options?: zod.infer<typeof options>
@@ -39,11 +39,7 @@ export default function ProjectInit({
   const folderName = path.basename(resolvedCwd)
   const normalizedName = cmdOptions.name?.trim()
 
-  const [step, setStep] = useState<Step>('checking')
-  const [name, setName] = useState<string>(normalizedName ?? '')
-  const [description, setDescription] = useState<string>(cmdOptions.description ?? '')
-  const [error, setError] = useState<string>()
-  const [result, setResult] = useState<InitProjectResult>()
+  const [state, setState] = useState<State>({ status: 'checking' })
 
   useEffect(() => {
     let isMounted = true
@@ -56,23 +52,30 @@ export default function ProjectInit({
 
         if (existing) {
           process.exitCode = 1
-          setError(`Directory "${resolvedCwd}" is already initialized as project "${existing.name}"`)
-          setStep('error')
+          setState({
+            status: 'error',
+            message: `Directory "${resolvedCwd}" is already initialized as project "${existing.name}"`,
+          })
           return
         }
 
         if (normalizedName !== undefined && normalizedName !== '') {
-          setName(normalizedName)
           if (cmdOptions.description !== undefined) {
-            setDescription(cmdOptions.description)
-            setStep('saving')
+            setState({
+              status: 'saving',
+              name: normalizedName,
+              description: cmdOptions.description,
+            })
           }
           else {
-            setStep('promptDescription')
+            setState({
+              status: 'promptDescription',
+              name: normalizedName,
+            })
           }
         }
         else {
-          setStep('promptName')
+          setState({ status: 'promptName' })
         }
       })
       .catch((err: unknown) => {
@@ -80,10 +83,12 @@ export default function ProjectInit({
           return
         }
         process.exitCode = 1
-        setError(err instanceof Error
-          ? err.message
-          : String(err))
-        setStep('error')
+        setState({
+          status: 'error',
+          message: err instanceof Error
+            ? err.message
+            : String(err),
+        })
       })
 
     return () => {
@@ -97,11 +102,12 @@ export default function ProjectInit({
   ])
 
   useEffect(() => {
-    if (step !== 'saving') {
+    if (state.status !== 'saving') {
       return
     }
 
     let isMounted = true
+    const { name, description } = state
 
     initProject({
       name,
@@ -112,55 +118,65 @@ export default function ProjectInit({
         if (!isMounted) {
           return
         }
-        setResult(res)
-        setStep('done')
+        setState({ status: 'done', result: res })
       })
       .catch((err: unknown) => {
         if (!isMounted) {
           return
         }
         process.exitCode = 1
-        setError(err instanceof Error
-          ? err.message
-          : String(err))
-        setStep('error')
+        setState({
+          status: 'error',
+          message: err instanceof Error
+            ? err.message
+            : String(err),
+        })
       })
 
     return () => {
       isMounted = false
     }
   }, [
-    step,
-    name,
-    description,
+    state,
     resolvedCwd,
     projectsDir,
   ])
 
   const handleNameSubmit = (value: string) => {
     const chosenName = value.trim() || folderName
-    setName(chosenName)
     if (cmdOptions.description !== undefined) {
-      setDescription(cmdOptions.description)
-      setStep('saving')
+      setState({
+        status: 'saving',
+        name: chosenName,
+        description: cmdOptions.description,
+      })
     }
     else {
-      setStep('promptDescription')
+      setState({
+        status: 'promptDescription',
+        name: chosenName,
+      })
     }
   }
 
   const handleDescriptionSubmit = (value: string) => {
-    setDescription(value.trim())
-    setStep('saving')
+    if (state.status !== 'promptDescription') {
+      return
+    }
+    setState({
+      status: 'saving',
+      name: state.name,
+      description: value.trim(),
+    })
   }
 
-  if (step === 'checking' || step === 'saving') {
+  if (state.status === 'checking' || state.status === 'saving') {
     return (
       <Box>
         <Text>
           <Text color="yellow">[RUNNING]</Text>
           {' '}
-          {step === 'checking'
+          {state.status === 'checking'
             ? 'Checking project status...'
             : 'Initializing project...'}
         </Text>
@@ -168,19 +184,19 @@ export default function ProjectInit({
     )
   }
 
-  if (step === 'error') {
+  if (state.status === 'error') {
     return (
       <Box>
         <Text>
           <Text color="red">[ERROR]</Text>
           {' '}
-          {error}
+          {state.message}
         </Text>
       </Box>
     )
   }
 
-  if (step === 'promptName') {
+  if (state.status === 'promptName') {
     return (
       <Box flexDirection="column">
         <Box>
@@ -194,12 +210,12 @@ export default function ProjectInit({
     )
   }
 
-  if (step === 'promptDescription') {
+  if (state.status === 'promptDescription') {
     return (
       <Box flexDirection="column">
         <Box>
           <Text>Project name: </Text>
-          <Text color="cyan">{name}</Text>
+          <Text color="cyan">{state.name}</Text>
         </Box>
         <Box>
           <Text>Project description: </Text>
@@ -212,25 +228,25 @@ export default function ProjectInit({
     )
   }
 
-  if (!result) {
-    return null
+  if (state.status === 'done') {
+    return (
+      <Box flexDirection="column">
+        <Box>
+          <Text>
+            <Text color="green">[OK]</Text>
+            {' '}
+            Initialized project
+            {' '}
+            {state.result.slug}
+            {' '}
+            in
+            {' '}
+            {state.result.filePath}
+          </Text>
+        </Box>
+      </Box>
+    )
   }
 
-  return (
-    <Box flexDirection="column">
-      <Box>
-        <Text>
-          <Text color="green">[OK]</Text>
-          {' '}
-          Initialized project
-          {' '}
-          {result.slug}
-          {' '}
-          in
-          {' '}
-          {result.filePath}
-        </Text>
-      </Box>
-    </Box>
-  )
+  return null
 }
