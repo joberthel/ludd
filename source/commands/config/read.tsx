@@ -57,7 +57,7 @@ export default function ConfigRead({ args: [key], store = configStore }: Props) 
     )
   }
 
-  if (state.error) {
+  if (state.error !== undefined) {
     return (
       <Box>
         <Text color="red">[ERROR]</Text>

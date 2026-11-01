@@ -31,7 +31,7 @@ export function createStore<TSchema extends z.ZodTypeAny>(
         return initial
       }
       await db.read()
-      return schema.parse(db.data)
+      return schema.parse(db.data) as z.output<TSchema>
     },
     async write(data) {
       const validated = schema.parse(data) as z.output<TSchema>

@@ -71,7 +71,7 @@ export default function ConfigWrite({ args: [key, value], store = configStore }:
     )
   }
 
-  if (state.error) {
+  if (state.error !== undefined) {
     return (
       <Box flexDirection="row">
         <Text color="red">[ERROR]</Text>

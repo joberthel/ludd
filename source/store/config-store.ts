@@ -60,7 +60,7 @@ export async function readConfigKey(
   key?: string,
 ): Promise<unknown> {
   const config = await store.read()
-  if (!key || !key.trim()) {
+  if (key === undefined || key.trim() === '') {
     return config
   }
 
@@ -76,7 +76,7 @@ function updateNestedKey(
   fullKey: string,
 ): Record<string, unknown> {
   const [head, ...rest] = segments
-  if (!head || !Object.hasOwn(obj, head)) {
+  if (head === undefined || head === '' || !Object.hasOwn(obj, head)) {
     throw new Error(`Unknown configuration key "${fullKey}"`)
   }
 
@@ -128,11 +128,11 @@ export async function writeConfigKey(
           segments,
           rawValue,
           trimmedKey,
-        ) as Config
+        )
       }
     }
 
-    return candidate as Config
+    return candidate
   })
 
   return getNestedValue(validated, segments, trimmedKey)
