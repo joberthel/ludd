@@ -7,7 +7,7 @@ import zod from 'zod'
 import { createStore } from './create-store.js'
 
 export const ProjectSchema = zod.object({
-  name: zod.string().min(1).default('project'),
+  name: zod.string().trim().min(1).default('project'),
   description: zod.string().default(''),
   cwd: zod.string().min(1).default('/'),
 }).strict().prefault({})
@@ -119,7 +119,7 @@ export async function initProject(
   const store = createStore(filePath, ProjectSchema)
 
   const projectData: Project = {
-    name: options.name,
+    name: options.name.trim(),
     description: options.description ?? '',
     cwd: resolvedCwd,
   }

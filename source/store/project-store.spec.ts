@@ -49,6 +49,11 @@ describe('projectStore', () => {
         extraField: 'not allowed',
       })).toThrow(ZodError)
     })
+
+    it('rejects empty or whitespace-only name', () => {
+      expect(() => ProjectSchema.parse({ name: '', cwd: '/valid' })).toThrow(ZodError)
+      expect(() => ProjectSchema.parse({ name: '   ', cwd: '/valid' })).toThrow(ZodError)
+    })
   })
 
   describe('getDefaultProjectsDir', () => {

@@ -153,4 +153,35 @@ describe('project init command', () => {
       cwd: path.resolve(tempWorkDir),
     })
   })
+
+  it('prompts for name instead of hanging when name option is whitespace-only', async () => {
+    const { lastFrame, stdin } = render(
+      <ProjectInit
+        cwd={tempWorkDir}
+        options={{ name: '   ', description: 'desc' }}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    // Verify it transitions to promptName instead of hanging in [RUNNING]
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Project name:')
+      expect(frame).not.toContain('[RUNNING]')
+    })
+
+    stdin.write('\r')
+
+    const folderName = path.basename(path.resolve(tempWorkDir))
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[OK]'))
+    })
+
+    const projectFile = path.join(tempProjectsDir, folderName, 'project.json')
+    const content = JSON.parse(await readFile(projectFile, 'utf8'))
+    expect(content.name).toBe(folderName)
+    expect(content.description).toBe('desc')
+  })
 })

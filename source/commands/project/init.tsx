@@ -12,7 +12,7 @@ import {
 } from '../../store/project-store.js'
 
 export const options = zod.object({
-  name: zod.string().optional().describe('Project name (prompts interactively if omitted)'),
+  name: zod.string().trim().min(1).optional().describe('Project name (prompts interactively if omitted)'),
   description: zod.string().optional().describe('Project description (prompts interactively if omitted)'),
 })
 
@@ -37,9 +37,10 @@ export default function ProjectInit({
 }: Props) {
   const resolvedCwd = path.resolve(cwd)
   const folderName = path.basename(resolvedCwd)
+  const normalizedName = cmdOptions.name?.trim()
 
   const [step, setStep] = useState<Step>('checking')
-  const [name, setName] = useState<string>(cmdOptions.name ?? '')
+  const [name, setName] = useState<string>(normalizedName ?? '')
   const [description, setDescription] = useState<string>(cmdOptions.description ?? '')
   const [error, setError] = useState<string>()
   const [result, setResult] = useState<InitProjectResult>()
@@ -60,8 +61,8 @@ export default function ProjectInit({
           return
         }
 
-        if (cmdOptions.name !== undefined) {
-          setName(cmdOptions.name)
+        if (normalizedName !== undefined && normalizedName !== '') {
+          setName(normalizedName)
           if (cmdOptions.description !== undefined) {
             setDescription(cmdOptions.description)
             setStep('saving')
@@ -91,12 +92,12 @@ export default function ProjectInit({
   }, [
     resolvedCwd,
     projectsDir,
-    cmdOptions.name,
+    normalizedName,
     cmdOptions.description,
   ])
 
   useEffect(() => {
-    if (step !== 'saving' || !name) {
+    if (step !== 'saving') {
       return
     }
 
