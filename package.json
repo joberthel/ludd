@@ -17,7 +17,6 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "commit": "czg",
     "prepare": "simple-git-hooks"
   },
   "dependencies": {
@@ -50,5 +49,9 @@
   },
   "lint-staged": {
     "*": "eslint --fix"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "simple-git-hooks@2.14.0": true
   }
 }
