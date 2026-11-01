@@ -15,7 +15,7 @@
     "dev": "tsc --watch",
     "test": "ava",
     "lint": "eslint .",
-    "format": "eslint --fix ."
+    "lint:fix": "eslint --fix ."
   },
   "dependencies": {
     "ink": "^4.1.0",
