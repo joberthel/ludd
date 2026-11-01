@@ -1,5 +1,6 @@
 import type { ConfigSchema } from '../../store/config-store.js'
 import type { Store } from '../../store/create-store.js'
+import process from 'node:process'
 import { Box, Text } from 'ink'
 import React, { useEffect, useState } from 'react'
 import zod, { ZodError } from 'zod'
@@ -41,6 +42,7 @@ export default function ConfigWrite({ args: [key, value], store = configStore }:
       })
       .catch((err: unknown) => {
         if (isMounted) {
+          process.exitCode = 1
           let message: string
           if (err instanceof ZodError) {
             message = err.issues.map(issue => `${issue.path.join('.') || key}: ${issue.message}`).join(', ')

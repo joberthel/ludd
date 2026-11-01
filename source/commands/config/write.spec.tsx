@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import React from 'react'
@@ -14,12 +15,14 @@ describe('config write command', () => {
   let testStore: ReturnType<typeof createConfigStore>
 
   beforeEach(async () => {
+    process.exitCode = 0
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-write-cmd-test-'))
     testConfigPath = path.join(tempDir, 'config.json')
     testStore = createConfigStore(testConfigPath)
   })
 
   afterEach(async () => {
+    process.exitCode = 0
     await rm(tempDir, { force: true, recursive: true })
   })
 
@@ -58,6 +61,7 @@ describe('config write command', () => {
       expect(frame).toContain(chalk.red('[ERROR]'))
       expect(frame).toContain('dummyNumber: Expected number, received string')
       expect(frame).not.toContain('at ')
+      expect(process.exitCode).toBe(1)
     })
 
     const diskAfter = await readFile(testConfigPath, 'utf8')
@@ -75,6 +79,7 @@ describe('config write command', () => {
       expect(frame).toContain(chalk.red('[ERROR]'))
       expect(frame).toContain('Unknown configuration key "unknownKey"')
       expect(frame).not.toContain('at ')
+      expect(process.exitCode).toBe(1)
     })
 
     const diskAfter = await readFile(testConfigPath, 'utf8')

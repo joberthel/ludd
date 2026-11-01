@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import React from 'react'
@@ -13,12 +14,14 @@ describe('config read command', () => {
   let testStore: ReturnType<typeof createConfigStore>
 
   beforeEach(async () => {
+    process.exitCode = 0
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-read-cmd-test-'))
     const testConfigPath = path.join(tempDir, 'config.json')
     testStore = createConfigStore(testConfigPath)
   })
 
   afterEach(async () => {
+    process.exitCode = 0
     await rm(tempDir, { force: true, recursive: true })
   })
 
@@ -65,6 +68,7 @@ describe('config read command', () => {
       expect(frame).toContain('Configuration key "unknown.key" not found')
       expect(frame).not.toContain('at ')
       expect(frame).not.toContain('Error:')
+      expect(process.exitCode).toBe(1)
     })
   })
 })

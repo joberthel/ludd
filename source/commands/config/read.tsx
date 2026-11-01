@@ -1,5 +1,6 @@
 import type { ConfigSchema } from '../../store/config-store.js'
 import type { Store } from '../../store/create-store.js'
+import process from 'node:process'
 import { Box, Text } from 'ink'
 import React, { useEffect, useState } from 'react'
 import zod from 'zod'
@@ -34,6 +35,7 @@ export default function ConfigRead({ args: [key], store = configStore }: Props) 
       })
       .catch((err: unknown) => {
         if (isMounted) {
+          process.exitCode = 1
           const message = err instanceof Error
             ? err.message
             : String(err)
