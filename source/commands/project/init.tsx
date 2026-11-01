@@ -3,7 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { TextInput } from '@inkjs/ui'
 import { Box, Text } from 'ink'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import zod from 'zod'
 import {
   findProjectByCwd,

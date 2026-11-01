@@ -2,7 +2,7 @@ import type { ConfigSchema } from '../../store/config-store.js'
 import type { Store } from '../../store/create-store.js'
 import process from 'node:process'
 import { Box, Text } from 'ink'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import zod, { ZodError } from 'zod'
 import { configStore, writeConfigKey } from '../../store/config-store.js'
 
