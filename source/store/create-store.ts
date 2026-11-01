@@ -25,7 +25,7 @@ export function createStore<TSchema extends z.ZodTypeAny>(
       const exists = await stat(filePath).then(() => true, () => false)
       if (!exists) {
         await mkdir(path.dirname(filePath), { recursive: true })
-        const initial = schema.parse({}) as z.output<TSchema>
+        const initial = structuredClone(defaultData)
         db.data = initial
         await db.write()
         return initial

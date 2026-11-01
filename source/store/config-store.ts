@@ -36,6 +36,25 @@ export function parseCliValue(raw: string): unknown {
   }
 }
 
+function getNestedValue(
+  config: unknown,
+  segments: string[],
+  fullKey: string,
+): unknown {
+  let current: unknown = config
+
+  for (const segment of segments) {
+    if (current !== null && typeof current === 'object' && Object.hasOwn(current, segment)) {
+      current = (current as Record<string, unknown>)[segment]
+    }
+    else {
+      throw new Error(`Configuration key "${fullKey}" not found`)
+    }
+  }
+
+  return current
+}
+
 export async function readConfigKey(
   store: Store<typeof ConfigSchema>,
   key?: string,
@@ -45,19 +64,9 @@ export async function readConfigKey(
     return config
   }
 
-  const segments = key.trim().split('.')
-  let current: unknown = config
-
-  for (const segment of segments) {
-    if (current !== null && typeof current === 'object' && segment in (current as Record<string, unknown>)) {
-      current = (current as Record<string, unknown>)[segment]
-    }
-    else {
-      throw new Error(`Configuration key "${key}" not found`)
-    }
-  }
-
-  return current
+  const trimmedKey = key.trim()
+  const segments = trimmedKey.split('.')
+  return getNestedValue(config, segments, key)
 }
 
 function updateNestedKey(
@@ -67,7 +76,7 @@ function updateNestedKey(
   fullKey: string,
 ): Record<string, unknown> {
   const [head, ...rest] = segments
-  if (!head || !(head in obj)) {
+  if (!head || !Object.hasOwn(obj, head)) {
     throw new Error(`Unknown configuration key "${fullKey}"`)
   }
 
@@ -100,17 +109,31 @@ export async function writeConfigKey(
 
   const trimmedKey = key.trim()
   const segments = trimmedKey.split('.')
-  const current = await store.read()
   const parsedValue = parseCliValue(rawValue)
 
-  const updated = updateNestedKey(
-    current as unknown as Record<string, unknown>,
-    segments,
-    parsedValue,
-    trimmedKey,
-  )
+  const validated = await store.update((current) => {
+    const currentRecord = current as unknown as Record<string, unknown>
+    const candidate = updateNestedKey(
+      currentRecord,
+      segments,
+      parsedValue,
+      trimmedKey,
+    )
 
-  const validated = ConfigSchema.parse(updated)
-  await store.write(validated)
-  return readConfigKey(store, trimmedKey)
+    if (typeof parsedValue !== 'string') {
+      const check = ConfigSchema.safeParse(candidate)
+      if (!check.success && check.error.issues.some(issue => issue.code === 'invalid_type' && issue.expected === 'string')) {
+        return updateNestedKey(
+          currentRecord,
+          segments,
+          rawValue,
+          trimmedKey,
+        ) as Config
+      }
+    }
+
+    return candidate as Config
+  })
+
+  return getNestedValue(validated, segments, trimmedKey)
 }

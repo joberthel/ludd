@@ -127,6 +127,16 @@ describe('configStore', () => {
         'Configuration key "dummyObject.unknownNested" not found',
       )
     })
+
+    it('rejects Object.prototype properties such as toString, constructor, and __proto__', async () => {
+      const store = createConfigStore(testConfigPath)
+      await expect(readConfigKey(store, 'toString')).rejects.toThrow('Configuration key "toString" not found')
+      await expect(readConfigKey(store, 'constructor')).rejects.toThrow('Configuration key "constructor" not found')
+      await expect(readConfigKey(store, '__proto__')).rejects.toThrow('Configuration key "__proto__" not found')
+      await expect(readConfigKey(store, 'dummyObject.toString')).rejects.toThrow(
+        'Configuration key "dummyObject.toString" not found',
+      )
+    })
   })
 
   describe('writeConfigKey', () => {
@@ -162,6 +172,37 @@ describe('configStore', () => {
 
       const disk = JSON.parse(await readFile(testConfigPath, 'utf8'))
       expect(disk.dummyNumber).toBe(99)
+    })
+
+    it('writes numeric-like and boolean-like strings to string fields', async () => {
+      const store = createConfigStore(testConfigPath)
+
+      expect(await writeConfigKey(store, 'dummyString', '123')).toBe('123')
+      expect(await writeConfigKey(store, 'dummyObject.nestedString', 'true')).toBe('true')
+
+      const disk = JSON.parse(await readFile(testConfigPath, 'utf8'))
+      expect(disk.dummyString).toBe('123')
+      expect(disk.dummyObject.nestedString).toBe('true')
+    })
+
+    it('rejects Object.prototype keys without modifying disk or polluting prototype', async () => {
+      const store = createConfigStore(testConfigPath)
+      await store.read()
+      const diskBefore = await readFile(testConfigPath, 'utf8')
+
+      await expect(writeConfigKey(store, 'toString', 'hacked')).rejects.toThrow(
+        'Unknown configuration key "toString"',
+      )
+      await expect(writeConfigKey(store, '__proto__.polluted', 'true')).rejects.toThrow(
+        'Unknown configuration key "__proto__.polluted"',
+      )
+      await expect(writeConfigKey(store, 'constructor.prototype.polluted', 'true')).rejects.toThrow(
+        'Unknown configuration key "constructor.prototype.polluted"',
+      )
+
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+      const diskAfter = await readFile(testConfigPath, 'utf8')
+      expect(diskAfter).toBe(diskBefore)
     })
 
     it('throws error and does not persist on unknown key', async () => {
