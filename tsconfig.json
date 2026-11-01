@@ -1,9 +1,18 @@
 {
   "extends": "@sindresorhus/tsconfig",
   "compilerOptions": {
+    "rootDir": "source",
     "module": "Node16",
     "moduleResolution": "node16",
     "outDir": "dist"
   },
-  "include": ["source"]
+  "include": ["source"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
 }
