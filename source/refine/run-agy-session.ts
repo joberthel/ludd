@@ -69,7 +69,6 @@ export async function createAgySessionFiles(
 
 export interface BuildAgyArgsOptions {
   model: string
-  effort: string
   sessionDir: string
   taskId: number
   taskName: string
@@ -82,8 +81,6 @@ export function buildAgyArgs(options: BuildAgyArgsOptions): string[] {
     '--sandbox',
     '--model',
     options.model,
-    '--effort',
-    options.effort,
     '--add-dir',
     options.sessionDir,
     '--settings',
@@ -103,7 +100,6 @@ export interface RunAgyRefineSessionOptions {
   task: Task
   project: ProjectRecord
   model: string
-  effort: string
   mcpServer: Pick<RefineMcpServerInstance, 'url'>
   luddHomeDir?: string
   signal?: AbortSignal
@@ -124,7 +120,6 @@ export async function runAgyRefineSession(
 
     const args = buildAgyArgs({
       model: options.model,
-      effort: options.effort,
       sessionDir: sessionTempDir,
       taskId: options.task.id,
       taskName: options.task.name,
