@@ -335,15 +335,6 @@ export function RefinementSession({
 
   return (
     <FullscreenContainer>
-      <Box borderStyle="round" flexDirection="column" paddingX={1} width="100%">
-        <Text bold color="cyan">
-          {`Refining Task #${task.id}: ${task.name}`}
-        </Text>
-        <Text dimColor>
-          {`Model: ${model}`}
-        </Text>
-      </Box>
-
       {!hasReceivedFirstToolCall
         ? (
             <LoadingScreen
@@ -356,6 +347,15 @@ export function RefinementSession({
           )
         : (
             <Box flexDirection="column" flexGrow={1} padding={1}>
+              <Box borderStyle="round" flexDirection="column" marginBottom={1} paddingX={1} width="100%">
+                <Text bold color="cyan">
+                  {`Refining Task #${task.id}: ${task.name}`}
+                </Text>
+                <Text dimColor>
+                  {`Model: ${model}`}
+                </Text>
+              </Box>
+
               <QuestionHistory history={history} />
 
               {sessionState.status === 'waiting'
@@ -453,7 +453,7 @@ export function RefinementSession({
             </Box>
           )}
 
-      <Box marginTop="auto" width="100%">
+      <Box width="100%">
         <Statusbar
           confidence={latestConfidence}
           historyCount={history.length}

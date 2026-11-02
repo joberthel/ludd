@@ -41,7 +41,7 @@ export function LoadingScreen({
     : ''
 
   return (
-    <Box flexDirection="column" padding={1}>
+    <Box flexDirection="column" flexGrow={1} padding={1}>
       <Box borderStyle="round" flexDirection="column" marginBottom={1} paddingX={1} width="100%">
         <Text bold color="cyan">
           {`Refining Task #${taskId}: ${taskName}`}

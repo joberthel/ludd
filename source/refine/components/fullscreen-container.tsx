@@ -27,7 +27,7 @@ export function FullscreenContainer({
   useEffect(() => {
     const stream = customStdout ?? inkStdout ?? process.stdout
     const isTTY = 'isTTY' in stream && (stream as { isTTY?: boolean }).isTTY === true
-    const isTest = process.env.NODE_ENV === 'test'
+    const isTest = process.env['NODE_ENV'] === 'test'
 
     let shouldEnable = false
     if (disabled === false) {

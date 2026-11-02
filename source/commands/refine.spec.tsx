@@ -136,8 +136,8 @@ describe('task refine command', () => {
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
-      expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Refine Me) with gemini-4-argon-medium...')
+      expect(frame).toContain('Refining Task #1: Refine Me')
+      expect(frame).toContain('Model: gemini-4-argon-medium')
     })
   })
 
@@ -168,8 +168,8 @@ describe('task refine command', () => {
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
-      expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Refine Me Flagged) with claude-3-7-sonnet...')
+      expect(frame).toContain('Refining Task #1: Refine Me Flagged')
+      expect(frame).toContain('Model: claude-3-7-sonnet')
     })
   })
 
@@ -199,8 +199,8 @@ describe('task refine command', () => {
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
-      expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Custom Config Task) with Custom Argon Pro...')
+      expect(frame).toContain('Refining Task #1: Custom Config Task')
+      expect(frame).toContain('Model: Custom Argon Pro')
     })
   })
 
@@ -268,8 +268,8 @@ describe('task refine command', () => {
     // Press Enter to select the focused option (task #1)
     await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
-      expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (First Refinement Task) with gemini-4-argon-medium...')
+      expect(frame).toContain('Refining Task #1: First Refinement Task')
+      expect(frame).toContain('Model: gemini-4-argon-medium')
     })
   })
 
@@ -363,5 +363,52 @@ describe('task refine command', () => {
 
     runAgySpy.mockRestore()
     ensureSkillSpy.mockRestore()
+  })
+
+  it('unmounts alternate screen and prints final [OK] summary when session completes', async () => {
+    const { slug } = await initProject({
+      name: 'Clean Exit Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: slug,
+      name: 'Clean Exit Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          await callCompleteRefinement(
+            mcpServer.url,
+            {
+              outcome: 'Exit outcome',
+              user: 'Developers',
+              whyNow: 'Now',
+              success: 'All clear',
+              constraint: 'None',
+              outOfScope: 'None',
+            },
+            sessionId,
+          )
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
+    })
+
+    await submitAndWait(stdin, '\r', () => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[OK]'))
+      expect(frame).toContain(`Refinement completed for task #${task.id} (${task.name})`)
+    })
   })
 })
