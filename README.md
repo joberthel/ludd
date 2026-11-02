@@ -4,7 +4,7 @@ A terminal-based (TUI) orchestrator and control plane for managing parallel back
 
 ## Tech Stack
 
-- **CLI & UI:** [Pastel](https://github.com/vadimdemedes/pastel), [Ink v4](https://github.com/vadimdemedes/ink), `@inkjs/ui`, React 18
+- **CLI & UI:** [Pastel](https://github.com/vadimdemedes/pastel), [Ink v8](https://github.com/vadimdemedes/ink), `@inkjs/ui`, React 19
 - **Protocol & Validation:** `@modelcontextprotocol/server`, [Zod](https://zod.dev/)
 - **Testing:** [Vitest](https://vitest.dev/), `ink-testing-library`
 - **Tooling & Quality:** TypeScript, ESLint (`@antfu/eslint-config`), `simple-git-hooks`, `lint-staged`, `commitlint`
