@@ -1,8 +1,9 @@
+import type { RefineIntent } from '../store/task-store.js'
 import type { AskQuestionInput } from './refine-mcp-server.js'
 import http from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { AskQuestionInputSchema, startRefineMcpServer } from './refine-mcp-server.js'
-import { callAskQuestion, initMcpSession, listMcpTools } from './test-helpers.js'
+import { callAskQuestion, callCompleteRefinement, initMcpSession, listMcpTools } from './test-helpers.js'
 
 describe('refine-mcp-server', () => {
   it('validates AskQuestionInputSchema correctly', () => {
@@ -180,6 +181,88 @@ describe('refine-mcp-server', () => {
 
       expect(callData.result?.isError).toBe(true)
       expect(callData.result?.content?.[0]?.text).toContain('User declined to answer')
+    }
+    finally {
+      await server.close()
+    }
+  })
+
+  it('lists and handles complete_refinement tool call with confirmation or feedback', async () => {
+    let capturedIntent: RefineIntent | undefined
+    let shouldConfirm = false
+
+    const server = await startRefineMcpServer({
+      onAskQuestion: async input => input.guess,
+      onCompleteRefinement: async (intent) => {
+        capturedIntent = intent
+        if (shouldConfirm) {
+          return { confirmed: true }
+        }
+        return { confirmed: false, feedback: 'Please refine the scope' }
+      },
+    })
+
+    const sampleIntent: RefineIntent = {
+      outcome: 'Refine tasks interactively',
+      user: 'Ludd users',
+      whyNow: 'Better task quality',
+      success: 'Intent file generated',
+      constraint: 'Strict types',
+      outOfScope: 'Remote agents',
+    }
+
+    try {
+      const sessionId = await initMcpSession(server.url)
+      const listData = await listMcpTools(server.url, sessionId)
+      const tool = listData.result.tools.find(t => t.name === 'complete_refinement')
+      expect(tool).toBeDefined()
+      expect(tool?.inputSchema.properties).toHaveProperty('outcome')
+      expect(tool?.inputSchema.properties).toHaveProperty('user')
+      expect(tool?.inputSchema.properties).toHaveProperty('whyNow')
+      expect(tool?.inputSchema.properties).toHaveProperty('success')
+      expect(tool?.inputSchema.properties).toHaveProperty('constraint')
+      expect(tool?.inputSchema.properties).toHaveProperty('outOfScope')
+
+      // First call: returns feedback
+      const feedbackCall = await callCompleteRefinement(server.url, sampleIntent, sessionId)
+      expect(feedbackCall.result?.content?.[0]?.type).toBe('text')
+      const feedbackParsed = JSON.parse(feedbackCall.result!.content![0]!.text)
+      expect(feedbackParsed).toEqual({
+        confirmed: false,
+        feedback: 'Please refine the scope',
+      })
+      expect(capturedIntent).toEqual(sampleIntent)
+
+      // Second call: confirmed
+      shouldConfirm = true
+      const confirmCall = await callCompleteRefinement(server.url, sampleIntent, sessionId)
+      const confirmParsed = JSON.parse(confirmCall.result!.content![0]!.text)
+      expect(confirmParsed).toEqual({ confirmed: true })
+    }
+    finally {
+      await server.close()
+    }
+  })
+
+  it('returns a tool error when onCompleteRefinement is not configured', async () => {
+    const server = await startRefineMcpServer({
+      onAskQuestion: async input => input.guess,
+    })
+
+    const sampleIntent: RefineIntent = {
+      outcome: 'Some outcome',
+      user: 'Users',
+      whyNow: 'Now',
+      success: 'Works',
+      constraint: 'None',
+      outOfScope: 'Nothing',
+    }
+
+    try {
+      const sessionId = await initMcpSession(server.url)
+      const callData = await callCompleteRefinement(server.url, sampleIntent, sessionId)
+      expect(callData.result?.isError).toBe(true)
+      expect(callData.result?.content?.[0]?.text).toContain('Refinement completion handler is not configured')
     }
     finally {
       await server.close()

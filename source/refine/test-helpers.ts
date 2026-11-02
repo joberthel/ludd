@@ -1,3 +1,4 @@
+import type { RefineIntent } from '../store/task-store.js'
 import type { AskQuestionInput } from './refine-mcp-server.js'
 import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/server'
 
@@ -65,6 +66,37 @@ export async function callAskQuestion(
       method: 'tools/call',
       params: {
         name: 'ask_question',
+        arguments: args,
+      },
+    }),
+  })
+
+  return await response.json() as McpCallResult
+}
+
+export async function callCompleteRefinement(
+  url: string,
+  args: RefineIntent,
+  sessionId?: string,
+  id = ++nextRpcId,
+): Promise<McpCallResult> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'accept': 'application/json, text/event-stream',
+  }
+  if (sessionId !== undefined && sessionId !== '') {
+    headers['mcp-session-id'] = sessionId
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: {
+        name: 'complete_refinement',
         arguments: args,
       },
     }),

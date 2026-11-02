@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { RefineIntent } from '../store/task-store.js'
 import crypto from 'node:crypto'
 import http from 'node:http'
 import { Readable } from 'node:stream'
@@ -9,6 +10,7 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from '@modelcontextprotocol/server'
 import { z as zod } from 'zod'
+import { RefineIntentSchema } from '../store/task-store.js'
 
 export const AskQuestionInputSchema = zod.object({
   hypothesis: zod.string().trim().min(1).describe('One-sentence best read of what the user wants'),
@@ -20,9 +22,15 @@ export const AskQuestionInputSchema = zod.object({
 
 export type AskQuestionInput = zod.infer<typeof AskQuestionInputSchema>
 
+export interface RefineConfirmationResult {
+  confirmed: boolean
+  feedback?: string
+}
+
 export interface StartRefineMcpServerOptions {
   port?: number
   onAskQuestion: (input: AskQuestionInput) => Promise<string>
+  onCompleteRefinement?: (intent: RefineIntent) => Promise<RefineConfirmationResult>
 }
 
 export interface RefineMcpServerInstance {
@@ -56,6 +64,28 @@ export async function startRefineMcpServer(
           {
             type: 'text',
             text: JSON.stringify({ answer }),
+          },
+        ],
+      }
+    },
+  )
+
+  mcpServer.registerTool(
+    'complete_refinement',
+    {
+      description: 'Submit candidate Statement of Intent for user confirmation',
+      inputSchema: RefineIntentSchema,
+    },
+    async (args) => {
+      if (options.onCompleteRefinement === undefined) {
+        throw new Error('Refinement completion handler is not configured')
+      }
+      const result = await options.onCompleteRefinement(args)
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result),
           },
         ],
       }
