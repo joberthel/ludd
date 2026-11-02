@@ -5,6 +5,7 @@
 This document gives the coding rules for the `ludd` project.
 Ludd is a Terminal User Interface (TUI) orchestrator and control plane for parallel background agents.
 The software uses Pastel, React 19, Ink v8, `@inkjs/ui`, TypeScript, and `@modelcontextprotocol/server`.
+This project is in an alpha stage. Backwards compatibility is not necessary.
 
 The terminal environment has strict limits:
 - The available screen area is small.
