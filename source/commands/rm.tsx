@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import zod from 'zod'
 import { ErrorLine, toMessage } from '../components/error-line.js'
 import { findProjectByPath, getDefaultProjectsDir } from '../store/project-store.js'
-import { listTasks, parseTaskId, removeTasks } from '../store/task-store.js'
+import { listTasks, removeTasks, resolveTaskIds } from '../store/task-store.js'
 
 export const args = zod.array(zod.string()).default([]).describe(
   argument({
@@ -38,8 +38,14 @@ type State
     | { message: string, status: 'done' }
     | { message: string, status: 'error' }
 
+function nextRemovalState(projectSlug: string, ids: number[], force: boolean): State {
+  return force
+    ? { status: 'deleting', projectSlug, ids }
+    : { status: 'confirming', projectSlug, ids }
+}
+
 export default function TaskRm({
-  args: cmdArgs = [],
+  args: cmdArgs,
   options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
   cwd = process.cwd(),
@@ -50,19 +56,18 @@ export default function TaskRm({
 
   const hasConflict = rawIds.length > 0 && isAll
 
-  const [state, setState] = useState<State>(() => {
-    if (hasConflict) {
-      process.exitCode = 1
-      return {
-        status: 'error',
-        message: 'Cannot specify both task IDs and --all',
-      }
-    }
-    return { status: 'checking' }
-  })
+  const [state, setState] = useState<State>(hasConflict
+    ? { status: 'error', message: 'Cannot specify both task IDs and --all' }
+    : { status: 'checking' })
 
   useEffect(() => {
-    if (state.status !== 'checking') {
+    if (hasConflict) {
+      process.exitCode = 1
+    }
+  }, [hasConflict])
+
+  useEffect(() => {
+    if (state.status !== 'checking' || hasConflict) {
       return
     }
 
@@ -84,82 +89,43 @@ export default function TaskRm({
         }
 
         const projectSlug = project.slug
-        const tasks = await listTasks(projectSlug, projectsDir)
-        if (!isMounted) {
-          return
-        }
 
         if (rawIds.length > 0) {
-          let targetIds: number[]
           try {
-            targetIds = [
-              ...new Set(rawIds.map(id => parseTaskId(id))),
-            ]
+            const targetIds = await resolveTaskIds(projectSlug, rawIds, projectsDir)
+            if (!isMounted) {
+              return
+            }
+            setState(nextRemovalState(projectSlug, targetIds, isForce))
           }
-          catch (err) {
+          catch (err: unknown) {
+            if (!isMounted) {
+              return
+            }
             process.exitCode = 1
             setState({
               status: 'error',
               message: toMessage(err),
             })
-            return
           }
-
-          const existingIds = new Set(tasks.map(t => t.id))
-          for (const id of targetIds) {
-            if (!existingIds.has(id)) {
-              process.exitCode = 1
-              setState({
-                status: 'error',
-                message: `Task #${id} does not exist in project "${projectSlug}"`,
-              })
-              return
-            }
-          }
-
-          if (isForce) {
-            setState({
-              status: 'deleting',
-              projectSlug,
-              ids: targetIds,
-            })
-          }
-          else {
-            setState({
-              status: 'confirming',
-              projectSlug,
-              ids: targetIds,
-            })
-          }
+          return
         }
-        else if (isAll) {
-          if (tasks.length === 0) {
-            setState({ status: 'empty' })
-            return
-          }
 
+        const tasks = await listTasks(projectSlug, projectsDir)
+        if (!isMounted) {
+          return
+        }
+
+        if (tasks.length === 0) {
+          setState({ status: 'empty' })
+          return
+        }
+
+        if (isAll) {
           const targetIds = tasks.map(t => t.id)
-          if (isForce) {
-            setState({
-              status: 'deleting',
-              projectSlug,
-              ids: targetIds,
-            })
-          }
-          else {
-            setState({
-              status: 'confirming',
-              projectSlug,
-              ids: targetIds,
-            })
-          }
+          setState(nextRemovalState(projectSlug, targetIds, isForce))
         }
         else {
-          if (tasks.length === 0) {
-            setState({ status: 'empty' })
-            return
-          }
-
           setState({
             status: 'selecting',
             projectSlug,
@@ -183,6 +149,7 @@ export default function TaskRm({
     }
   }, [
     state.status,
+    hasConflict,
     resolvedCwd,
     projectsDir,
     rawIds,
@@ -288,21 +255,7 @@ export default function TaskRm({
       }
 
       const selectedIds = selectedValues.map(v => Number.parseInt(v, 10))
-
-      if (isForce) {
-        setState({
-          status: 'deleting',
-          projectSlug: state.projectSlug,
-          ids: selectedIds,
-        })
-      }
-      else {
-        setState({
-          status: 'confirming',
-          projectSlug: state.projectSlug,
-          ids: selectedIds,
-        })
-      }
+      setState(nextRemovalState(state.projectSlug, selectedIds, isForce))
     }
 
     return (

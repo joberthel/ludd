@@ -18,7 +18,7 @@ type State
   = | { status: 'checking' }
     | { projectSlug: string, status: 'promptName' }
     | { defaultBranch: string, name: string, projectSlug: string, status: 'promptBranch' }
-    | { branch: string, name: string, projectSlug: string, status: 'saving' }
+    | { branch?: string, name: string, projectSlug: string, status: 'saving' }
     | { result: CreateTaskResult, status: 'done' }
     | { message: string, status: 'error' }
 
@@ -28,13 +28,30 @@ interface Props {
   cwd?: string
 }
 
+function afterName(projectSlug: string, name: string, branchOption?: string): State {
+  if (branchOption !== undefined) {
+    return {
+      status: 'saving',
+      projectSlug,
+      name,
+      branch: branchOption,
+    }
+  }
+  return {
+    status: 'promptBranch',
+    projectSlug,
+    name,
+    defaultBranch: slugifyBranchName(name),
+  }
+}
+
 export default function TaskNew({
-  options: cmdOptions = {},
+  options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
   cwd = process.cwd(),
 }: Props) {
+  const { name: flagName, branch: flagBranch } = options.parse(cmdOptions ?? {})
   const resolvedCwd = path.resolve(cwd)
-  const normalizedName = cmdOptions.name?.trim()
 
   const [state, setState] = useState<State>({ status: 'checking' })
 
@@ -57,29 +74,8 @@ export default function TaskNew({
         }
 
         const projectSlug = project.slug
-
-        if (normalizedName !== undefined && normalizedName !== '') {
-          const defaultBranch = slugifyBranchName(normalizedName)
-          if (cmdOptions.branch !== undefined) {
-            const customBranch = cmdOptions.branch.trim()
-            const branch = customBranch !== ''
-              ? customBranch
-              : defaultBranch
-            setState({
-              status: 'saving',
-              projectSlug,
-              name: normalizedName,
-              branch,
-            })
-          }
-          else {
-            setState({
-              status: 'promptBranch',
-              projectSlug,
-              name: normalizedName,
-              defaultBranch,
-            })
-          }
+        if (flagName !== undefined) {
+          setState(afterName(projectSlug, flagName, flagBranch))
         }
         else {
           setState({
@@ -105,8 +101,8 @@ export default function TaskNew({
   }, [
     resolvedCwd,
     projectsDir,
-    normalizedName,
-    cmdOptions.branch,
+    flagName,
+    flagBranch,
   ])
 
   useEffect(() => {
@@ -161,34 +157,14 @@ export default function TaskNew({
       return
     }
 
-    const defaultBranch = slugifyBranchName(trimmed)
-    if (cmdOptions.branch !== undefined) {
-      const customBranch = cmdOptions.branch.trim()
-      const branch = customBranch !== ''
-        ? customBranch
-        : defaultBranch
-      setState({
-        status: 'saving',
-        projectSlug: state.projectSlug,
-        name: trimmed,
-        branch,
-      })
-    }
-    else {
-      setState({
-        status: 'promptBranch',
-        projectSlug: state.projectSlug,
-        name: trimmed,
-        defaultBranch,
-      })
-    }
+    setState(afterName(state.projectSlug, trimmed, flagBranch))
   }
 
   const handleBranchSubmit = (value: string) => {
     if (state.status !== 'promptBranch') {
       return
     }
-    const chosenBranch = value.trim() || state.defaultBranch
+    const chosenBranch = value.trim() || undefined
     setState({
       status: 'saving',
       projectSlug: state.projectSlug,
