@@ -79,6 +79,11 @@ Test the codebase with `vitest` across three levels:
 - **End-to-End Tests:** Run the compiled `dist/` binary in a test shell to verify exit codes, output streams, and Pastel argument parsing.
 - Run `npm test` to execute the test suite once, or `npm run test:watch` during local development.
 
+Follow these rules when you test interactive components with `stdin.write`:
+- Wait 50 milliseconds before you send input to a new component. This delay allows React to register the input listener.
+- Put Enter (`\r`) and confirmation keys inside `vi.waitFor` blocks to repeat submissions during high CPU load.
+- Send toggle keys (such as Space) and arrow keys only one time after the initial wait.
+
 ## 8. CODE QUALITY AND GIT WORKFLOW
 
 Verify all source code with the repository tooling before you commit changes:
