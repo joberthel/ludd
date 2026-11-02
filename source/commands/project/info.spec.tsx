@@ -100,10 +100,10 @@ describe('project info command', () => {
     })
   })
 
-  it('renders greyed out (none) when description is empty', async () => {
+  it('renders (none) placeholder when description is empty', async () => {
     await initProject({
       name: 'No Desc Project',
-      description: '',
+      description: '   ',
       path: tempWorkDir,
     }, tempProjectsDir)
 
@@ -117,7 +117,7 @@ describe('project info command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('No Desc Project')
-      expect(frame).toContain('(none)')
+      expect(frame).toContain(chalk.dim('(none)'))
     })
   })
 })

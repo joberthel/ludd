@@ -5,6 +5,7 @@ import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
 import { ErrorLine, toMessage } from '../../components/error-line.js'
+import { OptionalText } from '../../components/optional-text.js'
 import { findProjectByPath, getDefaultProjectsDir } from '../../store/project-store.js'
 
 export const options = zod.object({
@@ -99,13 +100,7 @@ export default function ProjectInfo({
         <Box width={14}>
           <Text bold>Description:</Text>
         </Box>
-        {project.description
-          ? (
-              <Text>{project.description}</Text>
-            )
-          : (
-              <Text color="gray" dimColor>(none)</Text>
-            )}
+        <OptionalText value={project.description} />
       </Box>
       <Box>
         <Box width={14}>

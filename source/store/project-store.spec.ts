@@ -302,5 +302,18 @@ describe('projectStore', () => {
       const secondContent = JSON.parse(await readFile(second.filePath, 'utf8'))
       expect(secondContent.path).toBe(path.resolve(path2))
     })
+
+    it('trims whitespace-only description to empty string', async () => {
+      const projPath = path.join(tempProjectsDir, 'whitespace-desc')
+      const result = await initProject({
+        name: 'Whitespace Project',
+        description: '   ',
+        path: projPath,
+      }, tempProjectsDir)
+
+      expect(result.project.description).toBe('')
+      const fileContent = JSON.parse(await readFile(result.filePath, 'utf8'))
+      expect(fileContent.description).toBe('')
+    })
   })
 })

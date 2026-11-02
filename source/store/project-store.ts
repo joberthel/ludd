@@ -183,7 +183,7 @@ export async function initProject(
 
   const projectData: Project = {
     name: options.name.trim(),
-    description: options.description ?? '',
+    description: options.description?.trim() ?? '',
     path: resolvedPath,
   }
 

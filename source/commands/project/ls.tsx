@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import stringWidth from 'string-width'
 import zod from 'zod'
 import { ErrorLine, toMessage } from '../../components/error-line.js'
+import { EMPTY_PLACEHOLDER, OptionalText } from '../../components/optional-text.js'
 import { getDefaultProjectsDir, listProjects } from '../../store/project-store.js'
 
 export const options = zod.object({
@@ -80,7 +81,7 @@ export default function ProjectLs({
   const slugWidth = Math.max('SLUG'.length, ...projects.map(p => stringWidth(p.slug))) + 2
   const descWidth = Math.max(
     'DESCRIPTION'.length,
-    ...projects.map(p => stringWidth(p.description || '(none)')),
+    ...projects.map(p => stringWidth(p.description || EMPTY_PLACEHOLDER)),
   ) + 2
 
   return (
@@ -108,13 +109,7 @@ export default function ProjectLs({
             <Text>{project.slug}</Text>
           </Box>
           <Box width={descWidth}>
-            {project.description
-              ? (
-                  <Text>{project.description}</Text>
-                )
-              : (
-                  <Text color="gray" dimColor>(none)</Text>
-                )}
+            <OptionalText value={project.description} />
           </Box>
           <Box>
             <Text>{project.path}</Text>
