@@ -6,6 +6,7 @@ import { ZodError } from 'zod'
 import { initProject } from './project-store.js'
 import {
   createTask,
+  getTask,
   listTasks,
   parseTaskId,
   removeTasks,
@@ -439,6 +440,62 @@ describe('taskStore', () => {
       await expect(resolveTaskIds(slug, [1, 3], tempProjectsDir))
         .rejects
         .toThrow('Task #3 in project "corrupt-resolve-project" is corrupt (missing task.json)')
+    })
+  })
+
+  describe('getTask', () => {
+    it('returns a task by id or #id string', async () => {
+      const { slug } = await initProject({
+        name: 'Get Task Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      const created = await createTask({ projectSlug: slug, name: 'Sample Task' }, tempProjectsDir)
+
+      const byNumber = await getTask(slug, 1, tempProjectsDir)
+      expect(byNumber).toEqual(created.task)
+
+      const byString = await getTask(slug, '#1', tempProjectsDir)
+      expect(byString).toEqual(created.task)
+    })
+
+    it('throws if project does not exist', async () => {
+      await expect(getTask('non-existent', 1, tempProjectsDir))
+        .rejects
+        .toThrow('Project "non-existent" does not exist')
+    })
+
+    it('throws if task does not exist', async () => {
+      const { slug } = await initProject({
+        name: 'Empty Task Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      await expect(getTask(slug, 42, tempProjectsDir))
+        .rejects
+        .toThrow('Task #42 does not exist in project "empty-task-project"')
+    })
+
+    it('throws if task is corrupt or missing task.json', async () => {
+      const { slug } = await initProject({
+        name: 'Corrupt Task Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      const missingJsonDir = path.join(tempProjectsDir, slug, 'tasks', '1')
+      await mkdir(missingJsonDir, { recursive: true })
+
+      await expect(getTask(slug, 1, tempProjectsDir))
+        .rejects
+        .toThrow('Task #1 in project "corrupt-task-project" is corrupt (missing task.json)')
+
+      const corruptJsonDir = path.join(tempProjectsDir, slug, 'tasks', '2')
+      await mkdir(corruptJsonDir, { recursive: true })
+      await writeFile(path.join(corruptJsonDir, 'task.json'), 'invalid json')
+
+      await expect(getTask(slug, 2, tempProjectsDir))
+        .rejects
+        .toThrow('Task #2 in project "corrupt-task-project" is corrupt')
     })
   })
 })

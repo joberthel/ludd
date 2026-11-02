@@ -207,6 +207,53 @@ export async function listTasks(
   return tasks.sort((a, b) => a.id - b.id)
 }
 
+async function readTaskOrThrow(
+  projectDir: string,
+  projectSlug: string,
+  id: number | string,
+): Promise<Task> {
+  const taskId = parseTaskId(id)
+  const taskDir = path.join(projectDir, 'tasks', String(taskId))
+  const taskDirExists = await pathExists(taskDir)
+  if (!taskDirExists) {
+    throw new Error(`Task #${taskId} does not exist in project "${projectSlug}"`)
+  }
+
+  const taskFilePath = path.join(taskDir, 'task.json')
+  const fileExists = await pathExists(taskFilePath)
+  if (!fileExists) {
+    throw new Error(`Task #${taskId} in project "${projectSlug}" is corrupt (missing task.json)`)
+  }
+
+  try {
+    const store = createStore(taskFilePath, TaskSchema)
+    return await store.read()
+  }
+  catch (err: unknown) {
+    const detail = err instanceof Error
+      ? err.message
+      : String(err)
+    throw new Error(`Task #${taskId} in project "${projectSlug}" is corrupt (${detail})`)
+  }
+}
+
+export async function getTask(
+  projectSlug: string,
+  id: number | string,
+  projectsDir = getDefaultProjectsDir(),
+): Promise<Task> {
+  validateSlug(projectSlug, 'project slug')
+  const projectDir = path.join(projectsDir, projectSlug)
+  const projectFilePath = path.join(projectDir, 'project.json')
+
+  const exists = await pathExists(projectFilePath)
+  if (!exists) {
+    throw new Error(`Project "${projectSlug}" does not exist`)
+  }
+
+  return readTaskOrThrow(projectDir, projectSlug, id)
+}
+
 export async function resolveTaskIds(
   projectSlug: string,
   ids: (number | string)[],
@@ -230,26 +277,7 @@ export async function resolveTaskIds(
   ]
 
   for (const id of uniqueIds) {
-    const taskDir = path.join(projectDir, 'tasks', String(id))
-    const taskDirExists = await pathExists(taskDir)
-    if (!taskDirExists) {
-      throw new Error(`Task #${id} does not exist in project "${projectSlug}"`)
-    }
-    const taskFilePath = path.join(taskDir, 'task.json')
-    const fileExists = await pathExists(taskFilePath)
-    if (!fileExists) {
-      throw new Error(`Task #${id} in project "${projectSlug}" is corrupt (missing task.json)`)
-    }
-    try {
-      const store = createStore(taskFilePath, TaskSchema)
-      await store.read()
-    }
-    catch (err: unknown) {
-      const detail = err instanceof Error
-        ? err.message
-        : String(err)
-      throw new Error(`Task #${id} in project "${projectSlug}" is corrupt (${detail})`)
-    }
+    await readTaskOrThrow(projectDir, projectSlug, id)
   }
 
   return uniqueIds

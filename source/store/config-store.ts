@@ -4,6 +4,21 @@ import path from 'node:path'
 import zod from 'zod'
 import { createStore } from './create-store.js'
 
+export const RefineEffortSchema = zod.enum([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+])
+
+export type RefineEffort = zod.infer<typeof RefineEffortSchema>
+
+export const RefineConfigSchema = zod.object({
+  model: zod.string().trim().min(1).default('Gemini 4 Argon'),
+  effort: RefineEffortSchema.default('medium'),
+}).strict().prefault({})
+
 export const ConfigSchema = zod.object({
   dummyString: zod.string().default('hello'),
   dummyNumber: zod.number().int().default(42),
@@ -13,6 +28,7 @@ export const ConfigSchema = zod.object({
     nestedString: zod.string().default('nested-hello'),
     nestedBoolean: zod.boolean().default(false),
   }).strict().prefault({}),
+  refine: RefineConfigSchema,
 }).strict().prefault({})
 
 export type Config = zod.infer<typeof ConfigSchema>

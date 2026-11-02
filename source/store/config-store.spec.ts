@@ -9,6 +9,7 @@ import {
   getDefaultConfigPath,
   parseCliValue,
   readConfigKey,
+  RefineEffortSchema,
   writeConfigKey,
 } from './config-store.js'
 
@@ -36,6 +37,10 @@ describe('configStore', () => {
         dummyObject: {
           nestedString: 'nested-hello',
           nestedBoolean: false,
+        },
+        refine: {
+          model: 'Gemini 4 Argon',
+          effort: 'medium',
         },
       })
     })
@@ -94,6 +99,10 @@ describe('configStore', () => {
         dummyObject: {
           nestedString: 'nested-hello',
           nestedBoolean: false,
+        },
+        refine: {
+          model: 'Gemini 4 Argon',
+          effort: 'medium',
         },
       })
 
@@ -244,6 +253,32 @@ describe('configStore', () => {
 
       const diskAfter = await readFile(testConfigPath, 'utf8')
       expect(diskAfter).toBe(diskBefore)
+    })
+  })
+
+  describe('refine configuration', () => {
+    it('validates refine effort values via RefineEffortSchema', () => {
+      expect(RefineEffortSchema.parse('low')).toBe('low')
+      expect(RefineEffortSchema.parse('medium')).toBe('medium')
+      expect(RefineEffortSchema.parse('high')).toBe('high')
+      expect(RefineEffortSchema.parse('xhigh')).toBe('xhigh')
+      expect(RefineEffortSchema.parse('max')).toBe('max')
+      expect(() => RefineEffortSchema.parse('invalid')).toThrow(ZodError)
+    })
+
+    it('reads and writes refine.model and refine.effort', async () => {
+      const store = createConfigStore(testConfigPath)
+
+      expect(await readConfigKey(store, 'refine.model')).toBe('Gemini 4 Argon')
+      expect(await readConfigKey(store, 'refine.effort')).toBe('medium')
+
+      await writeConfigKey(store, 'refine.model', 'Custom Model Pro')
+      await writeConfigKey(store, 'refine.effort', 'high')
+
+      expect(await readConfigKey(store, 'refine.model')).toBe('Custom Model Pro')
+      expect(await readConfigKey(store, 'refine.effort')).toBe('high')
+
+      await expect(writeConfigKey(store, 'refine.effort', 'extreme')).rejects.toThrow(ZodError)
     })
   })
 })
