@@ -11,8 +11,10 @@ import { ErrorLine, toMessage } from '../components/error-line.js'
 import { completeTaskRefinement } from '../store/task-store.js'
 import { FullscreenContainer } from './components/fullscreen-container.js'
 import { LoadingScreen } from './components/loading-screen.js'
+import { QuestionDetails } from './components/question-details.js'
 import { QuestionHistory } from './components/question-history.js'
 import { Statusbar } from './components/statusbar.js'
+import { TaskHeader } from './components/task-header.js'
 import { ensureRefineSkill } from './ensure-refine-skill.js'
 import { startRefineMcpServer } from './refine-mcp-server.js'
 import { runAgyRefineSession } from './run-agy-session.js'
@@ -27,7 +29,7 @@ export interface RefineSessionContext {
   mcpServer: RefineMcpServerInstance
   signal?: AbortSignal
   luddHomeDir?: string
-  onStageChange?: (stage: InitStage) => void
+  onStageChange?: (stage: InitStage, details?: { pid?: number }) => void
 }
 
 export type RefineSessionRunner = (ctx: RefineSessionContext) => Promise<void>
@@ -43,6 +45,9 @@ export const defaultRefineSessionRunner: RefineSessionRunner = async (ctx) => {
     mcpServer: ctx.mcpServer,
     luddHomeDir: ctx.luddHomeDir,
     signal: ctx.signal,
+    onSpawn: (child) => {
+      ctx.onStageChange?.('waiting-agent-first-question', { pid: child.pid })
+    },
   })
 }
 
@@ -82,6 +87,7 @@ export function RefinementSession({
   const [hasReceivedFirstToolCall, setHasReceivedFirstToolCall] = useState(false)
   const [initStage, setInitStage] = useState<InitStage>('starting-mcp')
   const [mcpPort, setMcpPort] = useState<number | undefined>(undefined)
+  const [agentPid, setAgentPid] = useState<number | undefined>(undefined)
   const [mcpStatus, setMcpStatus] = useState<string>('Starting')
   const [history, setHistory] = useState<QnATurn[]>([])
   const [latestConfidence, setLatestConfidence] = useState<number | undefined>(undefined)
@@ -252,9 +258,12 @@ export function RefinementSession({
           mcpServer: server,
           signal: abortController.signal,
           luddHomeDir,
-          onStageChange: (nextStage) => {
+          onStageChange: (nextStage, details) => {
             if (isMounted) {
               setInitStage(nextStage)
+              if (details?.pid !== undefined) {
+                setAgentPid(details.pid)
+              }
             }
           },
         })
@@ -338,6 +347,7 @@ export function RefinementSession({
       {!hasReceivedFirstToolCall
         ? (
             <LoadingScreen
+              agentPid={agentPid}
               mcpPort={mcpPort}
               model={model}
               stage={initStage}
@@ -347,14 +357,7 @@ export function RefinementSession({
           )
         : (
             <Box flexDirection="column" flexGrow={1} padding={1}>
-              <Box borderStyle="round" flexDirection="column" marginBottom={1} paddingX={1} width="100%">
-                <Text bold color="cyan">
-                  {`Refining Task #${task.id}: ${task.name}`}
-                </Text>
-                <Text dimColor>
-                  {`Model: ${model}`}
-                </Text>
-              </Box>
+              <TaskHeader model={model} taskId={task.id} taskName={task.name} />
 
               <QuestionHistory history={history} />
 
@@ -369,30 +372,13 @@ export function RefinementSession({
               {sessionState.status === 'askingQuestion'
                 ? (
                     <Box flexDirection="column">
-                      <Text>
-                        <Text bold color="cyan">HYPOTHESIS: </Text>
-                        {sessionState.question.hypothesis}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">CONFIDENCE: </Text>
-                        {`${sessionState.question.confidence}%`}
-                      </Text>
-                      {sessionState.question.missing !== undefined && sessionState.question.missing !== ''
-                        ? (
-                            <Text>
-                              <Text bold color="cyan">MISSING: </Text>
-                              {sessionState.question.missing}
-                            </Text>
-                          )
-                        : null}
-                      <Text>
-                        <Text bold color="cyan">Q: </Text>
-                        {sessionState.question.question}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">GUESS: </Text>
-                        {sessionState.question.guess}
-                      </Text>
+                      <QuestionDetails
+                        confidence={sessionState.question.confidence}
+                        guess={sessionState.question.guess}
+                        hypothesis={sessionState.question.hypothesis}
+                        missing={sessionState.question.missing}
+                        question={sessionState.question.question}
+                      />
                       <Box marginTop={1}>
                         <Text>Answer (press Enter to accept guess): </Text>
                         <TextInput

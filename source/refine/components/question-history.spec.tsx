@@ -1,13 +1,8 @@
 import type { QnATurn } from './question-history.js'
 import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
-import { pressKey } from '../../test-helpers.js'
+import { pressKey, stripAnsi } from '../../test-helpers.js'
 import { QuestionHistory } from './question-history.js'
-
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B\[[0-9;]*[a-z]/gi, '')
-}
 
 const mockHistory: QnATurn[] = [
   {
@@ -103,5 +98,25 @@ describe('questionHistory component', () => {
     expect(frame).toContain('[History 1/2 - PageUp/PageDown]')
     expect(frame).toContain('User wants dark mode by default')
     expect(frame).toContain('MISSING: theme persistence')
+  })
+
+  it('returns to active prompt when pressing Escape while viewing history', async () => {
+    const { lastFrame, stdin } = render(
+      <QuestionHistory history={mockHistory} />,
+    )
+
+    // Navigate to history turn
+    await pressKey(stdin, '\x1B[5~')
+    await vi.waitFor(() => {
+      expect(stripAnsi(lastFrame() ?? '')).toContain('[History 2/2 - PageUp/PageDown]')
+    })
+
+    // Press Escape
+    await pressKey(stdin, '\x1B')
+    await vi.waitFor(() => {
+      const frame = stripAnsi(lastFrame() ?? '')
+      expect(frame).toContain('[History: 2 past turn(s) - press PageUp to view]')
+      expect(frame).not.toContain('HYPOTHESIS:')
+    })
   })
 })

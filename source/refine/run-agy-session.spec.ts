@@ -432,4 +432,29 @@ describe('runAgyRefineSession execution lifecycle', () => {
     // Verify directory was removed
     await expect(fs.access(capturedSessionDir)).rejects.toThrow()
   })
+
+  it('invokes onSpawn callback with the child process upon spawn', async () => {
+    const mockChild = createMockChild()
+    mockChild.pid = 4321
+    const spawnFn = vi.fn().mockImplementation(() => {
+      queueMicrotask(() => {
+        mockChild.exitCode = 0
+        mockChild.emit('close', 0, null)
+      })
+      return mockChild
+    })
+
+    const onSpawnSpy = vi.fn()
+
+    await runAgyRefineSession({
+      task: sampleTask,
+      project: sampleProject,
+      model: 'gemini-4-argon-medium',
+      mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+      spawnFn,
+      onSpawn: onSpawnSpy,
+    })
+
+    expect(onSpawnSpy).toHaveBeenCalledWith(mockChild)
+  })
 })

@@ -1,6 +1,7 @@
 import type { Key } from 'ink'
 import { Box, Text, useInput } from 'ink'
 import { useState } from 'react'
+import { QuestionDetails } from './question-details.js'
 
 export interface QnATurn {
   hypothesis: string
@@ -85,8 +86,6 @@ export function QuestionHistory({
     return null
   }
 
-  const hasMissing = turn.missing !== undefined && turn.missing !== ''
-
   return (
     <Box borderStyle="single" flexDirection="column" marginBottom={1} paddingX={1} width="100%">
       <Box justifyContent="space-between" width="100%">
@@ -100,35 +99,15 @@ export function QuestionHistory({
         </Text>
       </Box>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text>
-          <Text bold color="cyan">HYPOTHESIS: </Text>
-          {turn.hypothesis}
-        </Text>
-        <Text>
-          <Text bold color="cyan">CONFIDENCE: </Text>
-          {`${turn.confidence}%`}
-        </Text>
-        {hasMissing
-          ? (
-              <Text>
-                <Text bold color="cyan">MISSING: </Text>
-                {turn.missing}
-              </Text>
-            )
-          : null}
-        <Text>
-          <Text bold color="cyan">Q: </Text>
-          {turn.question}
-        </Text>
-        <Text>
-          <Text bold color="cyan">GUESS: </Text>
-          {turn.guess}
-        </Text>
-        <Text>
-          <Text bold color="green">ANSWER: </Text>
-          <Text bold>{turn.answer}</Text>
-        </Text>
+      <Box marginTop={1}>
+        <QuestionDetails
+          answer={turn.answer}
+          confidence={turn.confidence}
+          guess={turn.guess}
+          hypothesis={turn.hypothesis}
+          missing={turn.missing}
+          question={turn.question}
+        />
       </Box>
     </Box>
   )

@@ -1,12 +1,8 @@
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { describe, expect, it } from 'vitest'
+import { stripAnsi } from '../../test-helpers.js'
 import { LoadingScreen } from './loading-screen.js'
-
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B\[[0-9;]*[a-z]/gi, '')
-}
 
 describe('loadingScreen component', () => {
   it('renders header banner with task info and model', () => {

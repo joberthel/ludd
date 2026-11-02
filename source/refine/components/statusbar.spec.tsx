@@ -1,12 +1,8 @@
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { describe, expect, it } from 'vitest'
+import { stripAnsi } from '../../test-helpers.js'
 import { Statusbar } from './statusbar.js'
-
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1B\[[0-9;]*[a-z]/gi, '')
-}
 
 describe('statusbar component', () => {
   it('renders all status segments correctly', () => {

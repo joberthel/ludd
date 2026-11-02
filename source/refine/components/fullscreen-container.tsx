@@ -62,23 +62,11 @@ export function FullscreenContainer({
     catch {}
 
     const onExit = () => restoreTerminal()
-    const onSigint = () => {
-      restoreTerminal()
-      process.exit(130)
-    }
-    const onSigterm = () => {
-      restoreTerminal()
-      process.exit(143)
-    }
 
     process.on('exit', onExit)
-    process.on('SIGINT', onSigint)
-    process.on('SIGTERM', onSigterm)
 
     return () => {
       process.off('exit', onExit)
-      process.off('SIGINT', onSigint)
-      process.off('SIGTERM', onSigterm)
       restoreTerminal()
     }
   }, [disabled, customStdout, inkStdout])

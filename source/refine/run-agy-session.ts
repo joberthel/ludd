@@ -105,6 +105,7 @@ export interface RunAgyRefineSessionOptions {
   signal?: AbortSignal
   spawnFn?: SpawnFunction
   env?: NodeJS.ProcessEnv
+  onSpawn?: (child: ChildProcess) => void
 }
 
 export async function runAgyRefineSession(
@@ -154,6 +155,7 @@ export async function runAgyRefineSession(
           env: options.env ?? process.env,
           stdio: ['ignore', 'ignore', 'pipe'],
         })
+        options.onSpawn?.(child)
       }
       catch (err) {
         reject(err)

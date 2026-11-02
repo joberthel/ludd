@@ -1,5 +1,6 @@
 import { Spinner } from '@inkjs/ui'
 import { Box, Text } from 'ink'
+import { TaskHeader } from './task-header.js'
 
 export type InitStage
   = | 'starting-mcp'
@@ -14,7 +15,6 @@ export interface LoadingScreenProps {
   stage: InitStage
   mcpPort?: number
   agentPid?: number
-  skillPath?: string
 }
 
 const STAGE_ORDER: InitStage[] = [
@@ -42,14 +42,7 @@ export function LoadingScreen({
 
   return (
     <Box flexDirection="column" flexGrow={1} padding={1}>
-      <Box borderStyle="round" flexDirection="column" marginBottom={1} paddingX={1} width="100%">
-        <Text bold color="cyan">
-          {`Refining Task #${taskId}: ${taskName}`}
-        </Text>
-        <Text dimColor>
-          {`Model: ${model}`}
-        </Text>
-      </Box>
+      <TaskHeader model={model} taskId={taskId} taskName={taskName} />
 
       <Box flexDirection="column" gap={1}>
         <Box>

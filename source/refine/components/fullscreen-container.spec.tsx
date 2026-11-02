@@ -29,7 +29,7 @@ describe('fullscreenContainer component', () => {
     expect(written).toContain('\x1B[?1049l\x1B[?25h')
   })
 
-  it('registers exit, SIGINT, SIGTERM listeners and unregisters them on unmount', () => {
+  it('registers exit listener and unregisters it on unmount', () => {
     const onSpy = vi.spyOn(process, 'on')
     const offSpy = vi.spyOn(process, 'off')
 
@@ -44,17 +44,11 @@ describe('fullscreenContainer component', () => {
       </FullscreenContainer>,
     )
 
-    const registeredSignals = onSpy.mock.calls.map(call => call[0])
-    expect(registeredSignals).toContain('exit')
-    expect(registeredSignals).toContain('SIGINT')
-    expect(registeredSignals).toContain('SIGTERM')
+    expect(onSpy).toHaveBeenCalledWith('exit', expect.any(Function))
 
     unmount()
 
-    const unregisteredSignals = offSpy.mock.calls.map(call => call[0])
-    expect(unregisteredSignals).toContain('exit')
-    expect(unregisteredSignals).toContain('SIGINT')
-    expect(unregisteredSignals).toContain('SIGTERM')
+    expect(offSpy).toHaveBeenCalledWith('exit', expect.any(Function))
 
     onSpy.mockRestore()
     offSpy.mockRestore()
