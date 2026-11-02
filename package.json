@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "ink": "^8.0.0",
     "lowdb": "^7.0.1",
     "pastel": "^4.0.1",
