@@ -2,7 +2,9 @@ import type { ProjectRecord } from '../../store/project-store.js'
 import process from 'node:process'
 import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
+import stringWidth from 'string-width'
 import zod from 'zod'
+import { ErrorLine, toMessage } from '../../components/error-line.js'
 import { getDefaultProjectsDir, listProjects } from '../../store/project-store.js'
 
 export const options = zod.object({
@@ -20,11 +22,11 @@ type State
     | { status: 'done', projects: ProjectRecord[] }
 
 export default function ProjectLs({
-  options: cmdOptions = { format: 'table' },
+  options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
 }: Props) {
+  const { format } = options.parse(cmdOptions ?? {})
   const [state, setState] = useState<State>({ status: 'loading' })
-  const format = cmdOptions.format ?? 'table'
 
   useEffect(() => {
     let isMounted = true
@@ -43,9 +45,7 @@ export default function ProjectLs({
         process.exitCode = 1
         setState({
           status: 'error',
-          message: err instanceof Error
-            ? err.message
-            : String(err),
+          message: toMessage(err),
         })
       })
 
@@ -59,27 +59,13 @@ export default function ProjectLs({
   }
 
   if (state.status === 'error') {
-    return (
-      <Box>
-        <Text>
-          <Text color="red">[ERROR]</Text>
-          {' '}
-          {state.message}
-        </Text>
-      </Box>
-    )
+    return <ErrorLine message={state.message} />
   }
 
   const { projects } = state
 
   if (format === 'json') {
-    const formatted = projects.map(p => ({
-      slug: p.slug,
-      name: p.name,
-      description: p.description,
-      path: p.path,
-    }))
-    return <Text>{JSON.stringify(formatted, null, 2)}</Text>
+    return <Text>{JSON.stringify(projects, null, 2)}</Text>
   }
 
   if (projects.length === 0) {
@@ -90,9 +76,9 @@ export default function ProjectLs({
     )
   }
 
-  const nameWidth = Math.max('NAME'.length, ...projects.map(p => p.name.length)) + 2
-  const slugWidth = Math.max('SLUG'.length, ...projects.map(p => p.slug.length)) + 2
-  const descWidth = Math.max('DESCRIPTION'.length, ...projects.map(p => p.description.length)) + 2
+  const nameWidth = Math.max('NAME'.length, ...projects.map(p => stringWidth(p.name))) + 2
+  const slugWidth = Math.max('SLUG'.length, ...projects.map(p => stringWidth(p.slug))) + 2
+  const descWidth = Math.max('DESCRIPTION'.length, ...projects.map(p => stringWidth(p.description))) + 2
 
   return (
     <Box flexDirection="column">

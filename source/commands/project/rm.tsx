@@ -5,6 +5,7 @@ import { ConfirmInput, MultiSelect } from '@inkjs/ui'
 import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
+import { ErrorLine, toMessage } from '../../components/error-line.js'
 import {
   findProjectByPath,
   getDefaultProjectsDir,
@@ -27,19 +28,18 @@ type State
   = | { status: 'checking' }
     | { status: 'empty' }
     | { projects: ProjectRecord[], status: 'selecting' }
-    | { isCurrent: boolean, label?: string, slugs: string[], status: 'confirming' }
+    | { isCurrent: boolean, slugs: string[], status: 'confirming' }
     | { isCurrent: boolean, slugs: string[], status: 'deleting' }
     | { message: string, status: 'done' }
     | { message: string, status: 'error' }
 
 export default function ProjectRm({
-  options: cmdOptions = { current: false, force: false },
+  options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
   cwd = process.cwd(),
 }: Props) {
+  const { current: isCurrent, force: isForce } = options.parse(cmdOptions ?? {})
   const resolvedCwd = path.resolve(cwd)
-  const isCurrent = cmdOptions.current ?? false
-  const isForce = cmdOptions.force ?? false
 
   const [state, setState] = useState<State>({ status: 'checking' })
 
@@ -73,7 +73,6 @@ export default function ProjectRm({
             setState({
               status: 'confirming',
               slugs: [project.slug],
-              label: project.name,
               isCurrent: true,
             })
           }
@@ -83,12 +82,9 @@ export default function ProjectRm({
             return
           }
           process.exitCode = 1
-          const message = err instanceof Error
-            ? err.message
-            : String(err)
           setState({
             status: 'error',
-            message,
+            message: toMessage(err),
           })
         })
     }
@@ -111,12 +107,9 @@ export default function ProjectRm({
             return
           }
           process.exitCode = 1
-          const message = err instanceof Error
-            ? err.message
-            : String(err)
           setState({
             status: 'error',
-            message,
+            message: toMessage(err),
           })
         })
     }
@@ -154,12 +147,9 @@ export default function ProjectRm({
           return
         }
         process.exitCode = 1
-        const message = err instanceof Error
-          ? err.message
-          : String(err)
         setState({
           status: 'error',
-          message,
+          message: toMessage(err),
         })
       })
 
@@ -201,15 +191,7 @@ export default function ProjectRm({
   }
 
   if (state.status === 'error') {
-    return (
-      <Box>
-        <Text>
-          <Text color="red">[ERROR]</Text>
-          {' '}
-          {state.message}
-        </Text>
-      </Box>
-    )
+    return <ErrorLine message={state.message} />
   }
 
   if (state.status === 'done') {

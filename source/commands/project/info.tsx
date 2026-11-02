@@ -4,6 +4,7 @@ import process from 'node:process'
 import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
+import { ErrorLine, toMessage } from '../../components/error-line.js'
 import { findProjectByPath, getDefaultProjectsDir } from '../../store/project-store.js'
 
 export const options = zod.object({
@@ -22,13 +23,13 @@ type State
     | { status: 'done', project: ProjectRecord }
 
 export default function ProjectInfo({
-  options: cmdOptions = { format: 'table' },
+  options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
   cwd = process.cwd(),
 }: Props) {
+  const { format } = options.parse(cmdOptions ?? {})
   const resolvedCwd = path.resolve(cwd)
   const [state, setState] = useState<State>({ status: 'loading' })
-  const format = cmdOptions.format ?? 'table'
 
   useEffect(() => {
     let isMounted = true
@@ -55,12 +56,9 @@ export default function ProjectInfo({
           return
         }
         process.exitCode = 1
-        const message = err instanceof Error
-          ? err.message
-          : String(err)
         setState({
           status: 'error',
-          message,
+          message: toMessage(err),
         })
       })
 
@@ -74,27 +72,13 @@ export default function ProjectInfo({
   }
 
   if (state.status === 'error') {
-    return (
-      <Box>
-        <Text>
-          <Text color="red">[ERROR]</Text>
-          {' '}
-          {state.message}
-        </Text>
-      </Box>
-    )
+    return <ErrorLine message={state.message} />
   }
 
   const { project } = state
 
   if (format === 'json') {
-    const formatted = {
-      slug: project.slug,
-      name: project.name,
-      description: project.description,
-      path: project.path,
-    }
-    return <Text>{JSON.stringify(formatted, null, 2)}</Text>
+    return <Text>{JSON.stringify(project, null, 2)}</Text>
   }
 
   return (

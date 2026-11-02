@@ -122,4 +122,24 @@ describe('project ls command', () => {
       expect(frame).not.toContain('[OK]')
     })
   })
+
+  it('renders table properly with wide CJK and emoji project names', async () => {
+    await initProject({
+      name: '🚀 Project 项目',
+      description: 'Emoji and CJK',
+      path: '/workspace/wide',
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <ProjectLs
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('🚀 Project 项目')
+      expect(frame).toContain('/workspace/wide')
+    })
+  })
 })

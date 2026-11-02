@@ -26,6 +26,7 @@
     "lowdb": "^7.0.1",
     "pastel": "^4.0.1",
     "react": "^19.3.1",
+    "string-width": "^8.3.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

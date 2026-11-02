@@ -5,6 +5,7 @@ import { TextInput } from '@inkjs/ui'
 import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
+import { ErrorLine, toMessage } from '../../components/error-line.js'
 import {
   findProjectByPath,
   getDefaultProjectsDir,
@@ -85,9 +86,7 @@ export default function ProjectInit({
         process.exitCode = 1
         setState({
           status: 'error',
-          message: err instanceof Error
-            ? err.message
-            : String(err),
+          message: toMessage(err),
         })
       })
 
@@ -127,9 +126,7 @@ export default function ProjectInit({
         process.exitCode = 1
         setState({
           status: 'error',
-          message: err instanceof Error
-            ? err.message
-            : String(err),
+          message: toMessage(err),
         })
       })
 
@@ -185,15 +182,7 @@ export default function ProjectInit({
   }
 
   if (state.status === 'error') {
-    return (
-      <Box>
-        <Text>
-          <Text color="red">[ERROR]</Text>
-          {' '}
-          {state.message}
-        </Text>
-      </Box>
-    )
+    return <ErrorLine message={state.message} />
   }
 
   if (state.status === 'promptName') {

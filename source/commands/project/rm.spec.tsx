@@ -282,4 +282,37 @@ describe('project rm command', () => {
 
     await rm(dirA, { force: true, recursive: true })
   })
+
+  it('renders [ERROR] and sets exitCode = 1 when deletion fails during delete step', async () => {
+    const initResult = await initProject({
+      name: 'To Fail',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { lastFrame, stdin } = render(
+      <ProjectRm
+        cwd={tempWorkDir}
+        options={{ current: true, force: false }}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(`Remove project "${initResult.slug}"?`)
+    })
+
+    // Delete project directory behind the scenes before confirming
+    await rm(path.join(tempProjectsDir, initResult.slug), { force: true, recursive: true })
+
+    // Confirm removal
+    stdin.write('y')
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.red('[ERROR]'))
+      expect(frame).toContain(`Project "${initResult.slug}" does not exist`)
+      expect(process.exitCode).toBe(1)
+    })
+  })
 })
