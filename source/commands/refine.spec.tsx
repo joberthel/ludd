@@ -1,15 +1,15 @@
 import type { ConfigSchema } from '../store/config-store.js'
 import type { Store } from '../store/create-store.js'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { callAskQuestion, initMcpSession } from '../refine/test-helpers.js'
+import { callAskQuestion, callCompleteRefinement, initMcpSession } from '../refine/test-helpers.js'
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
-import { createTask } from '../store/task-store.js'
+import { createTask, getTask } from '../store/task-store.js'
 import TaskRefine from './refine.js'
 
 describe('task refine command', () => {
@@ -639,7 +639,7 @@ describe('task refine command', () => {
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
-      expect(frame).toContain(chalk.green('[DONE]'))
+      expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Refinement completed for task #1 (Done Task)')
     })
 
@@ -700,6 +700,212 @@ describe('task refine command', () => {
         isClosed = true
       }
       expect(isClosed).toBe(true)
+    })
+  })
+
+  it('handles complete_refinement feedback loop and final confirmation with Enter, writing intent.md and setting task to todo', async () => {
+    const { slug } = await initProject({
+      name: 'Refinement Complete Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Interactive Refinement Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let feedbackResult: unknown
+    let confirmResult: unknown
+
+    const initialIntent = {
+      outcome: 'Draft outcome',
+      user: 'Draft user',
+      whyNow: 'Draft why now',
+      success: 'Draft success',
+      constraint: 'Draft constraint',
+      outOfScope: 'Draft out of scope',
+    }
+
+    const refinedIntent = {
+      outcome: 'Refined outcome with offline support',
+      user: 'All mobile and desktop users',
+      whyNow: 'High demand from customers',
+      success: 'Intent written and status set to todo',
+      constraint: 'No native binaries',
+      outOfScope: 'Cloud sync',
+    }
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+
+          // 1. Send first complete_refinement tool call
+          feedbackResult = await callCompleteRefinement(
+            mcpServer.url,
+            initialIntent,
+            sessionId,
+          )
+
+          // 2. Send second complete_refinement tool call with refined intent
+          confirmResult = await callCompleteRefinement(
+            mcpServer.url,
+            refinedIntent,
+            sessionId,
+          )
+        }}
+      />,
+    )
+
+    // Wait for statement of intent to render in the TUI
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('STATEMENT OF INTENT:')
+      expect(frame).toContain('Draft outcome')
+      expect(frame).toContain('Draft user')
+      expect(frame).toContain('Draft why now')
+      expect(frame).toContain('Draft success')
+      expect(frame).toContain('Draft constraint')
+      expect(frame).toContain('Draft out of scope')
+      expect(frame).toContain('Confirm intent? (Enter/y to confirm, or type refinement feedback):')
+    })
+
+    // User types refinement feedback
+    stdin.write('Needs offline support')
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Needs offline support')
+    })
+    stdin.write('\r')
+
+    // Feedback tool call should resolve with confirmed: false and the user feedback
+    await vi.waitFor(() => {
+      expect(feedbackResult).toBeDefined()
+    })
+    const feedbackParsed = feedbackResult as { result: { content: Array<{ text: string }> } }
+    expect(JSON.parse(feedbackParsed.result.content[0]!.text)).toEqual({
+      confirmed: false,
+      feedback: 'Needs offline support',
+    })
+
+    // Task must still be refinement, and intent.md must not exist yet
+    const taskDuringFeedback = await getTask(slug, 1, tempProjectsDir)
+    expect(taskDuringFeedback.status).toBe('refinement')
+    const intentPath = path.join(tempProjectsDir, slug, 'tasks', '1', 'intent.md')
+    await expect(readFile(intentPath)).rejects.toThrow()
+
+    // Wait for second candidate intent to be displayed
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Refined outcome with offline support')
+    })
+
+    // User presses Enter to confirm intent
+    stdin.write('\r')
+
+    // Confirm call should resolve with confirmed: true
+    await vi.waitFor(() => {
+      expect(confirmResult).toBeDefined()
+    })
+    const confirmParsed = confirmResult as { result: { content: Array<{ text: string }> } }
+    expect(JSON.parse(confirmParsed.result.content[0]!.text)).toEqual({
+      confirmed: true,
+    })
+
+    // Verify [OK] is rendered in TUI
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[OK]'))
+      expect(frame).toContain('Refinement completed for task #1 (Interactive Refinement Task)')
+    })
+
+    // Verify task status is now todo
+    const taskAfterConfirm = await getTask(slug, 1, tempProjectsDir)
+    expect(taskAfterConfirm.status).toBe('todo')
+
+    // Verify intent.md was written with expected markdown content
+    const savedMarkdown = await readFile(intentPath, 'utf-8')
+    expect(savedMarkdown).toContain('# Statement of Intent: Interactive Refinement Task (#1)')
+    expect(savedMarkdown).toContain('- **Outcome:** Refined outcome with offline support')
+    expect(savedMarkdown).toContain('- **User:** All mobile and desktop users')
+    expect(savedMarkdown).toContain('- **Why now:** High demand from customers')
+    expect(savedMarkdown).toContain('- **Success:** Intent written and status set to todo')
+    expect(savedMarkdown).toContain('- **Constraint:** No native binaries')
+    expect(savedMarkdown).toContain('- **Out of scope:** Cloud sync')
+  })
+
+  it('accepts "yes" or "y" to confirm intent during complete_refinement', async () => {
+    const { slug } = await initProject({
+      name: 'Yes Confirm Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Yes Confirm Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let confirmResult: unknown
+
+    const intent = {
+      outcome: 'Outcome',
+      user: 'Users',
+      whyNow: 'Now',
+      success: 'Success condition',
+      constraint: 'Constraint',
+      outOfScope: 'Out of scope',
+    }
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          confirmResult = await callCompleteRefinement(
+            mcpServer.url,
+            intent,
+            sessionId,
+          )
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('STATEMENT OF INTENT:')
+    })
+
+    // Confirm with "y"
+    stdin.write('y')
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('y')
+    })
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(confirmResult).toBeDefined()
+    })
+    const confirmParsed = confirmResult as { result: { content: Array<{ text: string }> } }
+    expect(JSON.parse(confirmParsed.result.content[0]!.text)).toEqual({
+      confirmed: true,
+    })
+
+    const task = await getTask(slug, 1, tempProjectsDir)
+    expect(task.status).toBe('todo')
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[OK]'))
     })
   })
 })

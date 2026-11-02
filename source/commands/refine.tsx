@@ -1,7 +1,7 @@
 import type { RefineSessionRunner } from '../refine/refinement-session.js'
 import type { ConfigSchema, RefineEffort } from '../store/config-store.js'
 import type { Store } from '../store/create-store.js'
-import type { Project } from '../store/project-store.js'
+import type { ProjectRecord } from '../store/project-store.js'
 import type { Task } from '../store/task-store.js'
 import path from 'node:path'
 import process from 'node:process'
@@ -44,8 +44,8 @@ interface Props {
 type State
   = | { status: 'checking' }
     | { status: 'empty' }
-    | { effort: RefineEffort, model: string, project: Project, status: 'selectTask', tasks: Task[] }
-    | { effort: RefineEffort, model: string, project: Project, status: 'running', task: Task }
+    | { effort: RefineEffort, model: string, project: ProjectRecord, status: 'selectTask', tasks: Task[] }
+    | { effort: RefineEffort, model: string, project: ProjectRecord, status: 'running', task: Task }
     | { message: string, status: 'error' }
 
 export default function TaskRefine({
@@ -210,6 +210,7 @@ export default function TaskRefine({
         effort={state.effort}
         model={state.model}
         project={state.project}
+        projectsDir={projectsDir}
         runSession={runSession}
         task={state.task}
       />
