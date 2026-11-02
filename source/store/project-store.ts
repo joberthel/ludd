@@ -85,44 +85,34 @@ export async function findProjectByPath(
   projectsDir = getDefaultProjectsDir(),
 ): Promise<ProjectRecord | undefined> {
   const resolvedPath = path.resolve(projectPath)
+  return (await listProjects(projectsDir)).find(p => path.resolve(p.path) === resolvedPath)
+}
 
-  let entries: string[]
-  try {
-    entries = await readdir(projectsDir)
+export class RemoveProjectsError extends Error {
+  constructor(
+    message: string,
+    public readonly removedSlugs: string[],
+  ) {
+    super(message)
+    this.name = 'RemoveProjectsError'
   }
-  catch {
-    return undefined
-  }
-
-  for (const entry of entries) {
-    const projectFilePath = path.join(projectsDir, entry, 'project.json')
-    try {
-      const fileStat = await stat(projectFilePath)
-      if (fileStat.isFile()) {
-        const store = createStore(projectFilePath, ProjectSchema)
-        const projectData = await store.read()
-        if (path.resolve(projectData.path) === resolvedPath) {
-          return {
-            ...projectData,
-            slug: entry,
-          }
-        }
-      }
-    }
-    catch {
-      // Ignore unreadable or non-project directories
-    }
-  }
-
-  return undefined
 }
 
 export async function removeProjects(
   slugs: string[],
   projectsDir = getDefaultProjectsDir(),
+  rmFn: (target: string, options: { force: boolean, recursive: boolean }) => Promise<void> = rm,
 ): Promise<string[]> {
   for (const slug of slugs) {
-    if (!slug || path.basename(slug) !== slug || slug === '.' || slug === '..') {
+    if (
+      !slug
+      || path.isAbsolute(slug)
+      || path.basename(slug) !== slug
+      || slug === '.'
+      || slug === '..'
+      || slug.includes('/')
+      || slug.includes('\\')
+    ) {
       throw new Error(`Invalid project slug "${slug}"`)
     }
     const targetDir = path.join(projectsDir, slug)
@@ -132,9 +122,25 @@ export async function removeProjects(
     }
   }
 
+  const removed: string[] = []
   for (const slug of slugs) {
     const targetDir = path.join(projectsDir, slug)
-    await rm(targetDir, { force: false, recursive: true })
+    try {
+      await rmFn(targetDir, { force: false, recursive: true })
+      removed.push(slug)
+    }
+    catch (err) {
+      const detail = err instanceof Error
+        ? err.message
+        : String(err)
+      const partialInfo = removed.length > 0
+        ? ` (partially removed: ${removed.join(', ')})`
+        : ''
+      throw new RemoveProjectsError(
+        `Failed to remove project "${slug}"${partialInfo}: ${detail}`,
+        removed,
+      )
+    }
   }
 
   return slugs

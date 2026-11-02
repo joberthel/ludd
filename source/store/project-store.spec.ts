@@ -11,6 +11,7 @@ import {
   listProjects,
   ProjectSchema,
   removeProjects,
+  RemoveProjectsError,
   slugifyProjectName,
 } from './project-store.js'
 
@@ -223,9 +224,31 @@ describe('projectStore', () => {
     })
 
     it('throws error on invalid slug with traversal attempts', async () => {
-      await expect(removeProjects(['../evil'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
-      await expect(removeProjects([''], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+      await expect(removeProjects(['..'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
       await expect(removeProjects(['.'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+      await expect(removeProjects(['../evil'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+      await expect(removeProjects(['a/b'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+      await expect(removeProjects(['/absolute/path'], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+      await expect(removeProjects([''], tempProjectsDir)).rejects.toThrow(/Invalid project slug/)
+    })
+
+    it('reports already-removed slugs when rm fails partway through', async () => {
+      const p1 = path.join(tempProjectsDir, 'proj-1')
+      const p2 = path.join(tempProjectsDir, 'proj-2')
+      await initProject({ name: 'Proj 1', path: p1 }, tempProjectsDir)
+      await initProject({ name: 'Proj 2', path: p2 }, tempProjectsDir)
+
+      const failingRm = async (target: string, opts: { force: boolean, recursive: boolean }) => {
+        if (target.endsWith('proj-2')) {
+          throw new Error('EACCES: permission denied')
+        }
+        await rm(target, opts)
+      }
+
+      const error = await removeProjects(['proj-1', 'proj-2'], tempProjectsDir, failingRm).catch((err: unknown) => err)
+      expect(error).toBeInstanceOf(RemoveProjectsError)
+      expect((error as RemoveProjectsError).message).toContain('partially removed: proj-1')
+      expect((error as RemoveProjectsError).removedSlugs).toEqual(['proj-1'])
     })
   })
 
