@@ -1,8 +1,9 @@
 import type { ProjectRecord } from './project-store.js'
-import { readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, open, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import zod from 'zod'
 import { createStore } from './create-store.js'
+import { isValidBranchName, pathExists, slugify, validateSlug } from './fs-utils.js'
 import { getDefaultProjectsDir, ProjectSchema } from './project-store.js'
 
 export const TaskStatusSchema = zod.enum([
@@ -17,20 +18,16 @@ export type TaskStatus = zod.infer<typeof TaskStatusSchema>
 export const TaskSchema = zod.object({
   id: zod.number().int().positive(),
   name: zod.string().trim().min(1),
-  branch: zod.string().trim().min(1),
+  branch: zod.string().trim().min(1).refine(isValidBranchName, {
+    message: 'Invalid branch name',
+  }),
   status: TaskStatusSchema.default('refinement'),
 }).strict()
 
 export type Task = zod.infer<typeof TaskSchema>
 
 export function slugifyBranchName(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return slug || 'task'
+  return slugify(name, 'task')
 }
 
 export function parseTaskId(raw: number | string): number {
@@ -42,30 +39,6 @@ export function parseTaskId(raw: number | string): number {
     throw new Error(`Invalid task ID "${raw}"`)
   }
   return Number.parseInt(normalized, 10)
-}
-
-function validateProjectSlug(slug: string): void {
-  if (
-    !slug
-    || path.isAbsolute(slug)
-    || path.basename(slug) !== slug
-    || slug === '.'
-    || slug === '..'
-    || slug.includes('/')
-    || slug.includes('\\')
-  ) {
-    throw new Error(`Invalid project slug "${slug}"`)
-  }
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await stat(filePath)
-    return true
-  }
-  catch {
-    return false
-  }
 }
 
 export interface CreateTaskOptions {
@@ -81,11 +54,50 @@ export interface CreateTaskResult {
   project: ProjectRecord
 }
 
+async function withProjectLock<T>(projectDir: string, fn: () => Promise<T>): Promise<T> {
+  const lockPath = path.join(projectDir, '.project.lock')
+  const maxRetries = 200
+  const retryDelay = 25
+
+  for (let i = 0; i < maxRetries; i++) {
+    let handle
+    try {
+      handle = await open(lockPath, 'wx')
+      break
+    }
+    catch (err: unknown) {
+      const isExist = typeof err === 'object'
+        && err !== null
+        && 'code' in err
+        && (err as { code: string }).code === 'EEXIST'
+      if (!isExist) {
+        throw err
+      }
+      await new Promise(resolve => setTimeout(resolve, retryDelay + Math.random() * 15))
+    }
+    finally {
+      if (handle) {
+        await handle.close()
+      }
+    }
+    if (i === maxRetries - 1) {
+      throw new Error(`Timeout acquiring lock on project "${path.basename(projectDir)}"`)
+    }
+  }
+
+  try {
+    return await fn()
+  }
+  finally {
+    await rm(lockPath, { force: true })
+  }
+}
+
 export async function createTask(
   options: CreateTaskOptions,
   projectsDir = getDefaultProjectsDir(),
 ): Promise<CreateTaskResult> {
-  validateProjectSlug(options.projectSlug)
+  validateSlug(options.projectSlug, 'project slug')
   const projectDir = path.join(projectsDir, options.projectSlug)
   const projectFilePath = path.join(projectDir, 'project.json')
 
@@ -94,51 +106,77 @@ export async function createTask(
     throw new Error(`Project "${options.projectSlug}" does not exist`)
   }
 
-  const trimmedName = options.name?.trim()
-  if (!trimmedName) {
+  const trimmedName = options.name.trim()
+  if (trimmedName === '') {
     throw new Error('Task name cannot be empty')
   }
 
-  const projectStore = createStore(projectFilePath, ProjectSchema)
-  const updatedProject = await projectStore.update((current) => {
-    return {
-      ...current,
-      taskCounter: (current.taskCounter ?? 0) + 1,
-    }
-  })
-
-  const newTaskId = updatedProject.taskCounter
-  const customBranch = options.branch?.trim()
-  const branch = (customBranch !== undefined && customBranch !== '')
-    ? customBranch
+  const branch = (options.branch !== undefined && options.branch.trim() !== '')
+    ? options.branch.trim()
     : slugifyBranchName(trimmedName)
 
-  const taskData: Task = {
-    id: newTaskId,
-    name: trimmedName,
-    branch,
-    status: options.status ?? 'refinement',
-  }
+  return withProjectLock(projectDir, async () => {
+    const projectStore = createStore(projectFilePath, ProjectSchema)
+    const projectData = await projectStore.read()
 
-  const taskFilePath = path.join(projectDir, 'tasks', String(newTaskId), 'task.json')
-  const taskStore = createStore(taskFilePath, TaskSchema)
-  const writtenTask = await taskStore.write(taskData)
+    const tasksBaseDir = path.join(projectDir, 'tasks')
+    await mkdir(tasksBaseDir, { recursive: true })
 
-  return {
-    task: writtenTask,
-    filePath: taskFilePath,
-    project: {
-      ...updatedProject,
-      slug: options.projectSlug,
-    },
-  }
+    let candidateId = projectData.taskCounter + 1
+    let acquiredDir = false
+
+    while (!acquiredDir) {
+      const candidateDir = path.join(tasksBaseDir, String(candidateId))
+      try {
+        await mkdir(candidateDir)
+        acquiredDir = true
+      }
+      catch (err: unknown) {
+        const isExist = typeof err === 'object'
+          && err !== null
+          && 'code' in err
+          && (err as { code: string }).code === 'EEXIST'
+        if (isExist) {
+          candidateId++
+        }
+        else {
+          throw err
+        }
+      }
+    }
+
+    const taskData: Task = {
+      id: candidateId,
+      name: trimmedName,
+      branch,
+      status: options.status ?? 'refinement',
+    }
+
+    const taskFilePath = path.join(tasksBaseDir, String(candidateId), 'task.json')
+    const serialized = JSON.stringify(TaskSchema.parse(taskData), null, 2)
+    await writeFile(taskFilePath, serialized, { flag: 'wx' })
+
+    const updatedProject = await projectStore.write({
+      ...projectData,
+      taskCounter: candidateId,
+    })
+
+    return {
+      task: taskData,
+      filePath: taskFilePath,
+      project: {
+        ...updatedProject,
+        slug: options.projectSlug,
+      },
+    }
+  })
 }
 
 export async function listTasks(
   projectSlug: string,
   projectsDir = getDefaultProjectsDir(),
 ): Promise<Task[]> {
-  validateProjectSlug(projectSlug)
+  validateSlug(projectSlug, 'project slug')
   const tasksDir = path.join(projectsDir, projectSlug, 'tasks')
 
   let entries: string[]
@@ -169,6 +207,54 @@ export async function listTasks(
   return tasks.sort((a, b) => a.id - b.id)
 }
 
+export async function resolveTaskIds(
+  projectSlug: string,
+  ids: (number | string)[],
+  projectsDir = getDefaultProjectsDir(),
+): Promise<number[]> {
+  validateSlug(projectSlug, 'project slug')
+  const projectDir = path.join(projectsDir, projectSlug)
+  const projectFilePath = path.join(projectDir, 'project.json')
+
+  const exists = await pathExists(projectFilePath)
+  if (!exists) {
+    throw new Error(`Project "${projectSlug}" does not exist`)
+  }
+
+  if (ids.length === 0) {
+    return []
+  }
+
+  const uniqueIds = [
+    ...new Set(ids.map(id => parseTaskId(id))),
+  ]
+
+  for (const id of uniqueIds) {
+    const taskDir = path.join(projectDir, 'tasks', String(id))
+    const taskDirExists = await pathExists(taskDir)
+    if (!taskDirExists) {
+      throw new Error(`Task #${id} does not exist in project "${projectSlug}"`)
+    }
+    const taskFilePath = path.join(taskDir, 'task.json')
+    const fileExists = await pathExists(taskFilePath)
+    if (!fileExists) {
+      throw new Error(`Task #${id} in project "${projectSlug}" is corrupt (missing task.json)`)
+    }
+    try {
+      const store = createStore(taskFilePath, TaskSchema)
+      await store.read()
+    }
+    catch (err: unknown) {
+      const detail = err instanceof Error
+        ? err.message
+        : String(err)
+      throw new Error(`Task #${id} in project "${projectSlug}" is corrupt (${detail})`)
+    }
+  }
+
+  return uniqueIds
+}
+
 export class RemoveTasksError extends Error {
   constructor(
     message: string,
@@ -185,30 +271,8 @@ export async function removeTasks(
   projectsDir = getDefaultProjectsDir(),
   rmFn: (target: string, options: { force: boolean, recursive: boolean }) => Promise<void> = rm,
 ): Promise<number[]> {
-  validateProjectSlug(projectSlug)
+  const uniqueIds = await resolveTaskIds(projectSlug, ids, projectsDir)
   const projectDir = path.join(projectsDir, projectSlug)
-  const projectFilePath = path.join(projectDir, 'project.json')
-
-  const projectExists = await pathExists(projectFilePath)
-  if (!projectExists) {
-    throw new Error(`Project "${projectSlug}" does not exist`)
-  }
-
-  if (ids.length === 0) {
-    return []
-  }
-
-  const uniqueIds = [
-    ...new Set(ids.map(id => parseTaskId(id))),
-  ]
-
-  for (const id of uniqueIds) {
-    const taskFilePath = path.join(projectDir, 'tasks', String(id), 'task.json')
-    const exists = await pathExists(taskFilePath)
-    if (!exists) {
-      throw new Error(`Task #${id} does not exist in project "${projectSlug}"`)
-    }
-  }
 
   const removedIds: number[] = []
   for (const id of uniqueIds) {

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import zod from 'zod'
 import { createStore } from './create-store.js'
+import { pathExists, slugify, validateSlug } from './fs-utils.js'
 
 export const ProjectSchema = zod.object({
   name: zod.string().trim().min(1).default('project'),
@@ -24,27 +25,11 @@ export function getDefaultProjectsDir(): string {
 }
 
 export function slugifyProjectName(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return slug || 'project'
+  return slugify(name, 'project')
 }
 
 export function appendUniqueHash(slug: string, hash = randomUUID().slice(0, 8)): string {
   return `${slug}-${hash}`
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await stat(filePath)
-    return true
-  }
-  catch {
-    return false
-  }
 }
 
 export async function listProjects(
@@ -105,17 +90,7 @@ export async function removeProjects(
   rmFn: (target: string, options: { force: boolean, recursive: boolean }) => Promise<void> = rm,
 ): Promise<string[]> {
   for (const slug of slugs) {
-    if (
-      !slug
-      || path.isAbsolute(slug)
-      || path.basename(slug) !== slug
-      || slug === '.'
-      || slug === '..'
-      || slug.includes('/')
-      || slug.includes('\\')
-    ) {
-      throw new Error(`Invalid project slug "${slug}"`)
-    }
+    validateSlug(slug, 'project slug')
     const targetDir = path.join(projectsDir, slug)
     const exists = await pathExists(targetDir)
     if (!exists) {

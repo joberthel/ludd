@@ -121,4 +121,17 @@ describe('createStore', () => {
     const rawAfter = await readFile(filePath, 'utf8')
     expect(JSON.parse(rawAfter)).toEqual({ name: 'original', count: 1 })
   })
+
+  it('throws when file is missing and schema has no defaults, and does not create the file', async () => {
+    const noDefaultSchema = zod.object({
+      id: zod.number(),
+      title: zod.string(),
+    })
+
+    const filePath = path.join(tempDir, 'missing-file.json')
+    const store = createStore(filePath, noDefaultSchema)
+
+    await expect(store.read()).rejects.toThrow('File')
+    await expect(readFile(filePath)).rejects.toThrow()
+  })
 })

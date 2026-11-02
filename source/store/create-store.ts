@@ -16,11 +16,11 @@ export function createStore<TSchema extends z.ZodType>(
   schema: TSchema,
 ): Store<TSchema> {
   const parsedDefault = schema.safeParse({})
-  const defaultData = parsedDefault.success
+  const defaultData: z.output<TSchema> | null = parsedDefault.success
     ? parsedDefault.data
-    : ({} as z.output<TSchema>)
-  const adapter = new JSONFile<z.output<TSchema>>(filePath)
-  const db = new Low<z.output<TSchema>>(adapter, defaultData)
+    : null
+  const adapter = new JSONFile<z.output<TSchema> | null>(filePath)
+  const db = new Low<z.output<TSchema> | null>(adapter, defaultData)
 
   return {
     filePath,
@@ -28,15 +28,18 @@ export function createStore<TSchema extends z.ZodType>(
       const exists = await stat(filePath).then(() => true, () => false)
       if (!exists) {
         if (!parsedDefault.success) {
-          throw new Error(`File "${filePath}" does not exist`)
+          throw new Error(`File "${filePath}" does not exist and schema has no defaults`)
         }
         await mkdir(path.dirname(filePath), { recursive: true })
-        const initial = structuredClone(defaultData)
+        const initial = structuredClone(parsedDefault.data)
         db.data = initial
         await db.write()
         return initial
       }
       await db.read()
+      if (db.data === null) {
+        throw new Error(`File "${filePath}" contains null data`)
+      }
       return schema.parse(db.data)
     },
     async write(data) {

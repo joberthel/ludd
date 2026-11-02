@@ -10,6 +10,7 @@ import {
   parseTaskId,
   removeTasks,
   RemoveTasksError,
+  resolveTaskIds,
   slugifyBranchName,
   TaskSchema,
   TaskStatusSchema,
@@ -85,12 +86,25 @@ describe('taskStore', () => {
         extra: 'disallowed',
       })).toThrow(ZodError)
     })
+
+    it('rejects invalid branch names violating git ref format', () => {
+      expect(() => TaskSchema.parse({ id: 1, name: 'Task', branch: 'foo bar' })).toThrow(ZodError)
+      expect(() => TaskSchema.parse({ id: 1, name: 'Task', branch: 'a..b' })).toThrow(ZodError)
+      expect(() => TaskSchema.parse({ id: 1, name: 'Task', branch: 'foo/' })).toThrow(ZodError)
+      expect(() => TaskSchema.parse({ id: 1, name: 'Task', branch: 'foo.lock' })).toThrow(ZodError)
+      expect(() => TaskSchema.parse({ id: 1, name: 'Task', branch: 'foo~1' })).toThrow(ZodError)
+    })
   })
 
   describe('slugifyBranchName', () => {
     it('converts titles to kebab-case branch names', () => {
       expect(slugifyBranchName('Implement Task Store!')).toBe('implement-task-store')
       expect(slugifyBranchName('Fix Issue #42: Login Bug')).toBe('fix-issue-42-login-bug')
+    })
+
+    it('normalizes unicode characters such as umlauts and accents', () => {
+      expect(slugifyBranchName('Größe ändern')).toBe('grosse-andern')
+      expect(slugifyBranchName('Café crème')).toBe('cafe-creme')
     })
 
     it('falls back to "task" when input contains no alphanumeric characters', () => {
@@ -212,6 +226,34 @@ describe('taskStore', () => {
         projectSlug: slug,
         name: '   ',
       }, tempProjectsDir)).rejects.toThrow('Task name cannot be empty')
+    })
+
+    it('allocates distinct IDs and creates all files under concurrent execution', async () => {
+      const { slug } = await initProject({
+        name: 'Concurrent Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      const concurrency = 8
+      const tasks = await Promise.all(
+        Array.from({ length: concurrency }, async (_, i) =>
+          createTask({
+            projectSlug: slug,
+            name: `Concurrent Task ${i + 1}`,
+          }, tempProjectsDir)),
+      )
+
+      const ids = tasks.map(t => t.task.id).sort((a, b) => a - b)
+      expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+
+      const list = await listTasks(slug, tempProjectsDir)
+      expect(list).toHaveLength(concurrency)
+      expect(list.map(t => t.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+
+      const projectJson = JSON.parse(
+        await readFile(path.join(tempProjectsDir, slug, 'project.json'), 'utf8'),
+      )
+      expect(projectJson.taskCounter).toBe(concurrency)
     })
   })
 
@@ -371,6 +413,32 @@ describe('taskStore', () => {
       expect(error.removedIds).toEqual([1])
       expect(error.message).toContain('partially removed: #1')
       expect(error.message).toContain('Disk error')
+    })
+  })
+
+  describe('resolveTaskIds', () => {
+    it('reports corrupt tasks when task.json is corrupted or missing', async () => {
+      const { slug } = await initProject({
+        name: 'Corrupt Resolve Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      await createTask({ projectSlug: slug, name: 'Valid' }, tempProjectsDir)
+
+      const corruptDir = path.join(tempProjectsDir, slug, 'tasks', '2')
+      await mkdir(corruptDir, { recursive: true })
+      await writeFile(path.join(corruptDir, 'task.json'), 'bad json')
+
+      await expect(resolveTaskIds(slug, [1, 2], tempProjectsDir))
+        .rejects
+        .toThrow('Task #2 in project "corrupt-resolve-project" is corrupt')
+
+      const missingJsonDir = path.join(tempProjectsDir, slug, 'tasks', '3')
+      await mkdir(missingJsonDir, { recursive: true })
+
+      await expect(resolveTaskIds(slug, [1, 3], tempProjectsDir))
+        .rejects
+        .toThrow('Task #3 in project "corrupt-resolve-project" is corrupt (missing task.json)')
     })
   })
 })
