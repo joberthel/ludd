@@ -291,4 +291,236 @@ describe('task refine command', () => {
       expect(frame).toContain('#1 Whitespace ID Task')
     })
   })
+
+  it('renders ask_question prompt and returns guess when pressing Enter on empty input', async () => {
+    const { slug } = await initProject({
+      name: 'Ask Question Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Refine Task For Question',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let toolResult: unknown
+    let sessionPromiseResolve: () => void
+    const sessionPromise = new Promise<void>((resolve) => {
+      sessionPromiseResolve = resolve
+    })
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const initRes = await fetch(mcpServer.url, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'accept': 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'test-agent', version: '1.0.0' },
+              },
+            }),
+          })
+          const sessionId = initRes.headers.get('mcp-session-id')
+          const headers: Record<string, string> = {
+            'content-type': 'application/json',
+            'accept': 'application/json, text/event-stream',
+          }
+          if (sessionId !== null && sessionId !== '') {
+            headers['mcp-session-id'] = sessionId
+          }
+
+          const callRes = await fetch(mcpServer.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'tools/call',
+              params: {
+                name: 'ask_question',
+                arguments: {
+                  hypothesis: 'User wants dark mode by default',
+                  confidence: 65,
+                  missing: 'persistence strategy',
+                  question: 'Should dark mode be persisted in localStorage?',
+                  guess: 'Yes, persist in localStorage',
+                },
+              },
+            }),
+          })
+          toolResult = await callRes.json()
+          sessionPromiseResolve()
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('HYPOTHESIS:')
+      expect(frame).toContain('User wants dark mode by default')
+      expect(frame).toContain('CONFIDENCE:')
+      expect(frame).toContain('65%')
+      expect(frame).toContain('MISSING:')
+      expect(frame).toContain('persistence strategy')
+      expect(frame).toContain('Q:')
+      expect(frame).toContain('Should dark mode be persisted in localStorage?')
+      expect(frame).toContain('GUESS:')
+      expect(frame).toContain('Yes, persist in localStorage')
+      expect(frame).toContain('Answer (press Enter to accept guess):')
+    })
+
+    stdin.write('\r')
+
+    await sessionPromise
+
+    expect(toolResult).toEqual({
+      jsonrpc: '2.0',
+      id: 2,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ answer: 'Yes, persist in localStorage' }),
+          },
+        ],
+      },
+    })
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.yellow('[RUNNING]'))
+      expect(frame).toContain('Refining task #1 (Refine Task For Question)')
+    })
+  })
+
+  it('renders ask_question prompt and returns typed trimmed answer', async () => {
+    const { slug } = await initProject({
+      name: 'Custom Answer Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Refine Task Custom Answer',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let toolResult: unknown
+    let sessionPromiseResolve: () => void
+    const sessionPromise = new Promise<void>((resolve) => {
+      sessionPromiseResolve = resolve
+    })
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const initRes = await fetch(mcpServer.url, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'accept': 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'test-agent', version: '1.0.0' },
+              },
+            }),
+          })
+          const sessionId = initRes.headers.get('mcp-session-id')
+          const headers: Record<string, string> = {
+            'content-type': 'application/json',
+            'accept': 'application/json, text/event-stream',
+          }
+          if (sessionId !== null && sessionId !== '') {
+            headers['mcp-session-id'] = sessionId
+          }
+
+          const callRes = await fetch(mcpServer.url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'tools/call',
+              params: {
+                name: 'ask_question',
+                arguments: {
+                  hypothesis: 'User wants cookies',
+                  confidence: 85,
+                  question: 'Use cookies or indexedDB?',
+                  guess: 'Cookies',
+                },
+              },
+            }),
+          })
+          toolResult = await callRes.json()
+          sessionPromiseResolve()
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('HYPOTHESIS:')
+      expect(frame).toContain('User wants cookies')
+      expect(frame).toContain('CONFIDENCE:')
+      expect(frame).toContain('85%')
+      expect(frame).not.toContain('MISSING:')
+      expect(frame).toContain('Q:')
+      expect(frame).toContain('Use cookies or indexedDB?')
+      expect(frame).toContain('GUESS:')
+      expect(frame).toContain('Cookies')
+    })
+
+    stdin.write('No, use indexedDB instead')
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('No, use indexedDB instead')
+    })
+    stdin.write('\r')
+
+    await sessionPromise
+
+    expect(toolResult).toEqual({
+      jsonrpc: '2.0',
+      id: 2,
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ answer: 'No, use indexedDB instead' }),
+          },
+        ],
+      },
+    })
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.yellow('[RUNNING]'))
+      expect(frame).toContain('Refining task #1 (Refine Task Custom Answer)')
+    })
+  })
 })
