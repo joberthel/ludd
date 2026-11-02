@@ -6,7 +6,7 @@ import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initProject } from '../store/project-store.js'
 import { createTask, getTask } from '../store/task-store.js'
-import { pressKey, submitAndWait } from '../test-helpers.js'
+import { pressKey, stripAnsi, submitAndWait } from '../test-helpers.js'
 import { RefinementSession } from './refinement-session.js'
 import { callAskQuestion, callCompleteRefinement, initMcpSession } from './test-helpers.js'
 
@@ -679,5 +679,109 @@ describe('refinementSession component', () => {
       expect(frame).toContain('corrupt (missing task.json)')
       expect(process.exitCode).toBe(1)
     })
+  })
+
+  it('displays LoadingScreen during startup milestones before first question arrives', async () => {
+    const project = await initProject({
+      name: 'Loading Screen Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Startup Milestones Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let continueSession: () => void
+    const holdSession = new Promise<void>((resolve) => {
+      continueSession = resolve
+    })
+
+    const { lastFrame } = render(
+      <RefinementSession
+        model="gemini-2.5-pro"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ onStageChange }) => {
+          onStageChange?.('verifying-skill')
+          await holdSession
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Refining Task #1: Startup Milestones Task')
+      expect(frame).toContain('Model: gemini-2.5-pro')
+      expect(frame).toContain('MCP server started')
+      expect(frame).toContain('Verifying refinement skill...')
+    })
+
+    continueSession!()
+  })
+
+  it('appends answered question to history, renders thinking indicator, and updates statusbar', async () => {
+    const project = await initProject({
+      name: 'History And Thinking Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'History And Thinking Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let finishSession: () => void
+    const holdSession = new Promise<void>((resolve) => {
+      finishSession = resolve
+    })
+
+    const { lastFrame, stdin } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          await callAskQuestion(
+            mcpServer.url,
+            {
+              hypothesis: 'First hypothesis',
+              confidence: 65,
+              question: 'First question?',
+              guess: 'First guess',
+            },
+            sessionId,
+          )
+          await holdSession
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = stripAnsi(lastFrame() ?? '')
+      expect(frame).toContain('First question?')
+      expect(frame).toContain('Confidence: 65%')
+      expect(frame).toContain('MCP: Connected')
+    })
+
+    await pressKey(stdin, 'Custom User Answer')
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Custom User Answer')
+    })
+
+    await submitAndWait(stdin, '\r', () => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('Agent is analyzing your response and formulating the next question...')
+      expect(frame).toContain('[History: 1 past turn(s) - press PageUp to view]')
+      expect(frame).toContain('[PgUp/PgDn] History (1)')
+    })
+
+    finishSession!()
   })
 })

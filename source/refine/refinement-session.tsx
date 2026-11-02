@@ -1,15 +1,24 @@
 import type { ProjectRecord } from '../store/project-store.js'
 import type { RefineIntent, Task } from '../store/task-store.js'
+import type { InitStage } from './components/loading-screen.js'
+import type { QnATurn } from './components/question-history.js'
 import type { AskQuestionInput, RefineConfirmationResult, RefineMcpServerInstance } from './refine-mcp-server.js'
 import process from 'node:process'
-import { TextInput } from '@inkjs/ui'
+import { Spinner, TextInput } from '@inkjs/ui'
 import { Box, Text } from 'ink'
 import { useEffect, useRef, useState } from 'react'
 import { ErrorLine, toMessage } from '../components/error-line.js'
 import { completeTaskRefinement } from '../store/task-store.js'
+import { FullscreenContainer } from './components/fullscreen-container.js'
+import { LoadingScreen } from './components/loading-screen.js'
+import { QuestionHistory } from './components/question-history.js'
+import { Statusbar } from './components/statusbar.js'
 import { ensureRefineSkill } from './ensure-refine-skill.js'
 import { startRefineMcpServer } from './refine-mcp-server.js'
 import { runAgyRefineSession } from './run-agy-session.js'
+
+export type { InitStage } from './components/loading-screen.js'
+export type { QnATurn } from './components/question-history.js'
 
 export interface RefineSessionContext {
   task: Task
@@ -18,12 +27,15 @@ export interface RefineSessionContext {
   mcpServer: RefineMcpServerInstance
   signal?: AbortSignal
   luddHomeDir?: string
+  onStageChange?: (stage: InitStage) => void
 }
 
 export type RefineSessionRunner = (ctx: RefineSessionContext) => Promise<void>
 
 export const defaultRefineSessionRunner: RefineSessionRunner = async (ctx) => {
+  ctx.onStageChange?.('verifying-skill')
   await ensureRefineSkill(ctx.luddHomeDir)
+  ctx.onStageChange?.('spawning-agent')
   await runAgyRefineSession({
     task: ctx.task,
     project: ctx.project,
@@ -67,6 +79,13 @@ export function RefinementSession({
   runSession,
 }: RefinementSessionProps) {
   const [sessionState, setSessionState] = useState<SessionState>({ status: 'waiting' })
+  const [hasReceivedFirstToolCall, setHasReceivedFirstToolCall] = useState(false)
+  const [initStage, setInitStage] = useState<InitStage>('starting-mcp')
+  const [mcpPort, setMcpPort] = useState<number | undefined>(undefined)
+  const [mcpStatus, setMcpStatus] = useState<string>('Starting')
+  const [history, setHistory] = useState<QnATurn[]>([])
+  const [latestConfidence, setLatestConfidence] = useState<number | undefined>(undefined)
+
   const activePendingToolRejectRef = useRef<((reason: Error) => void) | undefined>(undefined)
   const isSubmittingRef = useRef(false)
   const confirmedRef = useRef(false)
@@ -79,6 +98,9 @@ export function RefinementSession({
 
     async function start() {
       try {
+        setInitStage('starting-mcp')
+        setMcpStatus('Starting')
+
         const server = await startRefineMcpServer({
           onAskQuestion: async (question) => {
             if (!isMounted) {
@@ -91,6 +113,8 @@ export function RefinementSession({
 
             return new Promise<string>((resolve, reject) => {
               activePendingToolRejectRef.current = reject
+              setHasReceivedFirstToolCall(true)
+              setLatestConfidence(question.confidence)
 
               setSessionState({
                 status: 'askingQuestion',
@@ -101,6 +125,18 @@ export function RefinementSession({
                   }
                   isSubmittingRef.current = true
                   activePendingToolRejectRef.current = undefined
+
+                  const turn: QnATurn = {
+                    hypothesis: question.hypothesis,
+                    confidence: question.confidence,
+                    missing: question.missing,
+                    question: question.question,
+                    guess: question.guess,
+                    answer,
+                  }
+                  setHistory(prev => [...prev, turn])
+                  setLatestConfidence(question.confidence)
+
                   if (isMounted) {
                     setSessionState({ status: 'waiting' })
                   }
@@ -121,6 +157,8 @@ export function RefinementSession({
 
             return new Promise<RefineConfirmationResult>((resolve, reject) => {
               activePendingToolRejectRef.current = reject
+              setHasReceivedFirstToolCall(true)
+              setLatestConfidence(95)
 
               setSessionState({
                 status: 'confirmingIntent',
@@ -190,11 +228,22 @@ export function RefinementSession({
         })
 
         serverInstance = server
+        setMcpStatus('Connected')
+
+        try {
+          const parsedUrl = new URL(server.url)
+          if (parsedUrl.port) {
+            setMcpPort(Number(parsedUrl.port))
+          }
+        }
+        catch {}
+
         if (!isMounted) {
           await server.close()
           return
         }
 
+        setInitStage('verifying-skill')
         const runner = runSession ?? defaultRefineSessionRunner
         await runner({
           task,
@@ -203,6 +252,11 @@ export function RefinementSession({
           mcpServer: server,
           signal: abortController.signal,
           luddHomeDir,
+          onStageChange: (nextStage) => {
+            if (isMounted) {
+              setInitStage(nextStage)
+            }
+          },
         })
 
         if (!isMounted) {
@@ -231,6 +285,7 @@ export function RefinementSession({
         })
       }
       finally {
+        setMcpStatus('Closed')
         if (activePendingToolRejectRef.current !== undefined) {
           activePendingToolRejectRef.current(new Error('Refinement session ended'))
           activePendingToolRejectRef.current = undefined
@@ -278,100 +333,134 @@ export function RefinementSession({
     )
   }
 
-  if (sessionState.status === 'confirmingIntent') {
-    const { intent, onConfirm } = sessionState
-    return (
-      <Box flexDirection="column">
-        <Text bold color="cyan">STATEMENT OF INTENT:</Text>
-        <Text>
-          <Text bold color="cyan">Outcome: </Text>
-          {intent.outcome}
-        </Text>
-        <Text>
-          <Text bold color="cyan">User: </Text>
-          {intent.user}
-        </Text>
-        <Text>
-          <Text bold color="cyan">Why now: </Text>
-          {intent.whyNow}
-        </Text>
-        <Text>
-          <Text bold color="cyan">Success: </Text>
-          {intent.success}
-        </Text>
-        <Text>
-          <Text bold color="cyan">Constraint: </Text>
-          {intent.constraint}
-        </Text>
-        <Text>
-          <Text bold color="cyan">Out of scope: </Text>
-          {intent.outOfScope}
-        </Text>
-        <Box marginTop={1}>
-          <Text>Confirm intent? (Enter/y to confirm, or type refinement feedback): </Text>
-          <TextInput
-            placeholder="y"
-            onSubmit={(val) => {
-              void onConfirm(val)
-            }}
-          />
-        </Box>
-      </Box>
-    )
-  }
-
-  if (sessionState.status === 'askingQuestion') {
-    const { question, onAnswer } = sessionState
-    const hasMissing = question.missing !== undefined && question.missing !== ''
-    return (
-      <Box flexDirection="column">
-        <Text>
-          <Text bold color="cyan">HYPOTHESIS: </Text>
-          {question.hypothesis}
-        </Text>
-        <Text>
-          <Text bold color="cyan">CONFIDENCE: </Text>
-          {`${question.confidence}%`}
-        </Text>
-        {hasMissing
-          ? (
-              <Text>
-                <Text bold color="cyan">MISSING: </Text>
-                {question.missing}
-              </Text>
-            )
-          : null}
-        <Text>
-          <Text bold color="cyan">Q: </Text>
-          {question.question}
-        </Text>
-        <Text>
-          <Text bold color="cyan">GUESS: </Text>
-          {question.guess}
-        </Text>
-        <Box marginTop={1}>
-          <Text>Answer (press Enter to accept guess): </Text>
-          <TextInput
-            placeholder={question.guess}
-            onSubmit={(val) => {
-              const trimmed = val.trim()
-              const answer = trimmed === ''
-                ? question.guess
-                : trimmed
-              onAnswer(answer)
-            }}
-          />
-        </Box>
-      </Box>
-    )
-  }
-
   return (
-    <Box>
-      <Text>
-        <Text color="yellow">[RUNNING]</Text>
-        {` Refining task #${task.id} (${task.name}) with ${model}...`}
-      </Text>
-    </Box>
+    <FullscreenContainer>
+      <Box borderStyle="round" flexDirection="column" paddingX={1} width="100%">
+        <Text bold color="cyan">
+          {`Refining Task #${task.id}: ${task.name}`}
+        </Text>
+        <Text dimColor>
+          {`Model: ${model}`}
+        </Text>
+      </Box>
+
+      {!hasReceivedFirstToolCall
+        ? (
+            <LoadingScreen
+              mcpPort={mcpPort}
+              model={model}
+              stage={initStage}
+              taskId={task.id}
+              taskName={task.name}
+            />
+          )
+        : (
+            <Box flexDirection="column" flexGrow={1} padding={1}>
+              <QuestionHistory history={history} />
+
+              {sessionState.status === 'waiting'
+                ? (
+                    <Box flexDirection="column" marginY={1}>
+                      <Spinner label="Agent is analyzing your response and formulating the next question..." />
+                    </Box>
+                  )
+                : null}
+
+              {sessionState.status === 'askingQuestion'
+                ? (
+                    <Box flexDirection="column">
+                      <Text>
+                        <Text bold color="cyan">HYPOTHESIS: </Text>
+                        {sessionState.question.hypothesis}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">CONFIDENCE: </Text>
+                        {`${sessionState.question.confidence}%`}
+                      </Text>
+                      {sessionState.question.missing !== undefined && sessionState.question.missing !== ''
+                        ? (
+                            <Text>
+                              <Text bold color="cyan">MISSING: </Text>
+                              {sessionState.question.missing}
+                            </Text>
+                          )
+                        : null}
+                      <Text>
+                        <Text bold color="cyan">Q: </Text>
+                        {sessionState.question.question}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">GUESS: </Text>
+                        {sessionState.question.guess}
+                      </Text>
+                      <Box marginTop={1}>
+                        <Text>Answer (press Enter to accept guess): </Text>
+                        <TextInput
+                          placeholder={sessionState.question.guess}
+                          onSubmit={(val) => {
+                            const trimmed = val.trim()
+                            const answer = trimmed === ''
+                              ? sessionState.question.guess
+                              : trimmed
+                            sessionState.onAnswer(answer)
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  )
+                : null}
+
+              {sessionState.status === 'confirmingIntent'
+                ? (
+                    <Box flexDirection="column">
+                      <Text bold color="cyan">STATEMENT OF INTENT:</Text>
+                      <Text>
+                        <Text bold color="cyan">Outcome: </Text>
+                        {sessionState.intent.outcome}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">User: </Text>
+                        {sessionState.intent.user}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">Why now: </Text>
+                        {sessionState.intent.whyNow}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">Success: </Text>
+                        {sessionState.intent.success}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">Constraint: </Text>
+                        {sessionState.intent.constraint}
+                      </Text>
+                      <Text>
+                        <Text bold color="cyan">Out of scope: </Text>
+                        {sessionState.intent.outOfScope}
+                      </Text>
+                      <Box marginTop={1}>
+                        <Text>Confirm intent? (Enter/y to confirm, or type refinement feedback): </Text>
+                        <TextInput
+                          placeholder="y"
+                          onSubmit={(val) => {
+                            void sessionState.onConfirm(val)
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  )
+                : null}
+            </Box>
+          )}
+
+      <Box marginTop="auto" width="100%">
+        <Statusbar
+          confidence={latestConfidence}
+          historyCount={history.length}
+          mcpStatus={mcpStatus}
+          model={model}
+        />
+      </Box>
+    </FullscreenContainer>
   )
 }
