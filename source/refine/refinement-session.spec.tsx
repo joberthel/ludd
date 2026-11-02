@@ -6,6 +6,7 @@ import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initProject } from '../store/project-store.js'
 import { createTask, getTask } from '../store/task-store.js'
+import { pressKey, submitAndWait } from '../test-helpers.js'
 import { RefinementSession } from './refinement-session.js'
 import { callAskQuestion, callCompleteRefinement, initMcpSession } from './test-helpers.js'
 
@@ -85,10 +86,7 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Answer (press Enter to accept guess):')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(toolResult).toBeDefined()
     })
 
@@ -144,17 +142,13 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Which framework should be used?')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    stdin.write('Vue 3 instead')
+    await pressKey(stdin, 'Vue 3 instead')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Vue 3 instead')
     })
-    await new Promise(resolve => setTimeout(resolve, 50))
 
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(toolResult).toBeDefined()
     })
 
@@ -225,10 +219,7 @@ describe('refinementSession component', () => {
     expect(parsedSecond.result?.isError).toBe(true)
     expect(parsedSecond.result?.content?.[0]?.text).toContain('Only one question may be asked at a time')
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(firstResult).toBeDefined()
     })
     const parsedFirst = firstResult as { result?: { content?: Array<{ text: string }> } }
@@ -325,10 +316,7 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Refinement completed for task #1 (Complete Refine Task)')
@@ -465,16 +453,13 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Confirm intent? (Enter/y to confirm, or type refinement feedback):')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    stdin.write('Please adjust the outcome')
+    await pressKey(stdin, 'Please adjust the outcome')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Please adjust the outcome')
     })
 
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(firstResult).toBeDefined()
     })
 
@@ -489,10 +474,7 @@ describe('refinementSession component', () => {
       expect(frame).toContain('All users')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(secondResult).toBeDefined()
     })
 
@@ -560,16 +542,13 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    stdin.write('y')
+    await pressKey(stdin, 'y')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('y')
     })
 
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(confirmResult).toBeDefined()
     })
 
@@ -622,16 +601,13 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    stdin.write('YES')
+    await pressKey(stdin, 'YES')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('YES')
     })
 
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(confirmResult).toBeDefined()
     })
 
@@ -689,10 +665,7 @@ describe('refinementSession component', () => {
     const taskJsonPath = path.join(tempProjectsDir, project.slug, 'tasks', '1', 'task.json')
     await rm(taskJsonPath, { force: true })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(confirmResult).toBeDefined()
     })
 

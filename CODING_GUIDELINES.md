@@ -84,6 +84,7 @@ Follow these rules when you test interactive components with `stdin.write`:
 - Wait 50 milliseconds before you send input to a new component. This delay allows React to register the input listener.
 - Put Enter (`\r`) and confirmation keys inside `vi.waitFor` blocks to repeat submissions during high CPU load.
 - Send toggle keys (such as Space) and arrow keys only one time after the initial wait.
+- Use `pressKey` and `submitAndWait` from `source/test-helpers.ts` to apply these patterns consistently.
 
 ## 8. CODE QUALITY AND GIT WORKFLOW
 

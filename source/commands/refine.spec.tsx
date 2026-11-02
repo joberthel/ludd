@@ -12,6 +12,7 @@ import { callCompleteRefinement, initMcpSession } from '../refine/test-helpers.j
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
 import { createTask } from '../store/task-store.js'
+import { submitAndWait } from '../test-helpers.js'
 import TaskRefine, { options } from './refine.js'
 
 describe('task refine command', () => {
@@ -264,11 +265,8 @@ describe('task refine command', () => {
       expect(frame).toContain('#2 Second Refinement Task')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
     // Press Enter to select the focused option (task #1)
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
       expect(frame).toContain('Refining task #1 (First Refinement Task) with gemini-4-argon-medium...')
@@ -350,10 +348,7 @@ describe('task refine command', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       expect(lastFrame() ?? '').toContain('[OK]')
     })
 

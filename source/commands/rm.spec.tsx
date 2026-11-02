@@ -6,6 +6,7 @@ import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initProject } from '../store/project-store.js'
 import { createTask, listTasks } from '../store/task-store.js'
+import { pressKey, submitAndWait } from '../test-helpers.js'
 import TaskRm from './rm.js'
 
 describe('task rm command', () => {
@@ -156,10 +157,7 @@ describe('task rm command', () => {
       expect(frame).toContain('Remove task #1?')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('y')
+    await submitAndWait(stdin, 'y', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed task #1')
@@ -190,10 +188,7 @@ describe('task rm command', () => {
       expect(frame).toContain('Remove task #1?')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('n')
+    await submitAndWait(stdin, 'n', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removal cancelled.')
@@ -276,10 +271,8 @@ describe('task rm command', () => {
       expect(frame).toContain('#1 Task A')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
     // Toggle Task 1 with Space
-    stdin.write(' ')
+    await pressKey(stdin, ' ')
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -287,19 +280,13 @@ describe('task rm command', () => {
     })
 
     // Submit selection
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Remove task #1?')
     })
 
     // Confirm with y
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('y')
+    await submitAndWait(stdin, 'y', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed task #1')
@@ -330,10 +317,7 @@ describe('task rm command', () => {
     })
 
     // Submit without selecting anything
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('No tasks selected for removal.')

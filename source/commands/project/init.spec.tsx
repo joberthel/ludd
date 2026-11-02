@@ -7,6 +7,7 @@ import { render } from 'ink-testing-library'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initProject, slugifyProjectName } from '../../store/project-store.js'
+import { pressKey, submitAndWait } from '../../test-helpers.js'
 import ProjectInit from './init.js'
 
 describe('project init command', () => {
@@ -91,14 +92,11 @@ describe('project init command', () => {
       expect(frame).toContain('Project name:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
     const folderName = path.basename(path.resolve(tempWorkDir))
     const expectedSlug = slugifyProjectName(folderName)
 
     // Press Enter to accept placeholder (folderName)
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })
@@ -126,24 +124,19 @@ describe('project init command', () => {
     })
 
     // Type custom name and press Enter
-    stdin.write('Custom Project')
+    await pressKey(stdin, 'Custom Project')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Custom Project')
     })
-    stdin.write('\r')
 
-    // Wait for description prompt
-    await vi.waitFor(() => {
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Project description:')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
     // Press Enter to accept empty description
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('custom-project')
@@ -175,13 +168,10 @@ describe('project init command', () => {
       expect(frame).not.toContain('[RUNNING]')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
     const folderName = path.basename(path.resolve(tempWorkDir))
     const expectedSlug = slugifyProjectName(folderName)
 
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })

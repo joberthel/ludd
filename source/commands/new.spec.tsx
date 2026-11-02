@@ -5,6 +5,7 @@ import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { initProject } from '../store/project-store.js'
+import { pressKey, submitAndWait } from '../test-helpers.js'
 import TaskNew from './new.js'
 
 describe('task new command', () => {
@@ -91,22 +92,19 @@ describe('task new command', () => {
       expect(frame).toContain('Task name:')
     })
 
-    stdin.write('Interactive Task')
+    await pressKey(stdin, 'Interactive Task')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Interactive Task')
     })
-    stdin.write('\r')
 
-    await vi.waitFor(() => {
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Branch name:')
     })
 
     // Press Enter to accept slugified branch default
-    await new Promise(resolve => setTimeout(resolve, 50))
-    await vi.waitFor(() => {
-      stdin.write('\r')
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Created task #1 (Interactive Task) on branch interactive-task')
@@ -138,14 +136,13 @@ describe('task new command', () => {
       expect(frame).toContain('Branch name:')
     })
 
-    stdin.write('my-override-branch')
+    await pressKey(stdin, 'my-override-branch')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('my-override-branch')
     })
-    stdin.write('\r')
 
-    await vi.waitFor(() => {
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Created task #1 (Named Task) on branch my-override-branch')
@@ -171,14 +168,13 @@ describe('task new command', () => {
       expect(frame).toContain('Task name:')
     })
 
-    stdin.write('   ')
+    await pressKey(stdin, '   ')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('   ')
     })
-    stdin.write('\r')
 
-    await vi.waitFor(() => {
+    await submitAndWait(stdin, '\r', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.red('[ERROR]'))
       expect(frame).toContain('Task name cannot be empty')
