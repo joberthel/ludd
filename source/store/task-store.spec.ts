@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ZodError } from 'zod'
 import { initProject } from './project-store.js'
 import {
+  completeTaskRefinement,
   createTask,
+  formatIntentMarkdown,
   getTask,
   listTasks,
   parseTaskId,
+  RefineIntentSchema,
   removeTasks,
   RemoveTasksError,
   resolveTaskIds,
@@ -496,6 +499,160 @@ describe('taskStore', () => {
       await expect(getTask(slug, 2, tempProjectsDir))
         .rejects
         .toThrow('Task #2 in project "corrupt-task-project" is corrupt')
+    })
+  })
+
+  describe('refineIntentSchema', () => {
+    const validIntent = {
+      outcome: 'Add task refinement command',
+      user: 'CLI users refining tasks',
+      whyNow: 'Needed before implementation',
+      success: 'Intent written to file and status set to todo',
+      constraint: 'Keep it within the TUI session',
+      outOfScope: 'Executing code directly',
+    }
+
+    it('accepts valid intent and trims fields', () => {
+      const parsed = RefineIntentSchema.parse({
+        ...validIntent,
+        outcome: '  Add task refinement command  ',
+      })
+      expect(parsed.outcome).toBe('Add task refinement command')
+    })
+
+    it('rejects missing or empty fields', () => {
+      expect(() => RefineIntentSchema.parse({ ...validIntent, outcome: '' })).toThrow()
+      expect(() => RefineIntentSchema.parse({ ...validIntent, user: '   ' })).toThrow()
+      const { success, ...incomplete } = validIntent
+      expect(() => RefineIntentSchema.parse(incomplete)).toThrow()
+    })
+
+    it('rejects unexpected properties', () => {
+      expect(() => RefineIntentSchema.parse({ ...validIntent, extra: 'not allowed' })).toThrow()
+    })
+  })
+
+  describe('formatIntentMarkdown', () => {
+    it('formats a statement of intent markdown document', () => {
+      const task = {
+        id: 1,
+        name: 'Refine Feature',
+        branch: 'task-1-refine-feature',
+        status: 'refinement' as const,
+      }
+      const intent = {
+        outcome: 'Add task refinement',
+        user: 'CLI users',
+        whyNow: 'High demand',
+        success: 'Unit tests pass',
+        constraint: 'No extra dependencies',
+        outOfScope: 'GUI support',
+      }
+
+      const markdown = formatIntentMarkdown(task, intent)
+      expect(markdown).toBe(
+        '# Statement of Intent: Refine Feature (#1)\n\n'
+        + '- **Outcome:** Add task refinement\n'
+        + '- **User:** CLI users\n'
+        + '- **Why now:** High demand\n'
+        + '- **Success:** Unit tests pass\n'
+        + '- **Constraint:** No extra dependencies\n'
+        + '- **Out of scope:** GUI support\n',
+      )
+    })
+  })
+
+  describe('completeTaskRefinement', () => {
+    const sampleIntent = {
+      outcome: 'Implement command',
+      user: 'Developers',
+      whyNow: 'Needed for sprint',
+      success: 'All tests pass',
+      constraint: 'Node 22',
+      outOfScope: 'Telemetry',
+    }
+
+    it('writes intent.md, updates task status to todo, and returns result', async () => {
+      const { slug } = await initProject({
+        name: 'Refine Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      const created = await createTask({ projectSlug: slug, name: 'Task to Refine' }, tempProjectsDir)
+      expect(created.task.status).toBe('refinement')
+
+      const result = await completeTaskRefinement({
+        projectSlug: slug,
+        taskId: '#1',
+        intent: sampleIntent,
+      }, tempProjectsDir)
+
+      expect(result.task.id).toBe(1)
+      expect(result.task.status).toBe('todo')
+      expect(result.intentPath).toBe(path.join(tempProjectsDir, slug, 'tasks', '1', 'intent.md'))
+
+      // Verify file content on disk
+      const savedMarkdown = await readFile(result.intentPath, 'utf-8')
+      expect(savedMarkdown).toBe(result.markdown)
+      expect(savedMarkdown).toContain('# Statement of Intent: Task to Refine (#1)')
+      expect(savedMarkdown).toContain('- **Outcome:** Implement command')
+
+      // Verify task.json on disk is updated to status todo
+      const refreshed = await getTask(slug, 1, tempProjectsDir)
+      expect(refreshed.status).toBe('todo')
+    })
+
+    it('throws if project does not exist', async () => {
+      await expect(completeTaskRefinement({
+        projectSlug: 'non-existent',
+        taskId: 1,
+        intent: sampleIntent,
+      }, tempProjectsDir)).rejects.toThrow('Project "non-existent" does not exist')
+    })
+
+    it('throws if task does not exist', async () => {
+      const { slug } = await initProject({
+        name: 'Empty Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      await expect(completeTaskRefinement({
+        projectSlug: slug,
+        taskId: 99,
+        intent: sampleIntent,
+      }, tempProjectsDir)).rejects.toThrow('Task #99 does not exist in project "empty-project"')
+    })
+
+    it('throws if task is corrupt', async () => {
+      const { slug } = await initProject({
+        name: 'Corrupt Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      const taskDir = path.join(tempProjectsDir, slug, 'tasks', '1')
+      await mkdir(taskDir, { recursive: true })
+      await writeFile(path.join(taskDir, 'task.json'), 'not-json')
+
+      await expect(completeTaskRefinement({
+        projectSlug: slug,
+        taskId: 1,
+        intent: sampleIntent,
+      }, tempProjectsDir)).rejects.toThrow('Task #1 in project "corrupt-project" is corrupt')
+    })
+
+    it('rejects invalid intent schema', async () => {
+      const { slug } = await initProject({
+        name: 'Valid Project',
+        path: tempWorkDir,
+      }, tempProjectsDir)
+
+      await createTask({ projectSlug: slug, name: 'Task 1' }, tempProjectsDir)
+
+      await expect(completeTaskRefinement({
+        projectSlug: slug,
+        taskId: 1,
+        intent: { ...sampleIntent, outcome: '' },
+      }, tempProjectsDir)).rejects.toThrow()
     })
   })
 })

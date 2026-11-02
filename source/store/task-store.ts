@@ -26,6 +26,31 @@ export const TaskSchema = zod.object({
 
 export type Task = zod.infer<typeof TaskSchema>
 
+export const RefineIntentSchema = zod.object({
+  outcome: zod.string().trim().min(1).describe('One-line summary of what is being built'),
+  user: zod.string().trim().min(1).describe('Who benefits from this task'),
+  whyNow: zod.string().trim().min(1).describe('Why this task is needed now'),
+  success: zod.string().trim().min(1).describe('Testable conditions for how we know it worked'),
+  constraint: zod.string().trim().min(1).describe('Binding architectural or product constraints'),
+  outOfScope: zod.string().trim().min(1).describe('What we are explicitly not doing'),
+}).strict()
+
+export type RefineIntent = zod.infer<typeof RefineIntentSchema>
+
+export function formatIntentMarkdown(task: Task, intent: RefineIntent): string {
+  return [
+    `# Statement of Intent: ${task.name} (#${task.id})`,
+    '',
+    `- **Outcome:** ${intent.outcome}`,
+    `- **User:** ${intent.user}`,
+    `- **Why now:** ${intent.whyNow}`,
+    `- **Success:** ${intent.success}`,
+    `- **Constraint:** ${intent.constraint}`,
+    `- **Out of scope:** ${intent.outOfScope}`,
+    '',
+  ].join('\n')
+}
+
 export function slugifyBranchName(name: string): string {
   return slugify(name, 'task')
 }
@@ -324,4 +349,53 @@ export async function removeTasks(
   }
 
   return removedIds
+}
+
+export interface CompleteTaskRefinementOptions {
+  projectSlug: string
+  taskId: number | string
+  intent: RefineIntent
+}
+
+export interface CompleteTaskRefinementResult {
+  task: Task
+  intentPath: string
+  markdown: string
+}
+
+export async function completeTaskRefinement(
+  options: CompleteTaskRefinementOptions,
+  projectsDir = getDefaultProjectsDir(),
+): Promise<CompleteTaskRefinementResult> {
+  validateSlug(options.projectSlug, 'project slug')
+  const projectDir = path.join(projectsDir, options.projectSlug)
+  const projectFilePath = path.join(projectDir, 'project.json')
+
+  const projectExists = await pathExists(projectFilePath)
+  if (!projectExists) {
+    throw new Error(`Project "${options.projectSlug}" does not exist`)
+  }
+
+  const parsedIntent = RefineIntentSchema.parse(options.intent)
+  const taskId = parseTaskId(options.taskId)
+  const task = await readTaskOrThrow(projectDir, options.projectSlug, taskId)
+
+  const taskDir = path.join(projectDir, 'tasks', String(taskId))
+  const taskFilePath = path.join(taskDir, 'task.json')
+  const taskStore = createStore(taskFilePath, TaskSchema)
+
+  const updatedTask = await taskStore.write({
+    ...task,
+    status: 'todo',
+  })
+
+  const markdown = formatIntentMarkdown(updatedTask, parsedIntent)
+  const intentPath = path.join(taskDir, 'intent.md')
+  await writeFile(intentPath, markdown, 'utf-8')
+
+  return {
+    task: updatedTask,
+    intentPath,
+    markdown,
+  }
 }
