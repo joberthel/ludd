@@ -109,9 +109,10 @@ describe('project rm command', () => {
       expect(frame).toContain(`Remove project "${initResult.slug}"?`)
     })
 
-    stdin.write('y')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('y')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain(`Removed project ${initResult.slug}`)
@@ -140,9 +141,10 @@ describe('project rm command', () => {
       expect(frame).toContain('Remove project "do-not-remove"?')
     })
 
-    stdin.write('n')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('n')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removal cancelled.')
@@ -170,10 +172,11 @@ describe('project rm command', () => {
       expect(frame).toContain('Select project(s) to remove')
     })
 
-    // Submit without selecting anything
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
+    // Submit without selecting anything
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('No projects selected for removal.')
@@ -203,6 +206,8 @@ describe('project rm command', () => {
       expect(frame).toContain('Alpha (alpha)')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     // Select Alpha (first item) with Space
     stdin.write(' ')
 
@@ -212,6 +217,7 @@ describe('project rm command', () => {
     })
 
     // Move down to Beta
+    await new Promise(resolve => setTimeout(resolve, 50))
     stdin.write('\u001B[B')
 
     // Wait a tick then toggle Beta with Space
@@ -220,17 +226,18 @@ describe('project rm command', () => {
 
     // Submit selection
     await new Promise(resolve => setTimeout(resolve, 50))
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Remove')
     })
 
     // Confirm with y
-    stdin.write('y')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('y')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed')
@@ -260,6 +267,8 @@ describe('project rm command', () => {
       expect(frame).toContain('Select project(s) to remove')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     // Select Alpha with Space
     stdin.write(' ')
 
@@ -268,10 +277,11 @@ describe('project rm command', () => {
       expect(frame).toContain('✔')
     })
 
-    // Submit selection
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
+    // Submit selection
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed 1 project(s): alpha')
@@ -305,10 +315,11 @@ describe('project rm command', () => {
     // Delete project directory behind the scenes before confirming
     await rm(path.join(tempProjectsDir, initResult.slug), { force: true, recursive: true })
 
-    // Confirm removal
-    stdin.write('y')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
+    // Confirm removal
     await vi.waitFor(() => {
+      stdin.write('y')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.red('[ERROR]'))
       expect(frame).toContain(`Project "${initResult.slug}" does not exist`)

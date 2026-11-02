@@ -156,9 +156,10 @@ describe('task rm command', () => {
       expect(frame).toContain('Remove task #1?')
     })
 
-    stdin.write('y')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('y')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed task #1')
@@ -189,9 +190,10 @@ describe('task rm command', () => {
       expect(frame).toContain('Remove task #1?')
     })
 
-    stdin.write('n')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('n')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removal cancelled.')
@@ -274,6 +276,8 @@ describe('task rm command', () => {
       expect(frame).toContain('#1 Task A')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     // Toggle Task 1 with Space
     stdin.write(' ')
 
@@ -284,18 +288,18 @@ describe('task rm command', () => {
 
     // Submit selection
     await new Promise(resolve => setTimeout(resolve, 50))
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Remove task #1?')
     })
 
     // Confirm with y
     await new Promise(resolve => setTimeout(resolve, 50))
-    stdin.write('y')
 
     await vi.waitFor(() => {
+      stdin.write('y')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Removed task #1')
@@ -327,9 +331,9 @@ describe('task rm command', () => {
 
     // Submit without selecting anything
     await new Promise(resolve => setTimeout(resolve, 50))
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('No tasks selected for removal.')
