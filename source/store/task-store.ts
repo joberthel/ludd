@@ -384,14 +384,16 @@ export async function completeTaskRefinement(
   const taskFilePath = path.join(taskDir, 'task.json')
   const taskStore = createStore(taskFilePath, TaskSchema)
 
-  const updatedTask = await taskStore.write({
+  const candidateTask: Task = {
     ...task,
     status: 'todo',
-  })
+  }
 
-  const markdown = formatIntentMarkdown(updatedTask, parsedIntent)
+  const markdown = formatIntentMarkdown(candidateTask, parsedIntent)
   const intentPath = path.join(taskDir, 'intent.md')
   await writeFile(intentPath, markdown, 'utf-8')
+
+  const updatedTask = await taskStore.write(candidateTask)
 
   return {
     task: updatedTask,

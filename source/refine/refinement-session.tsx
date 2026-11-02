@@ -53,6 +53,9 @@ export function RefinementSession({
 }: RefinementSessionProps) {
   const [sessionState, setSessionState] = useState<SessionState>({ status: 'waiting' })
   const activePendingToolRejectRef = useRef<((reason: Error) => void) | undefined>(undefined)
+  const isSubmittingRef = useRef(false)
+  const confirmedRef = useRef(false)
+  const sessionErrorOccurredRef = useRef(false)
 
   useEffect(() => {
     let isMounted = true
@@ -77,11 +80,16 @@ export function RefinementSession({
                 status: 'askingQuestion',
                 question,
                 onAnswer: (answer) => {
+                  if (isSubmittingRef.current) {
+                    return
+                  }
+                  isSubmittingRef.current = true
                   activePendingToolRejectRef.current = undefined
                   if (isMounted) {
                     setSessionState({ status: 'waiting' })
                   }
                   resolve(answer)
+                  isSubmittingRef.current = false
                 },
               })
             })
@@ -102,7 +110,10 @@ export function RefinementSession({
                 status: 'confirmingIntent',
                 intent,
                 onConfirm: async (val) => {
-                  activePendingToolRejectRef.current = undefined
+                  if (isSubmittingRef.current) {
+                    return
+                  }
+                  isSubmittingRef.current = true
                   const trimmed = val.trim()
                   const isConfirmed = trimmed === '' || /^y(?:es)?$/i.test(trimmed)
 
@@ -113,12 +124,16 @@ export function RefinementSession({
                         taskId: task.id,
                         intent,
                       }, projectsDir)
+                      confirmedRef.current = true
+                      activePendingToolRejectRef.current = undefined
                       if (isMounted) {
                         setSessionState({ status: 'done' })
                       }
                       resolve({ confirmed: true })
                     }
                     catch (err) {
+                      sessionErrorOccurredRef.current = true
+                      activePendingToolRejectRef.current = undefined
                       if (isMounted) {
                         process.exitCode = 1
                         setSessionState({
@@ -133,15 +148,24 @@ export function RefinementSession({
                         reject(new Error(String(err)))
                       }
                     }
+                    finally {
+                      isSubmittingRef.current = false
+                    }
                   }
                   else {
-                    if (isMounted) {
-                      setSessionState({ status: 'waiting' })
+                    try {
+                      activePendingToolRejectRef.current = undefined
+                      if (isMounted) {
+                        setSessionState({ status: 'waiting' })
+                      }
+                      resolve({
+                        confirmed: false,
+                        feedback: trimmed,
+                      })
                     }
-                    resolve({
-                      confirmed: false,
-                      feedback: trimmed,
-                    })
+                    finally {
+                      isSubmittingRef.current = false
+                    }
                   }
                 },
               })
@@ -165,8 +189,19 @@ export function RefinementSession({
           })
         }
 
-        if (isMounted) {
+        if (!isMounted) {
+          return
+        }
+
+        if (confirmedRef.current) {
           setSessionState({ status: 'done' })
+        }
+        else if (!sessionErrorOccurredRef.current) {
+          process.exitCode = 1
+          setSessionState({
+            status: 'error',
+            message: 'Refinement session ended before task refinement was completed',
+          })
         }
       }
       catch (err) {

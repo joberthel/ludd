@@ -43,9 +43,10 @@ export async function initMcpSession(url: string): Promise<string | undefined> {
 
 let nextRpcId = 100
 
-export async function callAskQuestion(
+export async function callMcpTool(
   url: string,
-  args: AskQuestionInput,
+  name: string,
+  args: Record<string, unknown>,
   sessionId?: string,
   id = ++nextRpcId,
 ): Promise<McpCallResult> {
@@ -65,7 +66,7 @@ export async function callAskQuestion(
       id,
       method: 'tools/call',
       params: {
-        name: 'ask_question',
+        name,
         arguments: args,
       },
     }),
@@ -74,35 +75,22 @@ export async function callAskQuestion(
   return await response.json() as McpCallResult
 }
 
+export async function callAskQuestion(
+  url: string,
+  args: AskQuestionInput,
+  sessionId?: string,
+  id?: number,
+): Promise<McpCallResult> {
+  return callMcpTool(url, 'ask_question', args, sessionId, id)
+}
+
 export async function callCompleteRefinement(
   url: string,
   args: RefineIntent,
   sessionId?: string,
-  id = ++nextRpcId,
+  id?: number,
 ): Promise<McpCallResult> {
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    'accept': 'application/json, text/event-stream',
-  }
-  if (sessionId !== undefined && sessionId !== '') {
-    headers['mcp-session-id'] = sessionId
-  }
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id,
-      method: 'tools/call',
-      params: {
-        name: 'complete_refinement',
-        arguments: args,
-      },
-    }),
-  })
-
-  return await response.json() as McpCallResult
+  return callMcpTool(url, 'complete_refinement', args, sessionId, id)
 }
 
 export async function listMcpTools(

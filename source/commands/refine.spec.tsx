@@ -610,7 +610,7 @@ describe('task refine command', () => {
     })
   })
 
-  it('transitions to done state and closes server when runSession completes', async () => {
+  it('transitions to done state and closes server when runSession completes after refinement confirmation', async () => {
     const { slug } = await initProject({
       name: 'Done State Project',
       path: tempWorkDir,
@@ -624,7 +624,7 @@ describe('task refine command', () => {
 
     let serverPort: number | undefined
 
-    const { lastFrame } = render(
+    const { lastFrame, stdin } = render(
       <TaskRefine
         args={['1']}
         configStore={testConfigStore}
@@ -632,10 +632,29 @@ describe('task refine command', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           serverPort = mcpServer.port
-          // session completes immediately
+          const sessionId = await initMcpSession(mcpServer.url)
+          await callCompleteRefinement(
+            mcpServer.url,
+            {
+              outcome: 'Done outcome',
+              user: 'Done user',
+              whyNow: 'Done why now',
+              success: 'Done success',
+              constraint: 'Done constraint',
+              outOfScope: 'Done out of scope',
+            },
+            sessionId,
+          )
         }}
       />,
     )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('STATEMENT OF INTENT:')
+    })
+
+    stdin.write('\r')
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -644,6 +663,52 @@ describe('task refine command', () => {
     })
 
     // Server should be closed after runSession resolves
+    await vi.waitFor(async () => {
+      let isClosed = false
+      try {
+        await fetch(`http://127.0.0.1:${serverPort}/mcp`, { method: 'POST' })
+      }
+      catch {
+        isClosed = true
+      }
+      expect(isClosed).toBe(true)
+    })
+  })
+
+  it('renders [ERROR] and sets process.exitCode = 1 when runSession finishes without confirming refinement', async () => {
+    const { slug } = await initProject({
+      name: 'Unconfirmed Exit Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Unconfirmed Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let serverPort: number | undefined
+
+    const { lastFrame } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          serverPort = mcpServer.port
+          // Agent session finishes without calling complete_refinement
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.red('[ERROR]'))
+      expect(frame).toContain('Refinement session ended before task refinement was completed')
+      expect(process.exitCode).toBe(1)
+    })
+
     await vi.waitFor(async () => {
       let isClosed = false
       try {
@@ -839,15 +904,15 @@ describe('task refine command', () => {
     expect(savedMarkdown).toContain('- **Out of scope:** Cloud sync')
   })
 
-  it('accepts "yes" or "y" to confirm intent during complete_refinement', async () => {
+  it('accepts "y" to confirm intent during complete_refinement', async () => {
     const { slug } = await initProject({
-      name: 'Yes Confirm Project',
+      name: 'Y Confirm Project',
       path: tempWorkDir,
     }, tempProjectsDir)
 
     await createTask({
       projectSlug: slug,
-      name: 'Yes Confirm Task',
+      name: 'Y Confirm Task',
       status: 'refinement',
     }, tempProjectsDir)
 
@@ -906,6 +971,144 @@ describe('task refine command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
+    })
+  })
+
+  it('accepts literal "yes" (case-insensitive) to confirm intent during complete_refinement', async () => {
+    const { slug } = await initProject({
+      name: 'Yes Confirm Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Yes Confirm Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let confirmResult: unknown
+
+    const intent = {
+      outcome: 'Outcome Yes',
+      user: 'Users Yes',
+      whyNow: 'Now Yes',
+      success: 'Success condition',
+      constraint: 'Constraint',
+      outOfScope: 'Out of scope',
+    }
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          confirmResult = await callCompleteRefinement(
+            mcpServer.url,
+            intent,
+            sessionId,
+          )
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('STATEMENT OF INTENT:')
+    })
+
+    // Confirm with "YES"
+    stdin.write('YES')
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('YES')
+    })
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(confirmResult).toBeDefined()
+    })
+    const confirmParsed = confirmResult as { result: { content: Array<{ text: string }> } }
+    expect(JSON.parse(confirmParsed.result.content[0]!.text)).toEqual({
+      confirmed: true,
+    })
+
+    const task = await getTask(slug, 1, tempProjectsDir)
+    expect(task.status).toBe('todo')
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[OK]'))
+    })
+  })
+
+  it('renders [ERROR], sets process.exitCode = 1, and rejects tool call when completeTaskRefinement fails during onConfirm', async () => {
+    const { slug } = await initProject({
+      name: 'Fail Confirm Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Fail Confirm Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let confirmResult: unknown
+
+    const intent = {
+      outcome: 'Fail outcome',
+      user: 'Users',
+      whyNow: 'Now',
+      success: 'Success',
+      constraint: 'Constraint',
+      outOfScope: 'Out of scope',
+    }
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          confirmResult = await callCompleteRefinement(
+            mcpServer.url,
+            intent,
+            sessionId,
+          )
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('STATEMENT OF INTENT:')
+    })
+
+    // Corrupt task.json while awaiting user confirmation to cause completeTaskRefinement to fail
+    const taskJsonPath = path.join(tempProjectsDir, slug, 'tasks', '1', 'task.json')
+    await rm(taskJsonPath, { force: true })
+
+    // User submits confirmation
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(confirmResult).toBeDefined()
+    })
+
+    const parsed = confirmResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
+    expect(parsed.result?.isError).toBe(true)
+    expect(parsed.result?.content?.[0]?.text).toContain('corrupt (missing task.json)')
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.red('[ERROR]'))
+      expect(frame).toContain('corrupt (missing task.json)')
+      expect(process.exitCode).toBe(1)
     })
   })
 })
