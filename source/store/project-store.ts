@@ -1,11 +1,10 @@
 import type { Store } from './create-store.js'
 import { randomUUID } from 'node:crypto'
 import { readdir, rm, stat } from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import zod from 'zod'
 import { createStore } from './create-store.js'
-import { pathExists, slugify, validateSlug } from './fs-utils.js'
+import { getDefaultLuddHome, pathExists, slugify, validateSlug } from './fs-utils.js'
 
 export const ProjectSchema = zod.object({
   name: zod.string().trim().min(1).default('project'),
@@ -21,7 +20,7 @@ export interface ProjectRecord extends Project {
 }
 
 export function getDefaultProjectsDir(): string {
-  return path.join(os.homedir(), '.ludd', 'projects')
+  return path.join(getDefaultLuddHome(), 'projects')
 }
 
 export function slugifyProjectName(name: string): string {

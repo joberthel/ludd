@@ -1,5 +1,10 @@
 import { stat } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
+
+export function getDefaultLuddHome(): string {
+  return path.join(os.homedir(), '.ludd')
+}
 
 export function slugify(text: string, fallback: string): string {
   const normalized = text

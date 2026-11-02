@@ -1,52 +1,31 @@
+import { constants } from 'node:fs'
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { getDefaultLuddHome } from '../store/fs-utils.js'
 
-export function getDefaultLuddHome(): string {
-  return path.join(os.homedir(), '.ludd')
-}
+export { getDefaultLuddHome }
 
 export function getBundledRefineSkillPath(): string {
   const currentDir = path.dirname(fileURLToPath(import.meta.url))
   return path.resolve(currentDir, '../../skills/refine/SKILL.md')
 }
 
-export interface EnsureRefineSkillOptions {
-  luddHomeDir?: string
-  bundledSkillPath?: string
-}
-
 export async function ensureRefineSkill(
-  optionsOrLuddHome?: EnsureRefineSkillOptions | string,
-  bundledSkillPathOverride?: string,
+  luddHomeDir: string = getDefaultLuddHome(),
+  bundledSkillPath: string = getBundledRefineSkillPath(),
 ): Promise<string> {
-  let luddHomeDir: string | undefined
-  let bundledSkillPath: string | undefined
-
-  if (typeof optionsOrLuddHome === 'string') {
-    luddHomeDir = optionsOrLuddHome
-    bundledSkillPath = bundledSkillPathOverride
-  }
-  else if (optionsOrLuddHome !== undefined) {
-    luddHomeDir = optionsOrLuddHome.luddHomeDir
-    bundledSkillPath = optionsOrLuddHome.bundledSkillPath ?? bundledSkillPathOverride
-  }
-
-  const resolvedLuddHome = luddHomeDir ?? getDefaultLuddHome()
-  const resolvedBundledSkill = bundledSkillPath ?? getBundledRefineSkillPath()
-  const targetPath = path.join(resolvedLuddHome, 'skills', 'refine', 'SKILL.md')
-
-  try {
-    await fs.access(targetPath)
-    return targetPath
-  }
-  catch {
-    // Target skill does not exist, copy from bundled asset
-  }
+  const targetPath = path.join(luddHomeDir, 'skills', 'refine', 'SKILL.md')
 
   await fs.mkdir(path.dirname(targetPath), { recursive: true })
-  await fs.copyFile(resolvedBundledSkill, targetPath)
+  try {
+    await fs.copyFile(bundledSkillPath, targetPath, constants.COPYFILE_EXCL)
+  }
+  catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw err
+    }
+  }
 
   return targetPath
 }

@@ -17,7 +17,6 @@ import { findProjectByPath, getDefaultProjectsDir } from '../store/project-store
 import { getTask, listTasks } from '../store/task-store.js'
 
 export type { RefineSessionContext, RefineSessionRunner } from '../refine/refinement-session.js'
-export { defaultRefineSessionRunner } from '../refine/refinement-session.js'
 
 export const args = zod.tuple([
   zod.string().optional().describe(

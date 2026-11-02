@@ -1,8 +1,8 @@
 import type { Store } from './create-store.js'
-import os from 'node:os'
 import path from 'node:path'
 import zod from 'zod'
 import { createStore } from './create-store.js'
+import { getDefaultLuddHome } from './fs-utils.js'
 
 export const RefineEffortSchema = zod.enum([
   'low',
@@ -34,7 +34,7 @@ export const ConfigSchema = zod.object({
 export type Config = zod.infer<typeof ConfigSchema>
 
 export function getDefaultConfigPath(): string {
-  return path.join(os.homedir(), '.ludd', 'config.json')
+  return path.join(getDefaultLuddHome(), 'config.json')
 }
 
 export function createConfigStore(filePath = getDefaultConfigPath()): Store<typeof ConfigSchema> {

@@ -30,7 +30,7 @@ describe('runAgyRefineSession helpers', () => {
         toolPermission: 'proceed-in-sandbox',
         permissions: {
           allow: ['mcp(ludd-refine/*)', 'read_file(*)'],
-          deny: ['write_file(*)'],
+          deny: ['write_file(*)', 'edit_file(*)', 'run_command(*)'],
         },
       })
     })
@@ -219,14 +219,37 @@ describe('runAgyRefineSession execution lifecycle', () => {
     ).rejects.toThrow('agy process terminated by signal SIGTERM')
   })
 
-  it('kills child process when abort signal fires', async () => {
+  it('rejects when child process emits error (e.g. ENOENT)', async () => {
+    const mockChild = createMockChild()
+    const spawnFn = vi.fn().mockImplementation(() => {
+      process.nextTick(() => {
+        mockChild.emit('error', new Error('spawn agy ENOENT'))
+      })
+      return mockChild
+    })
+
+    await expect(
+      runAgyRefineSession({
+        task: sampleTask,
+        project: sampleProject,
+        model: 'Gemini 4 Argon (Medium)',
+        effort: 'medium',
+        mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+        spawnFn,
+      }),
+    ).rejects.toThrow('spawn agy ENOENT')
+  })
+
+  it('kills child process when abort signal fires and waits for termination', async () => {
     const mockChild = createMockChild()
     const abortController = new AbortController()
 
     const spawnFn = vi.fn().mockImplementation(() => {
-      // Abort after spawn has returned the child process
       process.nextTick(() => {
         abortController.abort()
+        process.nextTick(() => {
+          mockChild.emit('close', null, 'SIGTERM')
+        })
       })
       return mockChild
     })
@@ -243,6 +266,135 @@ describe('runAgyRefineSession execution lifecycle', () => {
 
     await expect(runPromise).rejects.toThrow('Refinement session aborted')
     expect(mockChild.kill).toHaveBeenCalledWith('SIGTERM')
+  })
+
+  it('waits for child termination before deleting sessionTempDir on abort', async () => {
+    const mockChild = createMockChild()
+    const abortController = new AbortController()
+    let capturedSessionDir = ''
+    let sessionDirExistedDuringAbort = false
+
+    const spawnFn = vi.fn().mockImplementation((_cmd, args) => {
+      const addDirIndex = args.indexOf('--add-dir')
+      capturedSessionDir = args[addDirIndex + 1]
+
+      process.nextTick(async () => {
+        abortController.abort()
+        try {
+          await fs.access(capturedSessionDir)
+          sessionDirExistedDuringAbort = true
+        }
+        catch {
+          sessionDirExistedDuringAbort = false
+        }
+        process.nextTick(() => {
+          mockChild.emit('close', null, 'SIGTERM')
+        })
+      })
+      return mockChild
+    })
+
+    await expect(
+      runAgyRefineSession({
+        task: sampleTask,
+        project: sampleProject,
+        model: 'Gemini 4 Argon (Medium)',
+        effort: 'medium',
+        mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+        signal: abortController.signal,
+        spawnFn,
+      }),
+    ).rejects.toThrow('Refinement session aborted')
+
+    expect(sessionDirExistedDuringAbort).toBe(true)
+    await expect(fs.access(capturedSessionDir)).rejects.toThrow()
+  })
+
+  it('does not call child.kill if child has already exited when abort fires', async () => {
+    const mockChild = createMockChild()
+    mockChild.exitCode = 0
+    const abortController = new AbortController()
+
+    const spawnFn = vi.fn().mockImplementation(() => {
+      process.nextTick(() => {
+        abortController.abort()
+        process.nextTick(() => {
+          mockChild.emit('close', 0, null)
+        })
+      })
+      return mockChild
+    })
+
+    await expect(
+      runAgyRefineSession({
+        task: sampleTask,
+        project: sampleProject,
+        model: 'Gemini 4 Argon (Medium)',
+        effort: 'medium',
+        mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+        signal: abortController.signal,
+        spawnFn,
+      }),
+    ).rejects.toThrow('Refinement session aborted')
+
+    expect(mockChild.kill).not.toHaveBeenCalled()
+  })
+
+  it('does not call child.kill if child is already marked killed when abort fires', async () => {
+    const mockChild = createMockChild()
+    mockChild.killed = true
+    const abortController = new AbortController()
+
+    const spawnFn = vi.fn().mockImplementation(() => {
+      process.nextTick(() => {
+        abortController.abort()
+        process.nextTick(() => {
+          mockChild.emit('close', null, 'SIGTERM')
+        })
+      })
+      return mockChild
+    })
+
+    await expect(
+      runAgyRefineSession({
+        task: sampleTask,
+        project: sampleProject,
+        model: 'Gemini 4 Argon (Medium)',
+        effort: 'medium',
+        mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+        signal: abortController.signal,
+        spawnFn,
+      }),
+    ).rejects.toThrow('Refinement session aborted')
+
+    expect(mockChild.kill).not.toHaveBeenCalled()
+  })
+
+  it('rejects with abort error when aborted child emits error', async () => {
+    const mockChild = createMockChild()
+    const abortController = new AbortController()
+
+    const spawnFn = vi.fn().mockImplementation(() => {
+      process.nextTick(() => {
+        abortController.abort()
+        process.nextTick(() => {
+          mockChild.emit('error', new Error('Child killed abruptly'))
+        })
+      })
+      return mockChild
+    })
+
+    await expect(
+      runAgyRefineSession({
+        task: sampleTask,
+        project: sampleProject,
+        model: 'Gemini 4 Argon (Medium)',
+        effort: 'medium',
+        mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
+        signal: abortController.signal,
+        spawnFn,
+      }),
+    ).rejects.toThrow('Refinement session aborted')
   })
 
   it('rejects immediately without spawning if signal is already aborted', async () => {

@@ -40,12 +40,11 @@ describe('ensureRefineSkill', () => {
     expect(content).toContain('complete_refinement')
   })
 
-  it('supports options object signature', async () => {
-    const targetFile = await ensureRefineSkill({ luddHomeDir: tempDir })
-    expect(targetFile).toBe(path.join(tempDir, 'skills', 'refine', 'SKILL.md'))
-
-    const content = await fs.readFile(targetFile, 'utf8')
-    expect(content).toContain('name: refine')
+  it('re-throws unexpected filesystem errors other than EEXIST', async () => {
+    const nonExistentBundledPath = path.join(tempDir, 'non-existent-source.md')
+    await expect(
+      ensureRefineSkill(tempDir, nonExistentBundledPath),
+    ).rejects.toThrow()
   })
 
   it('does not overwrite existing user-customized skill file', async () => {

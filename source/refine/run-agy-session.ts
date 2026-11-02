@@ -8,7 +8,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { getDefaultLuddHome } from './ensure-refine-skill.js'
+import { getDefaultLuddHome } from '../store/fs-utils.js'
 
 export interface AgySettings {
   allowNonWorkspaceAccess: boolean
@@ -25,7 +25,7 @@ export function buildAgySettings(): AgySettings {
     toolPermission: 'proceed-in-sandbox',
     permissions: {
       allow: ['mcp(ludd-refine/*)', 'read_file(*)'],
-      deny: ['write_file(*)'],
+      deny: ['write_file(*)', 'edit_file(*)', 'run_command(*)'],
     },
   }
 }
@@ -140,6 +140,18 @@ export async function runAgyRefineSession(
 
       let child: ChildProcess
       let abortHandler: (() => void) | undefined
+      let aborted = false
+      let killGraceTimer: NodeJS.Timeout | undefined
+
+      const cleanupResources = () => {
+        if (killGraceTimer !== undefined) {
+          clearTimeout(killGraceTimer)
+          killGraceTimer = undefined
+        }
+        if (abortHandler && options.signal) {
+          options.signal.removeEventListener('abort', abortHandler)
+        }
+      }
 
       try {
         child = spawnImpl('agy', args, {
@@ -160,14 +172,11 @@ export async function runAgyRefineSession(
         })
       }
 
-      const cleanupSignal = () => {
+      abortHandler = () => {
+        aborted = true
         if (abortHandler && options.signal) {
           options.signal.removeEventListener('abort', abortHandler)
         }
-      }
-
-      abortHandler = () => {
-        cleanupSignal()
         if (child.exitCode === null && !child.killed) {
           try {
             child.kill('SIGTERM')
@@ -175,8 +184,21 @@ export async function runAgyRefineSession(
           catch {
             // Ignore kill errors if already terminated
           }
+
+          killGraceTimer = setTimeout(() => {
+            if (child.exitCode === null && !child.killed) {
+              try {
+                child.kill('SIGKILL')
+              }
+              catch {
+                // Ignore kill errors
+              }
+            }
+          }, 2000)
+          killGraceTimer.unref()
         }
-        reject(new Error('Refinement session aborted'))
+        // Do not reject immediately here; wait for child process to close/error
+        // so sessionTempDir is preserved until the child has fully exited.
       }
 
       if (options.signal) {
@@ -184,12 +206,22 @@ export async function runAgyRefineSession(
       }
 
       child.on('error', (err) => {
-        cleanupSignal()
-        reject(err)
+        cleanupResources()
+        if (aborted) {
+          reject(new Error('Refinement session aborted'))
+        }
+        else {
+          reject(err)
+        }
       })
 
       child.on('close', (code, sig) => {
-        cleanupSignal()
+        cleanupResources()
+        if (aborted) {
+          reject(new Error('Refinement session aborted'))
+          return
+        }
+
         if (code === 0) {
           resolve()
         }
