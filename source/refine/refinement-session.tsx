@@ -7,7 +7,9 @@ import { Box, Text } from 'ink'
 import { useEffect, useRef, useState } from 'react'
 import { ErrorLine, toMessage } from '../components/error-line.js'
 import { completeTaskRefinement } from '../store/task-store.js'
+import { ensureRefineSkill } from './ensure-refine-skill.js'
 import { startRefineMcpServer } from './refine-mcp-server.js'
+import { runAgyRefineSession } from './run-agy-session.js'
 
 export interface RefineSessionContext {
   task: Task
@@ -15,9 +17,24 @@ export interface RefineSessionContext {
   model: string
   effort: string
   mcpServer: RefineMcpServerInstance
+  signal?: AbortSignal
+  luddHomeDir?: string
 }
 
 export type RefineSessionRunner = (ctx: RefineSessionContext) => Promise<void>
+
+export const defaultRefineSessionRunner: RefineSessionRunner = async (ctx) => {
+  await ensureRefineSkill(ctx.luddHomeDir)
+  await runAgyRefineSession({
+    task: ctx.task,
+    project: ctx.project,
+    model: ctx.model,
+    effort: ctx.effort,
+    mcpServer: ctx.mcpServer,
+    luddHomeDir: ctx.luddHomeDir,
+    signal: ctx.signal,
+  })
+}
 
 export interface RefinementSessionProps {
   task: Task
@@ -25,6 +42,7 @@ export interface RefinementSessionProps {
   model: string
   effort: string
   projectsDir?: string
+  luddHomeDir?: string
   runSession?: RefineSessionRunner
 }
 
@@ -49,6 +67,7 @@ export function RefinementSession({
   model,
   effort,
   projectsDir,
+  luddHomeDir,
   runSession,
 }: RefinementSessionProps) {
   const [sessionState, setSessionState] = useState<SessionState>({ status: 'waiting' })
@@ -60,6 +79,7 @@ export function RefinementSession({
   useEffect(() => {
     let isMounted = true
     let serverInstance: RefineMcpServerInstance | undefined
+    const abortController = new AbortController()
 
     async function start() {
       try {
@@ -179,15 +199,16 @@ export function RefinementSession({
           return
         }
 
-        if (runSession) {
-          await runSession({
-            task,
-            project,
-            model,
-            effort,
-            mcpServer: server,
-          })
-        }
+        const runner = runSession ?? defaultRefineSessionRunner
+        await runner({
+          task,
+          project,
+          model,
+          effort,
+          mcpServer: server,
+          signal: abortController.signal,
+          luddHomeDir,
+        })
 
         if (!isMounted) {
           return
@@ -229,6 +250,7 @@ export function RefinementSession({
 
     return () => {
       isMounted = false
+      abortController.abort()
       if (activePendingToolRejectRef.current !== undefined) {
         activePendingToolRejectRef.current(new Error('Refinement session unmounted'))
         activePendingToolRejectRef.current = undefined
@@ -243,6 +265,7 @@ export function RefinementSession({
     model,
     effort,
     projectsDir,
+    luddHomeDir,
     runSession,
   ])
 

@@ -17,6 +17,7 @@ import { findProjectByPath, getDefaultProjectsDir } from '../store/project-store
 import { getTask, listTasks } from '../store/task-store.js'
 
 export type { RefineSessionContext, RefineSessionRunner } from '../refine/refinement-session.js'
+export { defaultRefineSessionRunner } from '../refine/refinement-session.js'
 
 export const args = zod.tuple([
   zod.string().optional().describe(
@@ -36,6 +37,7 @@ interface Props {
   args?: zod.infer<typeof args>
   options?: zod.infer<typeof options>
   projectsDir?: string
+  luddHomeDir?: string
   cwd?: string
   configStore?: Store<typeof ConfigSchema>
   runSession?: RefineSessionRunner
@@ -52,6 +54,7 @@ export default function TaskRefine({
   args: cmdArgs,
   options: cmdOptions,
   projectsDir = getDefaultProjectsDir(),
+  luddHomeDir,
   cwd = process.cwd(),
   configStore = defaultStore,
   runSession,
@@ -208,6 +211,7 @@ export default function TaskRefine({
     return (
       <RefinementSession
         effort={state.effort}
+        luddHomeDir={luddHomeDir}
         model={state.model}
         project={state.project}
         projectsDir={projectsDir}

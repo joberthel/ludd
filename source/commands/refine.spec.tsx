@@ -6,6 +6,8 @@ import path from 'node:path'
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as skillModule from '../refine/ensure-refine-skill.js'
+import * as agySessionModule from '../refine/run-agy-session.js'
 import { callAskQuestion, callCompleteRefinement, initMcpSession } from '../refine/test-helpers.js'
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
@@ -1110,5 +1112,64 @@ describe('task refine command', () => {
       expect(frame).toContain('corrupt (missing task.json)')
       expect(process.exitCode).toBe(1)
     })
+  })
+
+  it('uses ensureRefineSkill and runAgyRefineSession by default when runSession is not provided', async () => {
+    const { slug } = await initProject({
+      name: 'Default Runner Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Default Runner Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let sessionCalled = false
+    const runAgySpy = vi.spyOn(agySessionModule, 'runAgyRefineSession').mockImplementation(async (options) => {
+      sessionCalled = true
+      const sessionId = await initMcpSession(options.mcpServer.url)
+      await callCompleteRefinement(
+        options.mcpServer.url,
+        {
+          outcome: 'Default runner outcome',
+          user: 'Developers',
+          whyNow: 'Now',
+          success: 'Tests pass',
+          constraint: 'None',
+          outOfScope: 'Nothing',
+        },
+        sessionId,
+      )
+    })
+
+    const ensureSkillSpy = vi.spyOn(skillModule, 'ensureRefineSkill').mockResolvedValue('/fake/skill/path')
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
+    })
+
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('[OK]')
+    })
+
+    expect(ensureSkillSpy).toHaveBeenCalled()
+    expect(runAgySpy).toHaveBeenCalled()
+    expect(sessionCalled).toBe(true)
+
+    runAgySpy.mockRestore()
+    ensureSkillSpy.mockRestore()
   })
 })
