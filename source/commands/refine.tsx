@@ -1,5 +1,5 @@
 import type { RefineSessionRunner } from '../refine/refinement-session.js'
-import type { ConfigSchema, RefineEffort } from '../store/config-store.js'
+import type { ConfigSchema } from '../store/config-store.js'
 import type { Store } from '../store/create-store.js'
 import type { ProjectRecord } from '../store/project-store.js'
 import type { Task } from '../store/task-store.js'
@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import zod from 'zod'
 import { ErrorLine, toMessage } from '../components/error-line.js'
 import { RefinementSession } from '../refine/refinement-session.js'
-import { configStore as defaultStore, RefineEffortSchema } from '../store/config-store.js'
+import { configStore as defaultStore } from '../store/config-store.js'
 import { findProjectByPath, getDefaultProjectsDir } from '../store/project-store.js'
 import { getTask, listTasks } from '../store/task-store.js'
 
@@ -29,7 +29,6 @@ export const args = zod.tuple([
 
 export const options = zod.object({
   model: zod.string().trim().min(1).optional().describe('Override refine.model for this session'),
-  effort: RefineEffortSchema.optional().describe(`Override refine.effort for this session (${RefineEffortSchema.options.join('|')})`),
 })
 
 interface Props {
@@ -45,8 +44,8 @@ interface Props {
 type State
   = | { status: 'checking' }
     | { status: 'empty' }
-    | { effort: RefineEffort, model: string, project: ProjectRecord, status: 'selectTask', tasks: Task[] }
-    | { effort: RefineEffort, model: string, project: ProjectRecord, status: 'running', task: Task }
+    | { model: string, project: ProjectRecord, status: 'selectTask', tasks: Task[] }
+    | { model: string, project: ProjectRecord, status: 'running', task: Task }
     | { message: string, status: 'error' }
 
 export default function TaskRefine({
@@ -67,7 +66,7 @@ export default function TaskRefine({
   const rawId = firstArg !== undefined && firstArg !== ''
     ? firstArg
     : undefined
-  const { model: optModel, effort: optEffort } = parsedOptions
+  const { model: optModel } = parsedOptions
 
   useEffect(() => {
     let isMounted = true
@@ -94,7 +93,6 @@ export default function TaskRefine({
         }
 
         const resolvedModel = optModel ?? config.refine.model
-        const resolvedEffort = optEffort ?? config.refine.effort
 
         if (rawId !== undefined) {
           const task = await getTask(project.slug, rawId, projectsDir)
@@ -116,7 +114,6 @@ export default function TaskRefine({
             task,
             project,
             model: resolvedModel,
-            effort: resolvedEffort,
           })
         }
         else {
@@ -136,7 +133,6 @@ export default function TaskRefine({
             tasks: refinementTasks,
             project,
             model: resolvedModel,
-            effort: resolvedEffort,
           })
         }
       }
@@ -163,7 +159,6 @@ export default function TaskRefine({
     configStore,
     rawId,
     optModel,
-    optEffort,
   ])
 
   if (state.status === 'checking') {
@@ -197,7 +192,6 @@ export default function TaskRefine({
                 task: selected,
                 project: state.project,
                 model: state.model,
-                effort: state.effort,
               })
             }
           }}
@@ -209,7 +203,6 @@ export default function TaskRefine({
   if (state.status === 'running') {
     return (
       <RefinementSession
-        effort={state.effort}
         luddHomeDir={luddHomeDir}
         model={state.model}
         project={state.project}

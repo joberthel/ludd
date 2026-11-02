@@ -12,7 +12,7 @@ import { callCompleteRefinement, initMcpSession } from '../refine/test-helpers.j
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
 import { createTask } from '../store/task-store.js'
-import TaskRefine from './refine.js'
+import TaskRefine, { options } from './refine.js'
 
 describe('task refine command', () => {
   let tempProjectsDir: string
@@ -35,6 +35,11 @@ describe('task refine command', () => {
     await rm(tempProjectsDir, { force: true, recursive: true })
     await rm(tempWorkDir, { force: true, recursive: true })
     await rm(tempConfigDir, { force: true, recursive: true })
+  })
+
+  it('does not expose --effort in options schema', () => {
+    expect('effort' in options.shape).toBe(false)
+    expect('model' in options.shape).toBe(true)
   })
 
   it('renders [ERROR] and sets process.exitCode = 1 when directory is not initialized', async () => {
@@ -131,11 +136,11 @@ describe('task refine command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Refine Me) with Gemini 4 Argon (effort: medium)...')
+      expect(frame).toContain('Refining task #1 (Refine Me) with gemini-4-argon-medium...')
     })
   })
 
-  it('respects --model and --effort CLI overrides', async () => {
+  it('respects --model CLI override', async () => {
     const { slug } = await initProject({
       name: 'Override Flags Project',
       path: tempWorkDir,
@@ -153,8 +158,7 @@ describe('task refine command', () => {
         configStore={testConfigStore}
         cwd={tempWorkDir}
         options={{
-          model: 'Claude 3.7 Sonnet',
-          effort: 'high',
+          model: 'claude-3-7-sonnet',
         }}
         projectsDir={tempProjectsDir}
         runSession={async () => new Promise(() => {})}
@@ -164,13 +168,12 @@ describe('task refine command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Refine Me Flagged) with Claude 3.7 Sonnet (effort: high)...')
+      expect(frame).toContain('Refining task #1 (Refine Me Flagged) with claude-3-7-sonnet...')
     })
   })
 
-  it('reads default model and effort from configStore', async () => {
+  it('reads default model from configStore', async () => {
     await writeConfigKey(testConfigStore, 'refine.model', 'Custom Argon Pro')
-    await writeConfigKey(testConfigStore, 'refine.effort', 'xhigh')
 
     const { slug } = await initProject({
       name: 'Custom Config Project',
@@ -196,7 +199,7 @@ describe('task refine command', () => {
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (Custom Config Task) with Custom Argon Pro (effort: xhigh)...')
+      expect(frame).toContain('Refining task #1 (Custom Config Task) with Custom Argon Pro...')
     })
   })
 
@@ -268,7 +271,7 @@ describe('task refine command', () => {
       stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
-      expect(frame).toContain('Refining task #1 (First Refinement Task) with Gemini 4 Argon (effort: medium)...')
+      expect(frame).toContain('Refining task #1 (First Refinement Task) with gemini-4-argon-medium...')
     })
   })
 
