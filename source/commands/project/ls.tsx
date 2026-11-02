@@ -78,7 +78,10 @@ export default function ProjectLs({
 
   const nameWidth = Math.max('NAME'.length, ...projects.map(p => stringWidth(p.name))) + 2
   const slugWidth = Math.max('SLUG'.length, ...projects.map(p => stringWidth(p.slug))) + 2
-  const descWidth = Math.max('DESCRIPTION'.length, ...projects.map(p => stringWidth(p.description))) + 2
+  const descWidth = Math.max(
+    'DESCRIPTION'.length,
+    ...projects.map(p => stringWidth(p.description || '(none)')),
+  ) + 2
 
   return (
     <Box flexDirection="column">
@@ -105,7 +108,13 @@ export default function ProjectLs({
             <Text>{project.slug}</Text>
           </Box>
           <Box width={descWidth}>
-            <Text>{project.description}</Text>
+            {project.description
+              ? (
+                  <Text>{project.description}</Text>
+                )
+              : (
+                  <Text color="gray" dimColor>(none)</Text>
+                )}
           </Box>
           <Box>
             <Text>{project.path}</Text>

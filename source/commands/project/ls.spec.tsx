@@ -142,4 +142,24 @@ describe('project ls command', () => {
       expect(frame).toContain('/workspace/wide')
     })
   })
+
+  it('renders greyed out (none) when description is empty', async () => {
+    await initProject({
+      name: 'No Desc',
+      description: '',
+      path: '/workspace/no-desc',
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <ProjectLs
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('No Desc')
+      expect(frame).toContain('(none)')
+    })
+  })
 })

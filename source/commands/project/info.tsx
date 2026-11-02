@@ -99,7 +99,13 @@ export default function ProjectInfo({
         <Box width={14}>
           <Text bold>Description:</Text>
         </Box>
-        <Text>{project.description}</Text>
+        {project.description
+          ? (
+              <Text>{project.description}</Text>
+            )
+          : (
+              <Text color="gray" dimColor>(none)</Text>
+            )}
       </Box>
       <Box>
         <Box width={14}>

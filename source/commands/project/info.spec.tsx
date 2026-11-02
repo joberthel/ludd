@@ -99,4 +99,25 @@ describe('project info command', () => {
       expect(process.exitCode).toBe(1)
     })
   })
+
+  it('renders greyed out (none) when description is empty', async () => {
+    await initProject({
+      name: 'No Desc Project',
+      description: '',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <ProjectInfo
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('No Desc Project')
+      expect(frame).toContain('(none)')
+    })
+  })
 })
