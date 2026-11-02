@@ -4,19 +4,8 @@ import zod from 'zod'
 import { createStore } from './create-store.js'
 import { getDefaultLuddHome } from './fs-utils.js'
 
-export const RefineEffortSchema = zod.enum([
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-])
-
-export type RefineEffort = zod.infer<typeof RefineEffortSchema>
-
 export const RefineConfigSchema = zod.object({
-  model: zod.string().trim().min(1).default('Gemini 4 Argon'),
-  effort: RefineEffortSchema.default('medium'),
+  model: zod.string().trim().min(1).default('gemini-4-argon-medium'),
 }).strict().prefault({})
 
 export const ConfigSchema = zod.object({
