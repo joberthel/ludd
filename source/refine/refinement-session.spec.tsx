@@ -47,7 +47,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -118,7 +117,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -182,7 +180,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -255,7 +252,6 @@ describe('refinementSession component', () => {
 
     const { unmount } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -303,7 +299,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -355,7 +350,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -388,7 +382,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -442,7 +435,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -549,7 +541,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -612,7 +603,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}
@@ -675,7 +665,6 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        effort="medium"
         model="Gemini 4 Argon"
         project={project}
         projectsDir={tempProjectsDir}

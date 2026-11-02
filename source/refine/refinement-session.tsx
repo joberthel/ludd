@@ -15,7 +15,6 @@ export interface RefineSessionContext {
   task: Task
   project: ProjectRecord
   model: string
-  effort: string
   mcpServer: RefineMcpServerInstance
   signal?: AbortSignal
   luddHomeDir?: string
@@ -29,7 +28,6 @@ export const defaultRefineSessionRunner: RefineSessionRunner = async (ctx) => {
     task: ctx.task,
     project: ctx.project,
     model: ctx.model,
-    effort: ctx.effort,
     mcpServer: ctx.mcpServer,
     luddHomeDir: ctx.luddHomeDir,
     signal: ctx.signal,
@@ -40,7 +38,6 @@ export interface RefinementSessionProps {
   task: Task
   project: ProjectRecord
   model: string
-  effort: string
   projectsDir?: string
   luddHomeDir?: string
   runSession?: RefineSessionRunner
@@ -65,7 +62,6 @@ export function RefinementSession({
   task,
   project,
   model,
-  effort,
   projectsDir,
   luddHomeDir,
   runSession,
@@ -204,7 +200,6 @@ export function RefinementSession({
           task,
           project,
           model,
-          effort,
           mcpServer: server,
           signal: abortController.signal,
           luddHomeDir,
@@ -263,7 +258,6 @@ export function RefinementSession({
     task,
     project,
     model,
-    effort,
     projectsDir,
     luddHomeDir,
     runSession,
@@ -376,7 +370,7 @@ export function RefinementSession({
     <Box>
       <Text>
         <Text color="yellow">[RUNNING]</Text>
-        {` Refining task #${task.id} (${task.name}) with ${model} (effort: ${effort})...`}
+        {` Refining task #${task.id} (${task.name}) with ${model}...`}
       </Text>
     </Box>
   )
