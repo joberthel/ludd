@@ -1,6 +1,6 @@
 import type { ProjectRecord } from '../../store/project-store.js'
 import process from 'node:process'
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 import { useEffect, useState } from 'react'
 import stringWidth from 'string-width'
 import zod from 'zod'
@@ -27,6 +27,7 @@ export default function ProjectLs({
   projectsDir = getDefaultProjectsDir(),
 }: Props) {
   const { format } = options.parse(cmdOptions ?? {})
+  const { stdout } = useStdout()
   const [state, setState] = useState<State>({ status: 'loading' })
 
   useEffect(() => {
@@ -55,6 +56,16 @@ export default function ProjectLs({
     }
   }, [projectsDir])
 
+  useEffect(() => {
+    if (state.status === 'done' && format === 'json') {
+      stdout.write(`${JSON.stringify(state.projects, null, 2)}\n`)
+    }
+  }, [
+    state,
+    format,
+    stdout,
+  ])
+
   if (state.status === 'loading') {
     return null
   }
@@ -63,11 +74,11 @@ export default function ProjectLs({
     return <ErrorLine message={state.message} />
   }
 
-  const { projects } = state
-
   if (format === 'json') {
-    return <Text>{JSON.stringify(projects, null, 2)}</Text>
+    return null
   }
+
+  const { projects } = state
 
   if (projects.length === 0) {
     return (

@@ -83,6 +83,29 @@ describe('project info command', () => {
     })
   })
 
+  it('outputs valid JSON without line-wrapping corruption for long descriptions (>120 chars)', async () => {
+    const longDesc = 'description-'.repeat(15)
+    await initProject({
+      name: 'Long Info Project',
+      description: longDesc,
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <ProjectInfo
+        cwd={tempWorkDir}
+        options={{ format: 'json' }}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      const parsed = JSON.parse(frame)
+      expect(parsed.description).toBe(longDesc)
+    })
+  })
+
   it('renders [ERROR] and sets process.exitCode = 1 when directory is not initialized', async () => {
     const { lastFrame } = render(
       <ProjectInfo

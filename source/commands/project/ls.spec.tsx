@@ -124,6 +124,28 @@ describe('project ls command', () => {
     })
   })
 
+  it('outputs valid JSON without line-wrapping corruption for long names (>120 chars)', async () => {
+    const longName = 'project-'.repeat(15)
+    await initProject({
+      name: longName,
+      path: '/workspace/long-project',
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <ProjectLs
+        options={{ format: 'json' }}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      const parsed = JSON.parse(frame)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0]?.name).toBe(longName)
+    })
+  })
+
   it('renders table properly with wide CJK and emoji project names', async () => {
     await initProject({
       name: '🚀 Project 项目',

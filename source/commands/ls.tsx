@@ -1,7 +1,7 @@
 import type { Task } from '../store/task-store.js'
 import path from 'node:path'
 import process from 'node:process'
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 import { useEffect, useState } from 'react'
 import stringWidth from 'string-width'
 import zod from 'zod'
@@ -30,6 +30,7 @@ export default function TaskLs({
   cwd = process.cwd(),
 }: Props) {
   const { format } = options.parse(cmdOptions ?? {})
+  const { stdout } = useStdout()
   const resolvedCwd = path.resolve(cwd)
   const [state, setState] = useState<State>({ status: 'loading' })
 
@@ -77,6 +78,16 @@ export default function TaskLs({
     projectsDir,
   ])
 
+  useEffect(() => {
+    if (state.status === 'done' && format === 'json') {
+      stdout.write(`${JSON.stringify(state.tasks, null, 2)}\n`)
+    }
+  }, [
+    state,
+    format,
+    stdout,
+  ])
+
   if (state.status === 'loading') {
     return null
   }
@@ -85,11 +96,11 @@ export default function TaskLs({
     return <ErrorLine message={state.message} />
   }
 
-  const { tasks } = state
-
   if (format === 'json') {
-    return <Text>{JSON.stringify(tasks, null, 2)}</Text>
+    return null
   }
+
+  const { tasks } = state
 
   if (tasks.length === 0) {
     return (

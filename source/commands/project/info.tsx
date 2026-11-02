@@ -1,7 +1,7 @@
 import type { ProjectRecord } from '../../store/project-store.js'
 import path from 'node:path'
 import process from 'node:process'
-import { Box, Text } from 'ink'
+import { Box, Text, useStdout } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
 import { ErrorLine, toMessage } from '../../components/error-line.js'
@@ -29,6 +29,7 @@ export default function ProjectInfo({
   cwd = process.cwd(),
 }: Props) {
   const { format } = options.parse(cmdOptions ?? {})
+  const { stdout } = useStdout()
   const resolvedCwd = path.resolve(cwd)
   const [state, setState] = useState<State>({ status: 'loading' })
 
@@ -68,6 +69,16 @@ export default function ProjectInfo({
     }
   }, [resolvedCwd, projectsDir])
 
+  useEffect(() => {
+    if (state.status === 'done' && format === 'json') {
+      stdout.write(`${JSON.stringify(state.project, null, 2)}\n`)
+    }
+  }, [
+    state,
+    format,
+    stdout,
+  ])
+
   if (state.status === 'loading') {
     return null
   }
@@ -76,11 +87,11 @@ export default function ProjectInfo({
     return <ErrorLine message={state.message} />
   }
 
-  const { project } = state
-
   if (format === 'json') {
-    return <Text>{JSON.stringify(project, null, 2)}</Text>
+    return null
   }
+
+  const { project } = state
 
   return (
     <Box flexDirection="column">

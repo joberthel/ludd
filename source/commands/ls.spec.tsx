@@ -163,4 +163,33 @@ describe('task ls command', () => {
       expect(frame).not.toContain('[RUNNING]')
     })
   })
+
+  it('outputs valid JSON without terminal line wrapping corruption for long values (>120 chars)', async () => {
+    const { slug } = await initProject({
+      name: 'Long Task Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const longName = 'a'.repeat(120)
+    await createTask({
+      projectSlug: slug,
+      name: longName,
+      branch: 'long-task-branch',
+    }, tempProjectsDir)
+
+    const { lastFrame } = render(
+      <TaskLs
+        cwd={tempWorkDir}
+        options={{ format: 'json' }}
+        projectsDir={tempProjectsDir}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      const parsed = JSON.parse(frame)
+      expect(parsed).toHaveLength(1)
+      expect(parsed[0]?.name).toBe(longName)
+    })
+  })
 })
