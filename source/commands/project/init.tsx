@@ -6,7 +6,7 @@ import { Box, Text } from 'ink'
 import { useEffect, useState } from 'react'
 import zod from 'zod'
 import {
-  findProjectByCwd,
+  findProjectByPath,
   getDefaultProjectsDir,
   initProject,
 } from '../../store/project-store.js'
@@ -44,7 +44,7 @@ export default function ProjectInit({
   useEffect(() => {
     let isMounted = true
 
-    findProjectByCwd(resolvedCwd, projectsDir)
+    findProjectByPath(resolvedCwd, projectsDir)
       .then((existing) => {
         if (!isMounted) {
           return
@@ -112,7 +112,7 @@ export default function ProjectInit({
     initProject({
       name,
       description,
-      cwd: resolvedCwd,
+      path: resolvedCwd,
     }, projectsDir)
       .then((res) => {
         if (!isMounted) {

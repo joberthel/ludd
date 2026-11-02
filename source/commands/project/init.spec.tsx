@@ -49,14 +49,14 @@ describe('project init command', () => {
     expect(content).toEqual({
       name: 'My Service',
       description: 'Core microservice',
-      cwd: path.resolve(tempWorkDir),
+      path: path.resolve(tempWorkDir),
     })
   })
 
   it('renders [ERROR] and sets process.exitCode = 1 when directory is already initialized', async () => {
     await initProject({
       name: 'Existing Project',
-      cwd: tempWorkDir,
+      path: tempWorkDir,
     }, tempProjectsDir)
 
     const { lastFrame } = render(
@@ -105,7 +105,7 @@ describe('project init command', () => {
     const content = JSON.parse(await readFile(projectFile, 'utf8'))
     expect(content.name).toBe(folderName)
     expect(content.description).toBe('Some description')
-    expect(content.cwd).toBe(path.resolve(tempWorkDir))
+    expect(content.path).toBe(path.resolve(tempWorkDir))
   })
 
   it('prompts for name and description interactively when both omitted', async () => {
@@ -151,7 +151,7 @@ describe('project init command', () => {
     expect(content).toEqual({
       name: 'Custom Project',
       description: '',
-      cwd: path.resolve(tempWorkDir),
+      path: path.resolve(tempWorkDir),
     })
   })
 

@@ -1,6 +1,6 @@
 import type { Store } from './create-store.js'
 import { randomUUID } from 'node:crypto'
-import { readdir, stat } from 'node:fs/promises'
+import { readdir, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import zod from 'zod'
@@ -9,7 +9,7 @@ import { createStore } from './create-store.js'
 export const ProjectSchema = zod.object({
   name: zod.string().trim().min(1).default('project'),
   description: zod.string().default(''),
-  cwd: zod.string().min(1).default('/'),
+  path: zod.string().min(1).default('/'),
 }).strict().prefault({})
 
 export type Project = zod.infer<typeof ProjectSchema>
@@ -46,11 +46,45 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function findProjectByCwd(
-  cwd: string,
+export async function listProjects(
+  projectsDir = getDefaultProjectsDir(),
+): Promise<ProjectRecord[]> {
+  let entries: string[]
+  try {
+    entries = await readdir(projectsDir)
+  }
+  catch {
+    return []
+  }
+
+  const projects: ProjectRecord[] = []
+
+  for (const entry of entries) {
+    const projectFilePath = path.join(projectsDir, entry, 'project.json')
+    try {
+      const fileStat = await stat(projectFilePath)
+      if (fileStat.isFile()) {
+        const store = createStore(projectFilePath, ProjectSchema)
+        const projectData = await store.read()
+        projects.push({
+          ...projectData,
+          slug: entry,
+        })
+      }
+    }
+    catch {
+      // Ignore unreadable or non-project directories
+    }
+  }
+
+  return projects.sort((a, b) => a.slug.localeCompare(b.slug))
+}
+
+export async function findProjectByPath(
+  projectPath: string,
   projectsDir = getDefaultProjectsDir(),
 ): Promise<ProjectRecord | undefined> {
-  const resolvedCwd = path.resolve(cwd)
+  const resolvedPath = path.resolve(projectPath)
 
   let entries: string[]
   try {
@@ -67,7 +101,7 @@ export async function findProjectByCwd(
       if (fileStat.isFile()) {
         const store = createStore(projectFilePath, ProjectSchema)
         const projectData = await store.read()
-        if (path.resolve(projectData.cwd) === resolvedCwd) {
+        if (path.resolve(projectData.path) === resolvedPath) {
           return {
             ...projectData,
             slug: entry,
@@ -83,10 +117,33 @@ export async function findProjectByCwd(
   return undefined
 }
 
+export async function removeProjects(
+  slugs: string[],
+  projectsDir = getDefaultProjectsDir(),
+): Promise<string[]> {
+  for (const slug of slugs) {
+    if (!slug || path.basename(slug) !== slug || slug === '.' || slug === '..') {
+      throw new Error(`Invalid project slug "${slug}"`)
+    }
+    const targetDir = path.join(projectsDir, slug)
+    const exists = await pathExists(targetDir)
+    if (!exists) {
+      throw new Error(`Project "${slug}" does not exist`)
+    }
+  }
+
+  for (const slug of slugs) {
+    const targetDir = path.join(projectsDir, slug)
+    await rm(targetDir, { force: false, recursive: true })
+  }
+
+  return slugs
+}
+
 export interface InitProjectOptions {
   name: string
   description?: string
-  cwd: string
+  path: string
 }
 
 export interface InitProjectResult {
@@ -100,11 +157,11 @@ export async function initProject(
   options: InitProjectOptions,
   projectsDir = getDefaultProjectsDir(),
 ): Promise<InitProjectResult> {
-  const resolvedCwd = path.resolve(options.cwd)
+  const resolvedPath = path.resolve(options.path)
 
-  const existing = await findProjectByCwd(resolvedCwd, projectsDir)
+  const existing = await findProjectByPath(resolvedPath, projectsDir)
   if (existing) {
-    throw new Error(`Directory "${resolvedCwd}" is already initialized as project "${existing.name}"`)
+    throw new Error(`Directory "${resolvedPath}" is already initialized as project "${existing.name}"`)
   }
 
   const baseSlug = slugifyProjectName(options.name)
@@ -121,7 +178,7 @@ export async function initProject(
   const projectData: Project = {
     name: options.name.trim(),
     description: options.description ?? '',
-    cwd: resolvedCwd,
+    path: resolvedPath,
   }
 
   const written = await store.write(projectData)
