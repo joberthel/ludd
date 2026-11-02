@@ -1,6 +1,8 @@
 import type { AskQuestionInput } from './refine-mcp-server.js'
+import http from 'node:http'
 import { describe, expect, it } from 'vitest'
 import { AskQuestionInputSchema, startRefineMcpServer } from './refine-mcp-server.js'
+import { callAskQuestion, initMcpSession, listMcpTools } from './test-helpers.js'
 
 describe('refine-mcp-server', () => {
   it('validates AskQuestionInputSchema correctly', () => {
@@ -43,59 +45,12 @@ describe('refine-mcp-server', () => {
     })
 
     expect(server.port).toBeGreaterThan(0)
-    expect(server.url).toBe(`http://127.0.0.1:${server.port}/mcp`)
+    expect(server.url).toBe(`http://127.0.0.1:${server.port}/mcp/${server.sessionToken}`)
 
     try {
-      // 1. Initialize
-      const initResponse = await fetch(server.url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'accept': 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'initialize',
-          params: {
-            protocolVersion: '2024-11-05',
-            capabilities: {},
-            clientInfo: { name: 'test-client', version: '1.0.0' },
-          },
-        }),
-      })
+      const sessionId = await initMcpSession(server.url)
 
-      expect(initResponse.status).toBe(200)
-      const sessionId = initResponse.headers.get('mcp-session-id')
-      const requestHeaders: Record<string, string> = {
-        'content-type': 'application/json',
-        'accept': 'application/json, text/event-stream',
-      }
-      if (sessionId !== null && sessionId !== '') {
-        requestHeaders['mcp-session-id'] = sessionId
-      }
-
-      // 2. tools/list
-      const listResponse = await fetch(server.url, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'tools/list',
-          params: {},
-        }),
-      })
-
-      expect(listResponse.status).toBe(200)
-      const listData = await listResponse.json() as {
-        result: {
-          tools: Array<{
-            name: string
-            inputSchema: { properties: Record<string, unknown> }
-          }>
-        }
-      }
+      const listData = await listMcpTools(server.url, sessionId)
       expect(listData.result.tools).toBeDefined()
       const tool = listData.result.tools.find(t => t.name === 'ask_question')
       expect(tool).toBeDefined()
@@ -104,35 +59,20 @@ describe('refine-mcp-server', () => {
       expect(tool?.inputSchema.properties).toHaveProperty('question')
       expect(tool?.inputSchema.properties).toHaveProperty('guess')
 
-      // 3. tools/call
-      const callResponse = await fetch(server.url, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 3,
-          method: 'tools/call',
-          params: {
-            name: 'ask_question',
-            arguments: {
-              hypothesis: 'Need CLI confirmation',
-              confidence: 75,
-              missing: 'confirmation flag',
-              question: 'Add --yes flag?',
-              guess: 'Yes, add --yes flag to skip prompt',
-            },
-          },
-        }),
-      })
+      const callData = await callAskQuestion(
+        server.url,
+        {
+          hypothesis: 'Need CLI confirmation',
+          confidence: 75,
+          missing: 'confirmation flag',
+          question: 'Add --yes flag?',
+          guess: 'Yes, add --yes flag to skip prompt',
+        },
+        sessionId,
+      )
 
-      expect(callResponse.status).toBe(200)
-      const callData = await callResponse.json() as {
-        result: {
-          content: Array<{ type: string, text: string }>
-        }
-      }
-      expect(callData.result.content[0]?.type).toBe('text')
-      const parsedText = JSON.parse(callData.result.content[0]!.text)
+      expect(callData.result?.content?.[0]?.type).toBe('text')
+      const parsedText = JSON.parse(callData.result!.content![0]!.text)
       expect(parsedText).toEqual({ answer: 'Custom user response' })
 
       expect(capturedInput).toEqual({
@@ -148,63 +88,98 @@ describe('refine-mcp-server', () => {
     }
   })
 
-  it('defaults to returning guess when onAskQuestion is not provided', async () => {
-    const server = await startRefineMcpServer()
+  it('returns 404 for invalid path or wrong session token', async () => {
+    const server = await startRefineMcpServer({
+      onAskQuestion: async input => input.guess,
+    })
 
     try {
-      const initResponse = await fetch(server.url, {
+      // Root path returns 404
+      const rootRes = await fetch(`http://127.0.0.1:${server.port}/`, {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'accept': 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({
+      })
+      expect(rootRes.status).toBe(404)
+
+      // Base /mcp path without token returns 404
+      const baseMcpRes = await fetch(`http://127.0.0.1:${server.port}/mcp`, {
+        method: 'POST',
+      })
+      expect(baseMcpRes.status).toBe(404)
+
+      // Wrong token path returns 404
+      const wrongTokenRes = await fetch(`http://127.0.0.1:${server.port}/mcp/wrong-token-12345`, {
+        method: 'POST',
+      })
+      expect(wrongTokenRes.status).toBe(404)
+    }
+    finally {
+      await server.close()
+    }
+  })
+
+  it('rejects requests from untrusted Host headers (DNS rebinding protection)', async () => {
+    const server = await startRefineMcpServer({
+      onAskQuestion: async input => input.guess,
+    })
+
+    try {
+      const url = new URL(server.url)
+      const res = await new Promise<{ body: string, status?: number }>((resolve, reject) => {
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port: server.port,
+          path: url.pathname,
+          method: 'POST',
+          headers: {
+            'host': 'evil-rebinding.com',
+            'content-type': 'application/json',
+            'accept': 'application/json, text/event-stream',
+          },
+        }, (response) => {
+          let body = ''
+          response.on('data', chunk => (body += String(chunk)))
+          response.on('end', () => resolve({ status: response.statusCode, body }))
+        })
+        req.on('error', reject)
+        req.write(JSON.stringify({
           jsonrpc: '2.0',
           id: 1,
           method: 'initialize',
-          params: {
-            protocolVersion: '2024-11-05',
-            capabilities: {},
-            clientInfo: { name: 'test-client', version: '1.0.0' },
-          },
-        }),
-      })
-      const sessionId = initResponse.headers.get('mcp-session-id')
-      const requestHeaders: Record<string, string> = {
-        'content-type': 'application/json',
-        'accept': 'application/json, text/event-stream',
-      }
-      if (sessionId !== null && sessionId !== '') {
-        requestHeaders['mcp-session-id'] = sessionId
-      }
-
-      const callResponse = await fetch(server.url, {
-        method: 'POST',
-        headers: requestHeaders,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'tools/call',
-          params: {
-            name: 'ask_question',
-            arguments: {
-              hypothesis: 'Default handler test',
-              confidence: 90,
-              question: 'Use default?',
-              guess: 'Default answer',
-            },
-          },
-        }),
+        }))
+        req.end()
       })
 
-      expect(callResponse.status).toBe(200)
-      const callData = await callResponse.json() as {
-        result: {
-          content: Array<{ type: string, text: string }>
-        }
-      }
-      const parsedText = JSON.parse(callData.result.content[0]!.text)
-      expect(parsedText).toEqual({ answer: 'Default answer' })
+      expect(res.status).toBe(403)
+      const data = JSON.parse(res.body) as { error: { message: string } }
+      expect(data.error.message).toContain('Invalid Host header')
+    }
+    finally {
+      await server.close()
+    }
+  })
+
+  it('returns a tool error when onAskQuestion rejects or throws', async () => {
+    const server = await startRefineMcpServer({
+      onAskQuestion: async () => {
+        throw new Error('User declined to answer')
+      },
+    })
+
+    try {
+      const sessionId = await initMcpSession(server.url)
+      const callData = await callAskQuestion(
+        server.url,
+        {
+          hypothesis: 'Test hypothesis',
+          confidence: 80,
+          question: 'Will this fail?',
+          guess: 'Yes',
+        },
+        sessionId,
+      )
+
+      expect(callData.result?.isError).toBe(true)
+      expect(callData.result?.content?.[0]?.text).toContain('User declined to answer')
     }
     finally {
       await server.close()

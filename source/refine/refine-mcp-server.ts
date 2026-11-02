@@ -1,7 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import crypto from 'node:crypto'
 import http from 'node:http'
 import { Readable } from 'node:stream'
-import { McpServer, WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server'
+import {
+  localhostAllowedHostnames,
+  localhostAllowedOrigins,
+  McpServer,
+  WebStandardStreamableHTTPServerTransport,
+} from '@modelcontextprotocol/server'
 import { z as zod } from 'zod'
 
 export const AskQuestionInputSchema = zod.object({
@@ -16,24 +22,26 @@ export type AskQuestionInput = zod.infer<typeof AskQuestionInputSchema>
 
 export interface StartRefineMcpServerOptions {
   port?: number
-  onAskQuestion?: (input: AskQuestionInput) => Promise<string>
+  onAskQuestion: (input: AskQuestionInput) => Promise<string>
 }
 
 export interface RefineMcpServerInstance {
   port: number
   url: string
+  sessionToken: string
   close: () => Promise<void>
 }
 
 export async function startRefineMcpServer(
-  options: StartRefineMcpServerOptions = {},
+  options: StartRefineMcpServerOptions,
 ): Promise<RefineMcpServerInstance> {
+  const sessionToken = crypto.randomBytes(16).toString('hex')
+  const expectedPath = `/mcp/${sessionToken}`
+
   const mcpServer = new McpServer({
     name: 'ludd-refine',
     version: '0.0.0',
   })
-
-  const onAskQuestion = options.onAskQuestion ?? (async input => input.guess)
 
   mcpServer.registerTool(
     'ask_question',
@@ -42,8 +50,7 @@ export async function startRefineMcpServer(
       inputSchema: AskQuestionInputSchema,
     },
     async (args) => {
-      const validated = AskQuestionInputSchema.parse(args)
-      const answer = await onAskQuestion(validated)
+      const answer = await options.onAskQuestion(args)
       return {
         content: [
           {
@@ -55,18 +62,19 @@ export async function startRefineMcpServer(
     },
   )
 
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: () => crypto.randomUUID(),
-    enableJsonResponse: true,
-  })
-
-  await mcpServer.connect(transport)
+  let transport: WebStandardStreamableHTTPServerTransport | undefined
 
   async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-    if (url.pathname !== '/mcp') {
+    if (url.pathname !== expectedPath) {
       res.statusCode = 404
-      res.end()
+      res.end('Not Found')
+      return
+    }
+
+    if (transport === undefined) {
+      res.statusCode = 503
+      res.end('Service Unavailable')
       return
     }
 
@@ -109,13 +117,11 @@ export async function startRefineMcpServer(
   }
 
   const httpServer = http.createServer((req: IncomingMessage, res: ServerResponse) => {
-    void handleHttpRequest(req, res).catch((err: unknown) => {
-      res.statusCode = 500
-      let message = 'Internal Server Error'
-      if (err instanceof Error) {
-        message = err.message
+    void handleHttpRequest(req, res).catch(() => {
+      if (!res.headersSent) {
+        res.statusCode = 500
+        res.end('Internal Server Error')
       }
-      res.end(message)
     })
   })
 
@@ -132,12 +138,35 @@ export async function startRefineMcpServer(
   }
 
   const port = address.port
-  const url = `http://127.0.0.1:${port}/mcp`
+  const url = `http://127.0.0.1:${port}${expectedPath}`
+
+  const baseHosts = localhostAllowedHostnames()
+  const allowedHosts = [
+    ...baseHosts,
+    ...baseHosts.map(h => `${h}:${port}`),
+  ]
+  const baseOrigins = localhostAllowedOrigins()
+  const allowedOrigins = [
+    ...baseOrigins,
+    ...baseOrigins.map(o => `http://${o}:${port}`),
+  ]
+
+  transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: () => crypto.randomUUID(),
+    enableJsonResponse: true,
+    enableDnsRebindingProtection: true,
+    allowedHosts,
+    allowedOrigins,
+  })
+
+  await mcpServer.connect(transport)
 
   return {
     port,
     url,
+    sessionToken,
     close: async () => {
+      httpServer.closeAllConnections?.()
       await new Promise<void>((resolve) => {
         httpServer.close(() => resolve())
       })

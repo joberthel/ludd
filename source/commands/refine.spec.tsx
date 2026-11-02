@@ -6,6 +6,7 @@ import path from 'node:path'
 import chalk from 'chalk'
 import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { callAskQuestion, initMcpSession } from '../refine/test-helpers.js'
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
 import { createTask } from '../store/task-store.js'
@@ -121,6 +122,7 @@ describe('task refine command', () => {
         configStore={testConfigStore}
         cwd={tempWorkDir}
         projectsDir={tempProjectsDir}
+        runSession={async () => new Promise(() => {})}
       />,
     )
 
@@ -153,6 +155,7 @@ describe('task refine command', () => {
           effort: 'high',
         }}
         projectsDir={tempProjectsDir}
+        runSession={async () => new Promise(() => {})}
       />,
     )
 
@@ -184,6 +187,7 @@ describe('task refine command', () => {
         configStore={testConfigStore}
         cwd={tempWorkDir}
         projectsDir={tempProjectsDir}
+        runSession={async () => new Promise(() => {})}
       />,
     )
 
@@ -244,6 +248,7 @@ describe('task refine command', () => {
         configStore={testConfigStore}
         cwd={tempWorkDir}
         projectsDir={tempProjectsDir}
+        runSession={async () => new Promise(() => {})}
       />,
     )
 
@@ -317,53 +322,21 @@ describe('task refine command', () => {
         cwd={tempWorkDir}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
-          const initRes = await fetch(mcpServer.url, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'accept': 'application/json, text/event-stream',
+          const sessionId = await initMcpSession(mcpServer.url)
+          toolResult = await callAskQuestion(
+            mcpServer.url,
+            {
+              hypothesis: 'User wants dark mode by default',
+              confidence: 65,
+              missing: 'persistence strategy',
+              question: 'Should dark mode be persisted in localStorage?',
+              guess: 'Yes, persist in localStorage',
             },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'initialize',
-              params: {
-                protocolVersion: '2024-11-05',
-                capabilities: {},
-                clientInfo: { name: 'test-agent', version: '1.0.0' },
-              },
-            }),
-          })
-          const sessionId = initRes.headers.get('mcp-session-id')
-          const headers: Record<string, string> = {
-            'content-type': 'application/json',
-            'accept': 'application/json, text/event-stream',
-          }
-          if (sessionId !== null && sessionId !== '') {
-            headers['mcp-session-id'] = sessionId
-          }
-
-          const callRes = await fetch(mcpServer.url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 2,
-              method: 'tools/call',
-              params: {
-                name: 'ask_question',
-                arguments: {
-                  hypothesis: 'User wants dark mode by default',
-                  confidence: 65,
-                  missing: 'persistence strategy',
-                  question: 'Should dark mode be persisted in localStorage?',
-                  guess: 'Yes, persist in localStorage',
-                },
-              },
-            }),
-          })
-          toolResult = await callRes.json()
+            sessionId,
+          )
           sessionPromiseResolve()
+          // keep running
+          await new Promise(() => {})
         }}
       />,
     )
@@ -387,9 +360,8 @@ describe('task refine command', () => {
 
     await sessionPromise
 
-    expect(toolResult).toEqual({
+    expect(toolResult).toMatchObject({
       jsonrpc: '2.0',
-      id: 2,
       result: {
         content: [
           {
@@ -432,52 +404,20 @@ describe('task refine command', () => {
         cwd={tempWorkDir}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
-          const initRes = await fetch(mcpServer.url, {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              'accept': 'application/json, text/event-stream',
+          const sessionId = await initMcpSession(mcpServer.url)
+          toolResult = await callAskQuestion(
+            mcpServer.url,
+            {
+              hypothesis: 'User wants cookies',
+              confidence: 85,
+              question: 'Use cookies or indexedDB?',
+              guess: 'Cookies',
             },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'initialize',
-              params: {
-                protocolVersion: '2024-11-05',
-                capabilities: {},
-                clientInfo: { name: 'test-agent', version: '1.0.0' },
-              },
-            }),
-          })
-          const sessionId = initRes.headers.get('mcp-session-id')
-          const headers: Record<string, string> = {
-            'content-type': 'application/json',
-            'accept': 'application/json, text/event-stream',
-          }
-          if (sessionId !== null && sessionId !== '') {
-            headers['mcp-session-id'] = sessionId
-          }
-
-          const callRes = await fetch(mcpServer.url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 2,
-              method: 'tools/call',
-              params: {
-                name: 'ask_question',
-                arguments: {
-                  hypothesis: 'User wants cookies',
-                  confidence: 85,
-                  question: 'Use cookies or indexedDB?',
-                  guess: 'Cookies',
-                },
-              },
-            }),
-          })
-          toolResult = await callRes.json()
+            sessionId,
+          )
           sessionPromiseResolve()
+          // keep running
+          await new Promise(() => {})
         }}
       />,
     )
@@ -504,9 +444,8 @@ describe('task refine command', () => {
 
     await sessionPromise
 
-    expect(toolResult).toEqual({
+    expect(toolResult).toMatchObject({
       jsonrpc: '2.0',
-      id: 2,
       result: {
         content: [
           {
@@ -521,6 +460,246 @@ describe('task refine command', () => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
       expect(frame).toContain('Refining task #1 (Refine Task Custom Answer)')
+    })
+  })
+
+  it('rejects a second ask_question call with an error while one is pending', async () => {
+    const { slug } = await initProject({
+      name: 'Concurrent Questions Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Concurrent Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let secondCallResult: unknown
+    let firstCallResult: unknown
+
+    const { lastFrame, stdin } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+
+          // Fire first question (will wait for user)
+          const firstPromise = callAskQuestion(
+            mcpServer.url,
+            {
+              hypothesis: 'First question',
+              confidence: 90,
+              question: 'First question text',
+              guess: 'First guess',
+            },
+            sessionId,
+          )
+
+          // Small delay so first question reaches UI
+          await new Promise(r => setTimeout(r, 50))
+
+          // Fire second question concurrently
+          secondCallResult = await callAskQuestion(
+            mcpServer.url,
+            {
+              hypothesis: 'Second question',
+              confidence: 80,
+              question: 'Second question text',
+              guess: 'Second guess',
+            },
+            sessionId,
+          )
+
+          firstCallResult = await firstPromise
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain('First question text')
+    })
+
+    // Second call must have been rejected as a tool error
+    await vi.waitFor(() => {
+      expect(secondCallResult).toBeDefined()
+    })
+
+    const secondParsed = secondCallResult as { result: { isError: boolean, content: Array<{ text: string }> } }
+    expect(secondParsed.result?.isError).toBe(true)
+    expect(secondParsed.result?.content[0]?.text).toContain('Only one question may be asked at a time')
+
+    // First question should still be answerable
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(firstCallResult).toBeDefined()
+    })
+
+    const firstParsed = firstCallResult as { result: { content: Array<{ text: string }> } }
+    expect(JSON.parse(firstParsed.result.content[0]!.text)).toEqual({ answer: 'First guess' })
+  })
+
+  it('unmount cleanup rejects pending question and closes server without hanging', async () => {
+    const { slug } = await initProject({
+      name: 'Unmount Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Unmount Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let _questionError: unknown
+    let serverPort: number | undefined
+
+    const { unmount } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          serverPort = mcpServer.port
+          const sessionId = await initMcpSession(mcpServer.url)
+          try {
+            await callAskQuestion(
+              mcpServer.url,
+              {
+                hypothesis: 'Unmount test',
+                confidence: 90,
+                question: 'Will unmount soon?',
+                guess: 'Yes',
+              },
+              sessionId,
+            )
+          }
+          catch (e) {
+            _questionError = e
+          }
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(serverPort).toBeDefined()
+    })
+
+    // Give it a moment to enter askingQuestion state
+    await new Promise(r => setTimeout(r, 50))
+
+    // Unmount while question is pending
+    unmount()
+
+    // Server should close connections promptly and port should no longer accept connections
+    await vi.waitFor(async () => {
+      let isClosed = false
+      try {
+        await fetch(`http://127.0.0.1:${serverPort}/mcp`, { method: 'POST' })
+      }
+      catch {
+        isClosed = true
+      }
+      expect(isClosed).toBe(true)
+    })
+  })
+
+  it('transitions to done state and closes server when runSession completes', async () => {
+    const { slug } = await initProject({
+      name: 'Done State Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Done Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let serverPort: number | undefined
+
+    const { lastFrame } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          serverPort = mcpServer.port
+          // session completes immediately
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.green('[DONE]'))
+      expect(frame).toContain('Refinement completed for task #1 (Done Task)')
+    })
+
+    // Server should be closed after runSession resolves
+    await vi.waitFor(async () => {
+      let isClosed = false
+      try {
+        await fetch(`http://127.0.0.1:${serverPort}/mcp`, { method: 'POST' })
+      }
+      catch {
+        isClosed = true
+      }
+      expect(isClosed).toBe(true)
+    })
+  })
+
+  it('renders [ERROR], sets process.exitCode = 1, and closes server when runSession throws', async () => {
+    const { slug } = await initProject({
+      name: 'Error Session Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    await createTask({
+      projectSlug: slug,
+      name: 'Failed Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let serverPort: number | undefined
+
+    const { lastFrame } = render(
+      <TaskRefine
+        args={['1']}
+        configStore={testConfigStore}
+        cwd={tempWorkDir}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          serverPort = mcpServer.port
+          throw new Error('Agent process exited unexpectedly with code 1')
+        }}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      const frame = lastFrame() ?? ''
+      expect(frame).toContain(chalk.red('[ERROR]'))
+      expect(frame).toContain('Agent process exited unexpectedly with code 1')
+      expect(process.exitCode).toBe(1)
+    })
+
+    // Server should be closed after runSession fails
+    await vi.waitFor(async () => {
+      let isClosed = false
+      try {
+        await fetch(`http://127.0.0.1:${serverPort}/mcp`, { method: 'POST' })
+      }
+      catch {
+        isClosed = true
+      }
+      expect(isClosed).toBe(true)
     })
   })
 })
