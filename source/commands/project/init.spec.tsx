@@ -91,13 +91,14 @@ describe('project init command', () => {
       expect(frame).toContain('Project name:')
     })
 
-    // Press Enter to accept placeholder (folderName)
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     const folderName = path.basename(path.resolve(tempWorkDir))
     const expectedSlug = slugifyProjectName(folderName)
 
+    // Press Enter to accept placeholder (folderName)
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })
@@ -138,10 +139,11 @@ describe('project init command', () => {
       expect(frame).toContain('Project description:')
     })
 
-    // Press Enter to accept empty description
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
+    // Press Enter to accept empty description
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('custom-project')
@@ -173,12 +175,13 @@ describe('project init command', () => {
       expect(frame).not.toContain('[RUNNING]')
     })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     const folderName = path.basename(path.resolve(tempWorkDir))
     const expectedSlug = slugifyProjectName(folderName)
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
     })

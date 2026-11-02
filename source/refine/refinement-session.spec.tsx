@@ -86,9 +86,10 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Answer (press Enter to accept guess):')
     })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(toolResult).toBeDefined()
     })
 
@@ -145,14 +146,17 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Which framework should be used?')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     stdin.write('Vue 3 instead')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Vue 3 instead')
     })
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(toolResult).toBeDefined()
     })
 
@@ -224,9 +228,10 @@ describe('refinementSession component', () => {
     expect(parsedSecond.result?.isError).toBe(true)
     expect(parsedSecond.result?.content?.[0]?.text).toContain('Only one question may be asked at a time')
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(firstResult).toBeDefined()
     })
     const parsedFirst = firstResult as { result?: { content?: Array<{ text: string }> } }
@@ -325,9 +330,10 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Refinement completed for task #1 (Complete Refine Task)')
@@ -467,14 +473,16 @@ describe('refinementSession component', () => {
       expect(frame).toContain('Confirm intent? (Enter/y to confirm, or type refinement feedback):')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     stdin.write('Please adjust the outcome')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('Please adjust the outcome')
     })
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(firstResult).toBeDefined()
     })
 
@@ -489,9 +497,10 @@ describe('refinementSession component', () => {
       expect(frame).toContain('All users')
     })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(secondResult).toBeDefined()
     })
 
@@ -560,14 +569,16 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     stdin.write('y')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('y')
     })
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(confirmResult).toBeDefined()
     })
 
@@ -621,14 +632,16 @@ describe('refinementSession component', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
+    await new Promise(resolve => setTimeout(resolve, 50))
+
     stdin.write('YES')
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
       expect(frame).toContain('YES')
     })
-    stdin.write('\r')
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(confirmResult).toBeDefined()
     })
 
@@ -687,9 +700,10 @@ describe('refinementSession component', () => {
     const taskJsonPath = path.join(tempProjectsDir, project.slug, 'tasks', '1', 'task.json')
     await rm(taskJsonPath, { force: true })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(confirmResult).toBeDefined()
     })
 

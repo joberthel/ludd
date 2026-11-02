@@ -261,10 +261,11 @@ describe('task refine command', () => {
       expect(frame).toContain('#2 Second Refinement Task')
     })
 
-    // Press Enter to select the focused option (task #1)
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
+    // Press Enter to select the focused option (task #1)
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.yellow('[RUNNING]'))
       expect(frame).toContain('Refining task #1 (First Refinement Task) with Gemini 4 Argon (effort: medium)...')
@@ -346,9 +347,10 @@ describe('task refine command', () => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
     })
 
-    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 50))
 
     await vi.waitFor(() => {
+      stdin.write('\r')
       expect(lastFrame() ?? '').toContain('[OK]')
     })
 

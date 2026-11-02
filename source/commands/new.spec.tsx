@@ -104,9 +104,9 @@ describe('task new command', () => {
     })
 
     // Press Enter to accept slugified branch default
-    stdin.write('\r')
-
+    await new Promise(resolve => setTimeout(resolve, 50))
     await vi.waitFor(() => {
+      stdin.write('\r')
       const frame = lastFrame() ?? ''
       expect(frame).toContain(chalk.green('[OK]'))
       expect(frame).toContain('Created task #1 (Interactive Task) on branch interactive-task')
