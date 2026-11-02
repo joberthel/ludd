@@ -47,7 +47,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -117,7 +117,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -180,7 +180,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -252,7 +252,7 @@ describe('refinementSession component', () => {
 
     const { unmount } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -299,7 +299,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -350,7 +350,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async () => {
@@ -382,7 +382,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async () => {
@@ -435,7 +435,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -541,7 +541,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -603,7 +603,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
@@ -665,7 +665,7 @@ describe('refinementSession component', () => {
 
     const { lastFrame, stdin } = render(
       <RefinementSession
-        model="Gemini 4 Argon"
+        model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {

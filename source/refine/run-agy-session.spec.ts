@@ -69,7 +69,7 @@ describe('runAgyRefineSession helpers', () => {
   describe('buildAgyArgs', () => {
     it('builds command line arguments with settings and prompt', () => {
       const args = buildAgyArgs({
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         sessionDir: '/tmp/session-123',
         taskId: 42,
         taskName: 'Implement MCP runner',
@@ -78,7 +78,7 @@ describe('runAgyRefineSession helpers', () => {
       expect(args).toEqual([
         '--sandbox',
         '--model',
-        'Gemini 4 Argon (Medium)',
+        'gemini-4-argon-medium',
         '--add-dir',
         '/tmp/session-123',
         '--settings',
@@ -154,7 +154,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
     await runAgyRefineSession({
       task: sampleTask,
       project: sampleProject,
-      model: 'Gemini 4 Argon (Medium)',
+      model: 'gemini-4-argon-medium',
       mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
       spawnFn,
     })
@@ -162,7 +162,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
     expect(capturedCommand).toBe('agy')
     expect(capturedOptions.cwd).toBe(sampleProject.path)
     expect(capturedArgs).toContain('--sandbox')
-    expect(capturedArgs).toContain('Gemini 4 Argon (Medium)')
+    expect(capturedArgs).toContain('gemini-4-argon-medium')
     expect(capturedArgs).toContain('/refine Task #7: Add auth middleware')
     expect(capturedArgs).not.toContain('--effort')
   })
@@ -186,7 +186,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         spawnFn,
       }),
@@ -208,7 +208,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         spawnFn,
       }),
@@ -228,7 +228,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         spawnFn,
       }),
@@ -252,7 +252,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
     const runPromise = runAgyRefineSession({
       task: sampleTask,
       project: sampleProject,
-      model: 'Gemini 4 Argon (Medium)',
+      model: 'gemini-4-argon-medium',
       mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
       signal: abortController.signal,
       spawnFn,
@@ -292,7 +292,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         signal: abortController.signal,
         spawnFn,
@@ -322,7 +322,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         signal: abortController.signal,
         spawnFn,
@@ -351,7 +351,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         signal: abortController.signal,
         spawnFn,
@@ -379,7 +379,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         signal: abortController.signal,
         spawnFn,
@@ -396,7 +396,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
       runAgyRefineSession({
         task: sampleTask,
         project: sampleProject,
-        model: 'Gemini 4 Argon (Medium)',
+        model: 'gemini-4-argon-medium',
         mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
         signal: abortController.signal,
         spawnFn,
@@ -423,7 +423,7 @@ describe('runAgyRefineSession execution lifecycle', () => {
     await runAgyRefineSession({
       task: sampleTask,
       project: sampleProject,
-      model: 'Gemini 4 Argon (Medium)',
+      model: 'gemini-4-argon-medium',
       mcpServer: { url: 'http://127.0.0.1:9999/mcp/tok' },
       spawnFn,
     })
