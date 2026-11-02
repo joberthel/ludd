@@ -50,6 +50,7 @@ describe('project init command', () => {
       name: 'My Service',
       description: 'Core microservice',
       path: path.resolve(tempWorkDir),
+      taskCounter: 0,
     })
   })
 
@@ -152,6 +153,7 @@ describe('project init command', () => {
       name: 'Custom Project',
       description: '',
       path: path.resolve(tempWorkDir),
+      taskCounter: 0,
     })
   })
 

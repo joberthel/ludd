@@ -32,6 +32,7 @@ describe('projectStore', () => {
         name: 'My Service',
         description: 'A microservice for auth',
         path: '/Users/test/workspace/my-service',
+        taskCounter: 5,
       }
       expect(ProjectSchema.parse(valid)).toEqual(valid)
     })
@@ -42,7 +43,22 @@ describe('projectStore', () => {
         name: 'project',
         description: '',
         path: '/',
+        taskCounter: 0,
       })
+    })
+
+    it('defaults taskCounter to 0 when parsing legacy projects without taskCounter', () => {
+      const parsed = ProjectSchema.parse({
+        name: 'Legacy Project',
+        description: 'Older schema',
+        path: '/legacy',
+      })
+      expect(parsed.taskCounter).toBe(0)
+    })
+
+    it('rejects negative or non-integer taskCounter', () => {
+      expect(() => ProjectSchema.parse({ name: 'proj', taskCounter: -1 })).toThrow(ZodError)
+      expect(() => ProjectSchema.parse({ name: 'proj', taskCounter: 1.5 })).toThrow(ZodError)
     })
 
     it('rejects unknown keys due to strict()', () => {
@@ -146,6 +162,7 @@ describe('projectStore', () => {
         description: 'A desc',
         path: path.resolve(pathA),
         slug: 'alpha-project',
+        taskCounter: 0,
       })
     })
 
@@ -272,6 +289,7 @@ describe('projectStore', () => {
         name: 'My Project',
         description: 'First project',
         path: path.resolve(projPath),
+        taskCounter: 0,
       })
     })
 

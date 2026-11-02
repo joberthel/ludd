@@ -101,6 +101,7 @@ describe('project ls command', () => {
           name: 'Alpha',
           description: 'Alpha desc',
           path: '/workspace/alpha',
+          taskCounter: 0,
         },
       ])
       expect(frame).not.toContain('[OK]')

@@ -77,6 +77,7 @@ describe('project info command', () => {
         name: 'JSON Project',
         description: 'Details for JSON',
         path: path.resolve(tempWorkDir),
+        taskCounter: 0,
       })
       expect(frame).not.toContain('[OK]')
     })

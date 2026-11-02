@@ -15,7 +15,10 @@ export function createStore<TSchema extends z.ZodType>(
   filePath: string,
   schema: TSchema,
 ): Store<TSchema> {
-  const defaultData = schema.parse({})
+  const parsedDefault = schema.safeParse({})
+  const defaultData = parsedDefault.success
+    ? parsedDefault.data
+    : ({} as z.output<TSchema>)
   const adapter = new JSONFile<z.output<TSchema>>(filePath)
   const db = new Low<z.output<TSchema>>(adapter, defaultData)
 
@@ -24,6 +27,9 @@ export function createStore<TSchema extends z.ZodType>(
     async read() {
       const exists = await stat(filePath).then(() => true, () => false)
       if (!exists) {
+        if (!parsedDefault.success) {
+          throw new Error(`File "${filePath}" does not exist`)
+        }
         await mkdir(path.dirname(filePath), { recursive: true })
         const initial = structuredClone(defaultData)
         db.data = initial

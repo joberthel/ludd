@@ -10,6 +10,7 @@ export const ProjectSchema = zod.object({
   name: zod.string().trim().min(1).default('project'),
   description: zod.string().default(''),
   path: zod.string().min(1).default('/'),
+  taskCounter: zod.number().int().nonnegative().default(0),
 }).strict().prefault({})
 
 export type Project = zod.infer<typeof ProjectSchema>
@@ -185,6 +186,7 @@ export async function initProject(
     name: options.name.trim(),
     description: options.description?.trim() ?? '',
     path: resolvedPath,
+    taskCounter: 0,
   }
 
   const written = await store.write(projectData)
