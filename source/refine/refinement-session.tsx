@@ -133,9 +133,7 @@ export function RefinementSession({
                   activePendingToolRejectRef.current = undefined
 
                   const turn: QnATurn = {
-                    hypothesis: '',
                     confidence: question.confidence,
-                    missing: undefined,
                     question: question.question,
                     guess: question.guess,
                     answer,
@@ -357,7 +355,7 @@ export function RefinementSession({
           )
         : (
             <Box flexDirection="column" flexGrow={1} padding={1}>
-              <TaskHeader model={model} taskId={task.id} taskName={task.name} />
+              <TaskHeader taskId={task.id} taskName={task.name} />
 
               <QuestionHistory history={history} />
 
@@ -373,10 +371,7 @@ export function RefinementSession({
                 ? (
                     <Box flexDirection="column">
                       <QuestionDetails
-                        confidence={sessionState.question.confidence}
                         guess={sessionState.question.guess}
-                        hypothesis=""
-                        missing={undefined}
                         question={sessionState.question.question}
                       />
                       <Box marginTop={1}>

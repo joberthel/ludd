@@ -11,7 +11,7 @@ export type InitStage
 export interface LoadingScreenProps {
   taskId: number | string
   taskName: string
-  model: string
+  model?: string
   stage: InitStage
   mcpPort?: number
   agentPid?: number
@@ -27,7 +27,6 @@ const STAGE_ORDER: InitStage[] = [
 export function LoadingScreen({
   taskId,
   taskName,
-  model,
   stage,
   mcpPort,
   agentPid,
@@ -42,7 +41,7 @@ export function LoadingScreen({
 
   return (
     <Box flexDirection="column" flexGrow={1} padding={1}>
-      <TaskHeader model={model} taskId={taskId} taskName={taskName} />
+      <TaskHeader taskId={taskId} taskName={taskName} />
 
       <Box flexDirection="column" gap={1}>
         <Box>

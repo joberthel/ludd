@@ -6,15 +6,12 @@ import { QuestionHistory } from './question-history.js'
 
 const mockHistory: QnATurn[] = [
   {
-    hypothesis: 'User wants dark mode by default',
     confidence: 60,
-    missing: 'theme persistence',
     question: 'Should theme be persisted?',
     guess: 'Yes in localStorage',
     answer: 'Yes in localStorage',
   },
   {
-    hypothesis: 'System should respect OS dark mode preference',
     confidence: 85,
     question: 'Should system match prefers-color-scheme?',
     guess: 'Yes',
@@ -52,9 +49,11 @@ describe('questionHistory component', () => {
     await vi.waitFor(() => {
       const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('[History 2/2 - PageUp/PageDown]')
-      expect(frame).toContain('System should respect OS dark mode preference')
-      expect(frame).toContain('CONFIDENCE: 85%')
+      expect(frame).toContain('Q: Should system match prefers-color-scheme?')
+      expect(frame).toContain('GUESS: Yes')
       expect(frame).toContain('ANSWER: Yes, match OS')
+      expect(frame).not.toContain('HYPOTHESIS:')
+      expect(frame).not.toContain('CONFIDENCE:')
     })
 
     // Press PageUp again -> should view turn 1/2
@@ -63,9 +62,11 @@ describe('questionHistory component', () => {
     await vi.waitFor(() => {
       const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('[History 1/2 - PageUp/PageDown]')
-      expect(frame).toContain('User wants dark mode by default')
-      expect(frame).toContain('MISSING: theme persistence')
+      expect(frame).toContain('Q: Should theme be persisted?')
+      expect(frame).toContain('GUESS: Yes in localStorage')
       expect(frame).toContain('ANSWER: Yes in localStorage')
+      expect(frame).not.toContain('HYPOTHESIS:')
+      expect(frame).not.toContain('CONFIDENCE:')
     })
 
     // Press PageDown (\x1B[6~) -> should return to turn 2/2
@@ -96,8 +97,11 @@ describe('questionHistory component', () => {
 
     const frame = stripAnsi(lastFrame() ?? '')
     expect(frame).toContain('[History 1/2 - PageUp/PageDown]')
-    expect(frame).toContain('User wants dark mode by default')
-    expect(frame).toContain('MISSING: theme persistence')
+    expect(frame).toContain('Q: Should theme be persisted?')
+    expect(frame).toContain('GUESS: Yes in localStorage')
+    expect(frame).toContain('ANSWER: Yes in localStorage')
+    expect(frame).not.toContain('HYPOTHESIS:')
+    expect(frame).not.toContain('CONFIDENCE:')
   })
 
   it('returns to active prompt when pressing Escape while viewing history', async () => {

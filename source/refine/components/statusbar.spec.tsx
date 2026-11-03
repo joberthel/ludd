@@ -8,6 +8,7 @@ describe('statusbar component', () => {
   it('renders all status segments correctly', () => {
     const { lastFrame } = render(
       <Statusbar
+        agyStatus="Running"
         confidence={75}
         historyCount={2}
         mcpStatus="Connected"
@@ -19,6 +20,7 @@ describe('statusbar component', () => {
     expect(frame).toContain('Confidence: 75%')
     expect(frame).toContain('Model: gemini-2.5-pro')
     expect(frame).toContain('MCP: Connected')
+    expect(frame).toContain('Agent: Running')
     expect(frame).toContain('[PgUp/PgDn] History (2)')
   })
 

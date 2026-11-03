@@ -4,6 +4,7 @@ export interface StatusbarProps {
   confidence?: number
   model: string
   mcpStatus: string
+  agyStatus?: string
   historyCount?: number
 }
 
@@ -17,9 +18,9 @@ function getConfidenceColor(confidence: number | undefined): 'cyan' | 'green' | 
   return 'green'
 }
 
-function getMcpColor(status: string): 'cyan' | 'green' | 'yellow' {
+function getStatusColor(status: string): 'cyan' | 'green' | 'yellow' {
   const normalized = status.toLowerCase()
-  if (normalized.includes('connected') || normalized.includes('ready') || normalized.includes('ok')) {
+  if (normalized.includes('connected') || normalized.includes('ready') || normalized.includes('ok') || normalized.includes('running')) {
     return 'green'
   }
   if (normalized.includes('starting') || normalized.includes('init')) {
@@ -32,10 +33,14 @@ export function Statusbar({
   confidence,
   model,
   mcpStatus,
+  agyStatus,
   historyCount,
 }: StatusbarProps) {
   const confidenceColor = getConfidenceColor(confidence)
-  const mcpColor = getMcpColor(mcpStatus)
+  const mcpColor = getStatusColor(mcpStatus)
+  const agyColor = agyStatus !== undefined
+    ? getStatusColor(agyStatus)
+    : 'cyan'
 
   return (
     <Box borderStyle="single" flexDirection="row" justifyContent="space-between" width="100%">
@@ -56,6 +61,15 @@ export function Statusbar({
           {'MCP: '}
           <Text color={mcpColor}>{mcpStatus}</Text>
         </Text>
+        {agyStatus !== undefined && (
+          <>
+            <Text> | </Text>
+            <Text>
+              {'Agent: '}
+              <Text color={agyColor}>{agyStatus}</Text>
+            </Text>
+          </>
+        )}
       </Box>
       <Box>
         <Text dimColor>

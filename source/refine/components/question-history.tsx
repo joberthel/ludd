@@ -4,9 +4,7 @@ import { useState } from 'react'
 import { QuestionDetails } from './question-details.js'
 
 export interface QnATurn {
-  hypothesis: string
   confidence: number
-  missing?: string
   question: string
   guess: string
   answer: string
@@ -102,10 +100,7 @@ export function QuestionHistory({
       <Box marginTop={1}>
         <QuestionDetails
           answer={turn.answer}
-          confidence={turn.confidence}
           guess={turn.guess}
-          hypothesis={turn.hypothesis}
-          missing={turn.missing}
           question={turn.question}
         />
       </Box>
