@@ -75,6 +75,15 @@ export async function callMcpTool(
   return await response.json() as McpCallResult
 }
 
+export async function callGetInitialContext(
+  url: string,
+  args: Record<string, unknown> = {},
+  sessionId?: string,
+  id?: number,
+): Promise<McpCallResult> {
+  return callMcpTool(url, 'get_initial_context', args, sessionId, id)
+}
+
 export async function callAskQuestion(
   url: string,
   args: AskQuestionInput,

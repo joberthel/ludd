@@ -133,9 +133,9 @@ export function RefinementSession({
                   activePendingToolRejectRef.current = undefined
 
                   const turn: QnATurn = {
-                    hypothesis: question.hypothesis,
+                    hypothesis: '',
                     confidence: question.confidence,
-                    missing: question.missing,
+                    missing: undefined,
                     question: question.question,
                     guess: question.guess,
                     answer,
@@ -375,8 +375,8 @@ export function RefinementSession({
                       <QuestionDetails
                         confidence={sessionState.question.confidence}
                         guess={sessionState.question.guess}
-                        hypothesis={sessionState.question.hypothesis}
-                        missing={sessionState.question.missing}
+                        hypothesis=""
+                        missing={undefined}
                         question={sessionState.question.question}
                       />
                       <Box marginTop={1}>

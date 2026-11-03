@@ -12,10 +12,10 @@ import {
 import { z as zod } from 'zod'
 import { RefineIntentSchema } from '../store/task-store.js'
 
+export const GetInitialContextInputSchema = zod.object({}).strict()
+
 export const AskQuestionInputSchema = zod.object({
-  hypothesis: zod.string().trim().min(1).describe('One-sentence best read of what the user wants'),
   confidence: zod.number().int().min(0).max(100).describe('Honest confidence level from 0 to 100'),
-  missing: zod.string().trim().optional().describe('What is still unresolved when confidence is below 70%'),
   question: zod.string().trim().min(1).describe('One focused question for the user'),
   guess: zod.string().trim().min(1).describe('Best hypothesis for the answer and why'),
 }).strict()
@@ -29,6 +29,7 @@ export interface RefineConfirmationResult {
 
 export interface StartRefineMcpServerOptions {
   port?: number
+  onGetInitialContext?: () => Promise<string>
   onAskQuestion: (input: AskQuestionInput) => Promise<string>
   onCompleteRefinement?: (intent: RefineIntent) => Promise<RefineConfirmationResult>
 }
@@ -50,6 +51,28 @@ export async function startRefineMcpServer(
     name: 'ludd-refine',
     version: '0.0.0',
   })
+
+  mcpServer.registerTool(
+    'get_initial_context',
+    {
+      description: 'Get initial user-provided context about what to build or refine',
+      inputSchema: GetInitialContextInputSchema,
+    },
+    async () => {
+      if (options.onGetInitialContext === undefined) {
+        throw new Error('Initial context handler is not configured')
+      }
+      const context = await options.onGetInitialContext()
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ context }),
+          },
+        ],
+      }
+    },
+  )
 
   mcpServer.registerTool(
     'ask_question',

@@ -2,37 +2,89 @@ import type { RefineIntent } from '../store/task-store.js'
 import type { AskQuestionInput } from './refine-mcp-server.js'
 import http from 'node:http'
 import { describe, expect, it } from 'vitest'
-import { AskQuestionInputSchema, startRefineMcpServer } from './refine-mcp-server.js'
-import { callAskQuestion, callCompleteRefinement, initMcpSession, listMcpTools } from './test-helpers.js'
+import {
+  AskQuestionInputSchema,
+  GetInitialContextInputSchema,
+  startRefineMcpServer,
+} from './refine-mcp-server.js'
+import {
+  callAskQuestion,
+  callCompleteRefinement,
+  callGetInitialContext,
+  initMcpSession,
+  listMcpTools,
+} from './test-helpers.js'
 
 describe('refine-mcp-server', () => {
+  it('validates GetInitialContextInputSchema correctly', () => {
+    expect(GetInitialContextInputSchema.parse({})).toEqual({})
+    expect(() => GetInitialContextInputSchema.parse({ extra: 'invalid' })).toThrow()
+  })
+
   it('validates AskQuestionInputSchema correctly', () => {
     const valid = {
-      hypothesis: 'User wants dark mode',
       confidence: 85,
-      missing: 'theme persistence details',
       question: 'Should theme persist across sessions?',
       guess: 'Yes, store in localStorage',
     }
 
     expect(AskQuestionInputSchema.parse(valid)).toEqual(valid)
 
-    // missing is optional
-    const withoutMissing = {
-      hypothesis: 'User wants dark mode',
-      confidence: 90,
-      question: 'Should theme persist across sessions?',
-      guess: 'Yes',
-    }
-    expect(AskQuestionInputSchema.parse(withoutMissing)).toEqual(withoutMissing)
+    // rejects hypothesis or missing (strict schema)
+    expect(() => AskQuestionInputSchema.parse({ ...valid, hypothesis: 'Legacy hypothesis' })).toThrow()
+    expect(() => AskQuestionInputSchema.parse({ ...valid, missing: 'Legacy missing' })).toThrow()
 
     // confidence out of bounds
     expect(() => AskQuestionInputSchema.parse({ ...valid, confidence: 105 })).toThrow()
     expect(() => AskQuestionInputSchema.parse({ ...valid, confidence: -1 })).toThrow()
 
     // empty required strings
-    expect(() => AskQuestionInputSchema.parse({ ...valid, hypothesis: '' })).toThrow()
+    expect(() => AskQuestionInputSchema.parse({ ...valid, question: '' })).toThrow()
     expect(() => AskQuestionInputSchema.parse({ ...valid, question: '   ' })).toThrow()
+    expect(() => AskQuestionInputSchema.parse({ ...valid, guess: '' })).toThrow()
+  })
+
+  it('starts MCP server, lists get_initial_context tool, calls it, and returns context', async () => {
+    let initialContextCalled = false
+    const server = await startRefineMcpServer({
+      onGetInitialContext: async () => {
+        initialContextCalled = true
+        return 'Build an interactive CLI wizard'
+      },
+      onAskQuestion: async input => input.guess,
+    })
+
+    try {
+      const sessionId = await initMcpSession(server.url)
+      const listData = await listMcpTools(server.url, sessionId)
+      const tool = listData.result.tools.find(t => t.name === 'get_initial_context')
+      expect(tool).toBeDefined()
+
+      const callData = await callGetInitialContext(server.url, {}, sessionId)
+      expect(callData.result?.content?.[0]?.type).toBe('text')
+      const parsedText = JSON.parse(callData.result!.content![0]!.text)
+      expect(parsedText).toEqual({ context: 'Build an interactive CLI wizard' })
+      expect(initialContextCalled).toBe(true)
+    }
+    finally {
+      await server.close()
+    }
+  })
+
+  it('returns a tool error when onGetInitialContext is not configured', async () => {
+    const server = await startRefineMcpServer({
+      onAskQuestion: async input => input.guess,
+    })
+
+    try {
+      const sessionId = await initMcpSession(server.url)
+      const callData = await callGetInitialContext(server.url, {}, sessionId)
+      expect(callData.result?.isError).toBe(true)
+      expect(callData.result?.content?.[0]?.text).toContain('Initial context handler is not configured')
+    }
+    finally {
+      await server.close()
+    }
   })
 
   it('starts MCP server, lists ask_question tool, calls it, and shuts down', async () => {
@@ -55,7 +107,8 @@ describe('refine-mcp-server', () => {
       expect(listData.result.tools).toBeDefined()
       const tool = listData.result.tools.find(t => t.name === 'ask_question')
       expect(tool).toBeDefined()
-      expect(tool?.inputSchema.properties).toHaveProperty('hypothesis')
+      expect(tool?.inputSchema.properties).not.toHaveProperty('hypothesis')
+      expect(tool?.inputSchema.properties).not.toHaveProperty('missing')
       expect(tool?.inputSchema.properties).toHaveProperty('confidence')
       expect(tool?.inputSchema.properties).toHaveProperty('question')
       expect(tool?.inputSchema.properties).toHaveProperty('guess')
@@ -63,9 +116,7 @@ describe('refine-mcp-server', () => {
       const callData = await callAskQuestion(
         server.url,
         {
-          hypothesis: 'Need CLI confirmation',
           confidence: 75,
-          missing: 'confirmation flag',
           question: 'Add --yes flag?',
           guess: 'Yes, add --yes flag to skip prompt',
         },
@@ -77,9 +128,7 @@ describe('refine-mcp-server', () => {
       expect(parsedText).toEqual({ answer: 'Custom user response' })
 
       expect(capturedInput).toEqual({
-        hypothesis: 'Need CLI confirmation',
         confidence: 75,
-        missing: 'confirmation flag',
         question: 'Add --yes flag?',
         guess: 'Yes, add --yes flag to skip prompt',
       })
@@ -171,7 +220,6 @@ describe('refine-mcp-server', () => {
       const callData = await callAskQuestion(
         server.url,
         {
-          hypothesis: 'Test hypothesis',
           confidence: 80,
           question: 'Will this fail?',
           guess: 'Yes',
