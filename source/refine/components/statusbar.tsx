@@ -44,7 +44,7 @@ export function Statusbar({
 
   return (
     <Box borderStyle="single" flexDirection="row" justifyContent="space-between" width="100%">
-      <Box>
+      <Box flexShrink={0}>
         <Text>
           {'Confidence: '}
           {confidence !== undefined

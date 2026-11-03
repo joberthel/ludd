@@ -12,7 +12,7 @@ import { callCompleteRefinement, initMcpSession } from '../refine/test-helpers.j
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
 import { createTask } from '../store/task-store.js'
-import { submitAndWait } from '../test-helpers.js'
+import { stripAnsi, submitAndWait } from '../test-helpers.js'
 import TaskRefine, { options } from './refine.js'
 
 describe('task refine command', () => {
@@ -135,7 +135,7 @@ describe('task refine command', () => {
     )
 
     await vi.waitFor(() => {
-      const frame = lastFrame() ?? ''
+      const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('Refining Task #1: Refine Me')
       expect(frame).toContain('Model: gemini-4-argon-medium')
     })
@@ -167,7 +167,7 @@ describe('task refine command', () => {
     )
 
     await vi.waitFor(() => {
-      const frame = lastFrame() ?? ''
+      const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('Refining Task #1: Refine Me Flagged')
       expect(frame).toContain('Model: claude-3-7-sonnet')
     })
@@ -198,7 +198,7 @@ describe('task refine command', () => {
     )
 
     await vi.waitFor(() => {
-      const frame = lastFrame() ?? ''
+      const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('Refining Task #1: Custom Config Task')
       expect(frame).toContain('Model: Custom Argon Pro')
     })
@@ -267,7 +267,7 @@ describe('task refine command', () => {
 
     // Press Enter to select the focused option (task #1)
     await submitAndWait(stdin, '\r', () => {
-      const frame = lastFrame() ?? ''
+      const frame = stripAnsi(lastFrame() ?? '')
       expect(frame).toContain('Refining Task #1: First Refinement Task')
       expect(frame).toContain('Model: gemini-4-argon-medium')
     })

@@ -1,6 +1,5 @@
 import type { ProjectRecord } from '../store/project-store.js'
 import type { RefineIntent, Task } from '../store/task-store.js'
-import type { InitStage } from './components/loading-screen.js'
 import type { QnATurn } from './components/question-history.js'
 import type { AskQuestionInput, RefineConfirmationResult, RefineMcpServerInstance } from './refine-mcp-server.js'
 import process from 'node:process'
@@ -10,7 +9,6 @@ import { useEffect, useRef, useState } from 'react'
 import { ErrorLine, toMessage } from '../components/error-line.js'
 import { completeTaskRefinement } from '../store/task-store.js'
 import { FullscreenContainer } from './components/fullscreen-container.js'
-import { LoadingScreen } from './components/loading-screen.js'
 import { QuestionDetails } from './components/question-details.js'
 import { QuestionHistory } from './components/question-history.js'
 import { Statusbar } from './components/statusbar.js'
@@ -19,7 +17,6 @@ import { ensureRefineSkill } from './ensure-refine-skill.js'
 import { startRefineMcpServer } from './refine-mcp-server.js'
 import { runAgyRefineSession } from './run-agy-session.js'
 
-export type { InitStage } from './components/loading-screen.js'
 export type { QnATurn } from './components/question-history.js'
 
 export interface RefineSessionContext {
@@ -29,7 +26,7 @@ export interface RefineSessionContext {
   mcpServer: RefineMcpServerInstance
   signal?: AbortSignal
   luddHomeDir?: string
-  onStageChange?: (stage: InitStage, details?: { pid?: number }) => void
+  onStageChange?: (stage: string, details?: { pid?: number }) => void
 }
 
 export type RefineSessionRunner = (ctx: RefineSessionContext) => Promise<void>
@@ -61,7 +58,8 @@ export interface RefinementSessionProps {
 }
 
 export type SessionState
-  = | { status: 'waiting' }
+  = | { status: 'collectingInitialInput' }
+    | { message?: string, status: 'waiting' }
     | {
       status: 'askingQuestion'
       question: AskQuestionInput
@@ -72,6 +70,7 @@ export type SessionState
       intent: RefineIntent
       onConfirm: (val: string) => void | Promise<void>
     }
+    | { status: 'finishing' }
     | { status: 'done' }
     | { message: string, status: 'error' }
 
@@ -83,33 +82,70 @@ export function RefinementSession({
   luddHomeDir,
   runSession,
 }: RefinementSessionProps) {
-  const [sessionState, setSessionState] = useState<SessionState>({ status: 'waiting' })
-  const [hasReceivedFirstToolCall, setHasReceivedFirstToolCall] = useState(false)
-  const [initStage, setInitStage] = useState<InitStage>('starting-mcp')
-  const [mcpPort, setMcpPort] = useState<number | undefined>(undefined)
-  const [agentPid, setAgentPid] = useState<number | undefined>(undefined)
+  const [sessionState, setSessionState] = useState<SessionState>({ status: 'collectingInitialInput' })
   const [mcpStatus, setMcpStatus] = useState<string>('Starting')
+  const [agyStatus, setAgyStatus] = useState<string>('Starting')
   const [history, setHistory] = useState<QnATurn[]>([])
   const [latestConfidence, setLatestConfidence] = useState<number | undefined>(undefined)
 
+  const isMountedRef = useRef(true)
   const activePendingToolRejectRef = useRef<((reason: Error) => void) | undefined>(undefined)
   const isSubmittingRef = useRef(false)
   const confirmedRef = useRef(false)
   const sessionErrorOccurredRef = useRef(false)
 
+  const initialContextResolverRef = useRef<{
+    promise: Promise<string>
+    resolve: (val: string) => void
+    reject: (err: Error) => void
+  } | null>(null)
+
+  if (initialContextResolverRef.current === null) {
+    let resolve!: (val: string) => void
+    let reject!: (err: Error) => void
+    const promise = new Promise<string>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    promise.catch(() => {})
+    initialContextResolverRef.current = { promise, resolve, reject }
+  }
+
   useEffect(() => {
-    let isMounted = true
+    isMountedRef.current = true
     let serverInstance: RefineMcpServerInstance | undefined
     const abortController = new AbortController()
 
     async function start() {
       try {
-        setInitStage('starting-mcp')
         setMcpStatus('Starting')
+        setAgyStatus('Starting')
 
         const server = await startRefineMcpServer({
+          onGetInitialContext: async () => {
+            if (!isMountedRef.current) {
+              throw new Error('Refinement session terminated; no user available to provide context')
+            }
+
+            if (activePendingToolRejectRef.current !== undefined) {
+              throw new Error('Only one tool call may be awaiting user response at a time')
+            }
+
+            return new Promise<string>((resolve, reject) => {
+              activePendingToolRejectRef.current = reject
+              initialContextResolverRef.current!.promise
+                .then((context) => {
+                  activePendingToolRejectRef.current = undefined
+                  resolve(context)
+                })
+                .catch((err: Error) => {
+                  activePendingToolRejectRef.current = undefined
+                  reject(err)
+                })
+            })
+          },
           onAskQuestion: async (question) => {
-            if (!isMounted) {
+            if (!isMountedRef.current) {
               throw new Error('Refinement session terminated; no user available to answer')
             }
 
@@ -119,7 +155,6 @@ export function RefinementSession({
 
             return new Promise<string>((resolve, reject) => {
               activePendingToolRejectRef.current = reject
-              setHasReceivedFirstToolCall(true)
               setLatestConfidence(question.confidence)
 
               setSessionState({
@@ -141,8 +176,11 @@ export function RefinementSession({
                   setHistory(prev => [...prev, turn])
                   setLatestConfidence(question.confidence)
 
-                  if (isMounted) {
-                    setSessionState({ status: 'waiting' })
+                  if (isMountedRef.current) {
+                    setSessionState({
+                      status: 'waiting',
+                      message: 'Agent is analyzing your response and formulating the next question...',
+                    })
                   }
                   resolve(answer)
                   isSubmittingRef.current = false
@@ -151,7 +189,7 @@ export function RefinementSession({
             })
           },
           onCompleteRefinement: async (intent) => {
-            if (!isMounted) {
+            if (!isMountedRef.current) {
               throw new Error('Refinement session terminated; no user available to confirm')
             }
 
@@ -161,7 +199,6 @@ export function RefinementSession({
 
             return new Promise<RefineConfirmationResult>((resolve, reject) => {
               activePendingToolRejectRef.current = reject
-              setHasReceivedFirstToolCall(true)
               setLatestConfidence(95)
 
               setSessionState({
@@ -184,15 +221,15 @@ export function RefinementSession({
                       }, projectsDir)
                       confirmedRef.current = true
                       activePendingToolRejectRef.current = undefined
-                      if (isMounted) {
-                        setSessionState({ status: 'done' })
+                      if (isMountedRef.current) {
+                        setSessionState({ status: 'finishing' })
                       }
                       resolve({ confirmed: true })
                     }
                     catch (err) {
                       sessionErrorOccurredRef.current = true
                       activePendingToolRejectRef.current = undefined
-                      if (isMounted) {
+                      if (isMountedRef.current) {
                         process.exitCode = 1
                         setSessionState({
                           status: 'error',
@@ -213,8 +250,11 @@ export function RefinementSession({
                   else {
                     try {
                       activePendingToolRejectRef.current = undefined
-                      if (isMounted) {
-                        setSessionState({ status: 'waiting' })
+                      if (isMountedRef.current) {
+                        setSessionState({
+                          status: 'waiting',
+                          message: 'Agent is analyzing your response and formulating the next question...',
+                        })
                       }
                       resolve({
                         confirmed: false,
@@ -234,20 +274,12 @@ export function RefinementSession({
         serverInstance = server
         setMcpStatus('Connected')
 
-        try {
-          const parsedUrl = new URL(server.url)
-          if (parsedUrl.port) {
-            setMcpPort(Number(parsedUrl.port))
-          }
-        }
-        catch {}
-
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           await server.close()
           return
         }
 
-        setInitStage('verifying-skill')
+        setAgyStatus('Starting')
         const runner = runSession ?? defaultRefineSessionRunner
         await runner({
           task,
@@ -257,18 +289,22 @@ export function RefinementSession({
           signal: abortController.signal,
           luddHomeDir,
           onStageChange: (nextStage, details) => {
-            if (isMounted) {
-              setInitStage(nextStage)
+            if (isMountedRef.current) {
               if (details?.pid !== undefined) {
-                setAgentPid(details.pid)
+                setAgyStatus('Running')
+              }
+              else if (nextStage === 'spawning-agent' || nextStage === 'waiting-agent-first-question') {
+                setAgyStatus('Running')
               }
             }
           },
         })
 
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           return
         }
+
+        setAgyStatus('Exited')
 
         if (confirmedRef.current) {
           setSessionState({ status: 'done' })
@@ -282,7 +318,7 @@ export function RefinementSession({
         }
       }
       catch (err) {
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           return
         }
         process.exitCode = 1
@@ -293,6 +329,7 @@ export function RefinementSession({
       }
       finally {
         setMcpStatus('Closed')
+        setAgyStatus('Exited')
         if (activePendingToolRejectRef.current !== undefined) {
           activePendingToolRejectRef.current(new Error('Refinement session ended'))
           activePendingToolRejectRef.current = undefined
@@ -306,8 +343,9 @@ export function RefinementSession({
     void start()
 
     return () => {
-      isMounted = false
+      isMountedRef.current = false
       abortController.abort()
+      initialContextResolverRef.current?.reject(new Error('Refinement session unmounted'))
       if (activePendingToolRejectRef.current !== undefined) {
         activePendingToolRejectRef.current(new Error('Refinement session unmounted'))
         activePendingToolRejectRef.current = undefined
@@ -342,100 +380,115 @@ export function RefinementSession({
 
   return (
     <FullscreenContainer>
-      {!hasReceivedFirstToolCall
-        ? (
-            <LoadingScreen
-              agentPid={agentPid}
-              mcpPort={mcpPort}
-              model={model}
-              stage={initStage}
-              taskId={task.id}
-              taskName={task.name}
-            />
-          )
-        : (
-            <Box flexDirection="column" flexGrow={1} padding={1}>
-              <TaskHeader taskId={task.id} taskName={task.name} />
+      <Box flexDirection="column" flexGrow={1} padding={1}>
+        <TaskHeader taskId={task.id} taskName={task.name} />
 
-              <QuestionHistory history={history} />
+        <QuestionHistory history={history} />
 
-              {sessionState.status === 'waiting'
-                ? (
-                    <Box flexDirection="column" marginY={1}>
-                      <Spinner label="Agent is analyzing your response and formulating the next question..." />
-                    </Box>
-                  )
-                : null}
+        {sessionState.status === 'collectingInitialInput'
+          ? (
+              <Box flexDirection="column" marginTop={1}>
+                <Text>Describe what you want to build or refine:</Text>
+                <TextInput
+                  onSubmit={(val) => {
+                    const trimmed = val.trim()
+                    initialContextResolverRef.current?.resolve(trimmed)
+                    if (isMountedRef.current) {
+                      setSessionState({
+                        status: 'waiting',
+                        message: 'Waiting for agent to formulate the next question...',
+                      })
+                    }
+                  }}
+                />
+              </Box>
+            )
+          : null}
 
-              {sessionState.status === 'askingQuestion'
-                ? (
-                    <Box flexDirection="column">
-                      <QuestionDetails
-                        guess={sessionState.question.guess}
-                        question={sessionState.question.question}
-                      />
-                      <Box marginTop={1}>
-                        <Text>Answer (press Enter to accept guess): </Text>
-                        <TextInput
-                          placeholder={sessionState.question.guess}
-                          onSubmit={(val) => {
-                            const trimmed = val.trim()
-                            const answer = trimmed === ''
-                              ? sessionState.question.guess
-                              : trimmed
-                            sessionState.onAnswer(answer)
-                          }}
-                        />
-                      </Box>
-                    </Box>
-                  )
-                : null}
+        {sessionState.status === 'waiting'
+          ? (
+              <Box flexDirection="column" marginY={1}>
+                <Spinner label={sessionState.message ?? 'Waiting for agent to formulate the next question...'} />
+              </Box>
+            )
+          : null}
 
-              {sessionState.status === 'confirmingIntent'
-                ? (
-                    <Box flexDirection="column">
-                      <Text bold color="cyan">STATEMENT OF INTENT:</Text>
-                      <Text>
-                        <Text bold color="cyan">Outcome: </Text>
-                        {sessionState.intent.outcome}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">User: </Text>
-                        {sessionState.intent.user}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">Why now: </Text>
-                        {sessionState.intent.whyNow}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">Success: </Text>
-                        {sessionState.intent.success}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">Constraint: </Text>
-                        {sessionState.intent.constraint}
-                      </Text>
-                      <Text>
-                        <Text bold color="cyan">Out of scope: </Text>
-                        {sessionState.intent.outOfScope}
-                      </Text>
-                      <Box marginTop={1}>
-                        <Text>Confirm intent? (Enter/y to confirm, or type refinement feedback): </Text>
-                        <TextInput
-                          placeholder="y"
-                          onSubmit={(val) => {
-                            void sessionState.onConfirm(val)
-                          }}
-                        />
-                      </Box>
-                    </Box>
-                  )
-                : null}
-            </Box>
-          )}
+        {sessionState.status === 'askingQuestion'
+          ? (
+              <Box flexDirection="column">
+                <QuestionDetails
+                  guess={sessionState.question.guess}
+                  question={sessionState.question.question}
+                />
+                <Box flexDirection="column" marginTop={1}>
+                  <Text>Answer (press Enter to accept guess):</Text>
+                  <TextInput
+                    onSubmit={(val) => {
+                      const trimmed = val.trim()
+                      const answer = trimmed === ''
+                        ? sessionState.question.guess
+                        : trimmed
+                      sessionState.onAnswer(answer)
+                    }}
+                  />
+                </Box>
+              </Box>
+            )
+          : null}
+
+        {sessionState.status === 'confirmingIntent'
+          ? (
+              <Box flexDirection="column">
+                <Text bold color="cyan">STATEMENT OF INTENT:</Text>
+                <Text>
+                  <Text bold color="cyan">Outcome: </Text>
+                  {sessionState.intent.outcome}
+                </Text>
+                <Text>
+                  <Text bold color="cyan">User: </Text>
+                  {sessionState.intent.user}
+                </Text>
+                <Text>
+                  <Text bold color="cyan">Why now: </Text>
+                  {sessionState.intent.whyNow}
+                </Text>
+                <Text>
+                  <Text bold color="cyan">Success: </Text>
+                  {sessionState.intent.success}
+                </Text>
+                <Text>
+                  <Text bold color="cyan">Constraint: </Text>
+                  {sessionState.intent.constraint}
+                </Text>
+                <Text>
+                  <Text bold color="cyan">Out of scope: </Text>
+                  {sessionState.intent.outOfScope}
+                </Text>
+                <Box marginTop={1}>
+                  <Text>Confirm intent? (Enter/y to confirm, or type refinement feedback): </Text>
+                  <TextInput
+                    placeholder="y"
+                    onSubmit={(val) => {
+                      void sessionState.onConfirm(val)
+                    }}
+                  />
+                </Box>
+              </Box>
+            )
+          : null}
+
+        {sessionState.status === 'finishing'
+          ? (
+              <Box flexDirection="column" marginY={1}>
+                <Spinner label="Saving refinement and closing agent session..." />
+              </Box>
+            )
+          : null}
+      </Box>
 
       <Box width="100%">
         <Statusbar
+          agyStatus={agyStatus}
           confidence={latestConfidence}
           historyCount={history.length}
           mcpStatus={mcpStatus}

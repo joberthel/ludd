@@ -19,7 +19,7 @@ export function FullscreenContainer({
 
   const columns = typeof windowSize?.columns === 'number' && windowSize.columns > 0
     ? windowSize.columns
-    : 80
+    : 120
   const rows = typeof windowSize?.rows === 'number' && windowSize.rows > 0
     ? windowSize.rows
     : 24
