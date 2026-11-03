@@ -8,11 +8,11 @@ import { render } from 'ink-testing-library'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as skillModule from '../refine/ensure-refine-skill.js'
 import * as agySessionModule from '../refine/run-agy-session.js'
-import { callCompleteRefinement, initMcpSession } from '../refine/test-helpers.js'
+import { callCompleteRefinement, callGetInitialContext, initMcpSession } from '../refine/test-helpers.js'
 import { createConfigStore, writeConfigKey } from '../store/config-store.js'
 import { initProject } from '../store/project-store.js'
 import { createTask } from '../store/task-store.js'
-import { stripAnsi, submitAndWait } from '../test-helpers.js'
+import { pressKey, stripAnsi, submitAndWait } from '../test-helpers.js'
 import TaskRefine, { options } from './refine.js'
 
 describe('task refine command', () => {
@@ -318,6 +318,7 @@ describe('task refine command', () => {
     const runAgySpy = vi.spyOn(agySessionModule, 'runAgyRefineSession').mockImplementation(async (options) => {
       sessionCalled = true
       const sessionId = await initMcpSession(options.mcpServer.url)
+      await callGetInitialContext(options.mcpServer.url, {}, sessionId)
       await callCompleteRefinement(
         options.mcpServer.url,
         {
@@ -343,6 +344,13 @@ describe('task refine command', () => {
         projectsDir={tempProjectsDir}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+
+    await pressKey(stdin, 'Build default runner feature')
+    await pressKey(stdin, '\r')
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
@@ -385,6 +393,7 @@ describe('task refine command', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           await callCompleteRefinement(
             mcpServer.url,
             {
@@ -400,6 +409,13 @@ describe('task refine command', () => {
         }}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+
+    await pressKey(stdin, 'Clean exit test initial input')
+    await pressKey(stdin, '\r')
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')

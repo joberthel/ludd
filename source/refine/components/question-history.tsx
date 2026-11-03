@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { QuestionDetails } from './question-details.js'
 
 export interface QnATurn {
-  confidence: number
   question: string
   guess: string
   answer: string

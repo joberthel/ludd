@@ -6,13 +6,11 @@ import { QuestionHistory } from './question-history.js'
 
 const mockHistory: QnATurn[] = [
   {
-    confidence: 60,
     question: 'Should theme be persisted?',
     guess: 'Yes in localStorage',
     answer: 'Yes in localStorage',
   },
   {
-    confidence: 85,
     question: 'Should system match prefers-color-scheme?',
     guess: 'Yes',
     answer: 'Yes, match OS',

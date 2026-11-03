@@ -33,6 +33,11 @@ describe('refinementSession component', () => {
     await rm(tempWorkDir, { force: true, recursive: true })
   })
 
+  async function provideInitialContext(stdin: NodeJS.WriteStream, text = 'Initial user requirement') {
+    await pressKey(stdin, text)
+    await pressKey(stdin, '\r')
+  }
+
   it('renders ask_question prompt and returns guess when pressing Enter on empty input', async () => {
     const project = await initProject({
       name: 'Ask Question Project',
@@ -58,6 +63,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           toolResult = await callAskQuestion(
             mcpServer.url,
             {
@@ -73,6 +79,12 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await pressKey(stdin, 'Initial user requirement')
+    await pressKey(stdin, '\r')
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -119,6 +131,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           toolResult = await callAskQuestion(
             mcpServer.url,
             {
@@ -134,6 +147,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -177,6 +195,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           const firstCallPromise = callAskQuestion(
             mcpServer.url,
             {
@@ -208,12 +227,17 @@ describe('refinementSession component', () => {
     )
 
     await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
+
+    await vi.waitFor(() => {
       expect(secondResult).toBeDefined()
     })
 
     const parsedSecond = secondResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
     expect(parsedSecond.result?.isError).toBe(true)
-    expect(parsedSecond.result?.content?.[0]?.text).toContain('Only one question may be asked at a time')
+    expect(parsedSecond.result?.content?.[0]?.text).toContain('Only one tool call may be awaiting user response at a time')
 
     await submitAndWait(stdin, '\r', () => {
       expect(firstResult).toBeDefined()
@@ -237,13 +261,14 @@ describe('refinementSession component', () => {
 
     let callError: unknown
 
-    const { unmount } = render(
+    const { lastFrame, stdin, unmount } = render(
       <RefinementSession
         model="gemini-4-argon-medium"
         project={project}
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           try {
             await callAskQuestion(
               mcpServer.url,
@@ -263,7 +288,14 @@ describe('refinementSession component', () => {
       />,
     )
 
-    await new Promise(r => setTimeout(r, 80))
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Will this unmount?')
+    })
     unmount()
 
     await vi.waitFor(() => {
@@ -290,6 +322,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           await callCompleteRefinement(
             mcpServer.url,
             {
@@ -306,6 +339,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
@@ -423,6 +461,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
 
           firstResult = await callCompleteRefinement(
             mcpServer.url,
@@ -439,6 +478,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -523,6 +567,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           confirmResult = await callCompleteRefinement(
             mcpServer.url,
             intent,
@@ -532,6 +577,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
@@ -582,6 +632,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           confirmResult = await callCompleteRefinement(
             mcpServer.url,
             intent,
@@ -591,6 +642,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
@@ -641,6 +697,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           confirmResult = await callCompleteRefinement(
             mcpServer.url,
             intent,
@@ -650,6 +707,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       const frame = lastFrame() ?? ''
@@ -811,6 +873,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           await callCompleteRefinement(
             mcpServer.url,
             {
@@ -828,6 +891,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       expect(lastFrame() ?? '').toContain('STATEMENT OF INTENT:')
@@ -878,6 +946,7 @@ describe('refinementSession component', () => {
         projectsDir={tempProjectsDir}
         runSession={async ({ mcpServer }) => {
           const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
           await callAskQuestion(
             mcpServer.url,
             {
@@ -892,6 +961,11 @@ describe('refinementSession component', () => {
         task={task}
       />,
     )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
 
     await vi.waitFor(() => {
       const frame = stripAnsi(lastFrame() ?? '')
@@ -913,6 +987,292 @@ describe('refinementSession component', () => {
       expect(frame).toContain('[PgUp/PgDn]')
       expect(frame).toContain('History (1)')
     })
+
+    finishSession!()
+  })
+
+  it('rejects ask_question with an error if called before get_initial_context', async () => {
+    const project = await initProject({
+      name: 'Premature Ask Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Premature Ask Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let toolResult: unknown
+    let finishSession: () => void
+    const holdSession = new Promise<void>((resolve) => {
+      finishSession = resolve
+    })
+
+    const { lastFrame } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          toolResult = await callAskQuestion(
+            mcpServer.url,
+            {
+              confidence: 70,
+              question: 'Premature question?',
+              guess: 'Premature guess',
+            },
+            sessionId,
+          )
+          await holdSession
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+      expect(toolResult).toBeDefined()
+    })
+
+    const parsed = toolResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
+    expect(parsed.result?.isError).toBe(true)
+    expect(parsed.result?.content?.[0]?.text).toContain('Initial context has not been retrieved. You must call get_initial_context first')
+
+    finishSession!()
+  })
+
+  it('rejects complete_refinement with an error if called before get_initial_context', async () => {
+    const project = await initProject({
+      name: 'Premature Complete Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Premature Complete Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let toolResult: unknown
+    let finishSession: () => void
+    const holdSession = new Promise<void>((resolve) => {
+      finishSession = resolve
+    })
+
+    const { lastFrame } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          toolResult = await callCompleteRefinement(
+            mcpServer.url,
+            {
+              outcome: 'Early outcome',
+              user: 'Users',
+              whyNow: 'Now',
+              success: 'Pass',
+              constraint: 'None',
+              outOfScope: 'None',
+            },
+            sessionId,
+          )
+          await holdSession
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+      expect(toolResult).toBeDefined()
+    })
+
+    const parsed = toolResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
+    expect(parsed.result?.isError).toBe(true)
+    expect(parsed.result?.content?.[0]?.text).toContain('Initial context has not been retrieved. You must call get_initial_context first')
+
+    finishSession!()
+  })
+
+  it('rejects get_initial_context with an error if called while ask_question is waiting', async () => {
+    const project = await initProject({
+      name: 'Context While Question Pending Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Context While Question Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let questionResult: unknown
+    let contextResult: unknown
+
+    const { lastFrame, stdin } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          await callGetInitialContext(mcpServer.url, {}, sessionId)
+
+          const questionPromise = callAskQuestion(
+            mcpServer.url,
+            {
+              confidence: 60,
+              question: 'Awaiting answer?',
+              guess: 'Guess',
+            },
+            sessionId,
+          ).then((r) => {
+            questionResult = r
+          })
+
+          await new Promise(r => setTimeout(r, 50))
+
+          contextResult = await callGetInitialContext(mcpServer.url, {}, sessionId)
+
+          await questionPromise
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+    await provideInitialContext(stdin)
+
+    await vi.waitFor(() => {
+      expect(contextResult).toBeDefined()
+    })
+
+    const parsedContext = contextResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
+    expect(parsedContext.result?.isError).toBe(true)
+    expect(parsedContext.result?.content?.[0]?.text).toContain('Only one tool call may be awaiting user response at a time')
+
+    await submitAndWait(stdin, '\r', () => {
+      expect(questionResult).toBeDefined()
+    })
+  })
+
+  it('returns an error on get_initial_context when unmounted while waiting for user input', async () => {
+    const project = await initProject({
+      name: 'Unmount Initial Context Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Unmount Initial Context Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let initialContextResult: unknown
+    let callError: unknown
+    let agentWaitingOnContext = false
+
+    const { unmount } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          agentWaitingOnContext = true
+          try {
+            initialContextResult = await callGetInitialContext(mcpServer.url, {}, sessionId)
+          }
+          catch (err) {
+            callError = err
+          }
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(agentWaitingOnContext).toBe(true)
+    })
+
+    // Small delay to ensure the request reached the MCP server and deferred promise is pending
+    await new Promise(r => setTimeout(r, 50))
+    unmount()
+
+    await vi.waitFor(() => {
+      expect(initialContextResult !== undefined || callError !== undefined).toBe(true)
+    })
+
+    if (initialContextResult !== undefined) {
+      const parsed = initialContextResult as { result?: { isError?: boolean, content?: Array<{ text: string }> } }
+      expect(parsed.result?.isError).toBe(true)
+      expect(parsed.result?.content?.[0]?.text).toContain('Refinement session unmounted')
+    }
+  })
+
+  it('ignores empty initial context submission and awaits non-empty input', async () => {
+    const project = await initProject({
+      name: 'Empty Input Project',
+      path: tempWorkDir,
+    }, tempProjectsDir)
+
+    const { task } = await createTask({
+      projectSlug: project.slug,
+      name: 'Empty Input Task',
+      status: 'refinement',
+    }, tempProjectsDir)
+
+    let initialContextResult: unknown
+    let finishSession: () => void
+    const holdSession = new Promise<void>((resolve) => {
+      finishSession = resolve
+    })
+
+    const { lastFrame, stdin } = render(
+      <RefinementSession
+        model="gemini-4-argon-medium"
+        project={project}
+        projectsDir={tempProjectsDir}
+        runSession={async ({ mcpServer }) => {
+          const sessionId = await initMcpSession(mcpServer.url)
+          initialContextResult = await callGetInitialContext(mcpServer.url, {}, sessionId)
+          await holdSession
+        }}
+        task={task}
+      />,
+    )
+
+    await vi.waitFor(() => {
+      expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+    })
+
+    // Press Enter on blank input
+    await pressKey(stdin, '\r')
+
+    // Press spaces then Enter
+    await pressKey(stdin, '   ')
+    await pressKey(stdin, '\r')
+
+    // Verify it didn't resolve get_initial_context and remains on the input screen
+    await new Promise(r => setTimeout(r, 60))
+    expect(initialContextResult).toBeUndefined()
+    expect(lastFrame() ?? '').toContain('Describe what you want to build or refine:')
+
+    // Now submit non-empty text
+    await provideInitialContext(stdin, 'Valid non-empty requirement')
+
+    await vi.waitFor(() => {
+      expect(initialContextResult).toBeDefined()
+    })
+
+    const parsed = initialContextResult as { result?: { content?: Array<{ text: string }> } }
+    expect(parsed.result?.content?.[0]?.text).toContain('Valid non-empty requirement')
 
     finishSession!()
   })
