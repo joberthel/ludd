@@ -1,4 +1,3 @@
-import { constants } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,14 +17,7 @@ export async function ensureRefineSkill(
   const targetPath = path.join(luddHomeDir, 'skills', 'refine', 'SKILL.md')
 
   await fs.mkdir(path.dirname(targetPath), { recursive: true })
-  try {
-    await fs.copyFile(bundledSkillPath, targetPath, constants.COPYFILE_EXCL)
-  }
-  catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
-      throw err
-    }
-  }
+  await fs.copyFile(bundledSkillPath, targetPath)
 
   return targetPath
 }

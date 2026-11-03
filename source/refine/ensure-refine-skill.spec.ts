@@ -40,14 +40,14 @@ describe('ensureRefineSkill', () => {
     expect(content).toContain('complete_refinement')
   })
 
-  it('re-throws unexpected filesystem errors other than EEXIST', async () => {
+  it('re-throws unexpected filesystem errors', async () => {
     const nonExistentBundledPath = path.join(tempDir, 'non-existent-source.md')
     await expect(
       ensureRefineSkill(tempDir, nonExistentBundledPath),
     ).rejects.toThrow()
   })
 
-  it('does not overwrite existing user-customized skill file', async () => {
+  it('overwrites existing skill file with bundled content on every run', async () => {
     const skillDir = path.join(tempDir, 'skills', 'refine')
     await fs.mkdir(skillDir, { recursive: true })
     const customizedContent = '# My Custom Refine Skill\nCustom instructions'
@@ -58,7 +58,9 @@ describe('ensureRefineSkill', () => {
     expect(returnedPath).toBe(targetPath)
 
     const currentContent = await fs.readFile(targetPath, 'utf8')
-    expect(currentContent).toBe(customizedContent)
+    expect(currentContent).not.toBe(customizedContent)
+    expect(currentContent).toContain('name: refine')
+    expect(currentContent).toContain('complete_refinement')
   })
 
   it('supports custom bundledSkillPath override', async () => {
