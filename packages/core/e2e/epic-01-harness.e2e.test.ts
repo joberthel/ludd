@@ -83,7 +83,7 @@ describe('epic 1 E2E vertical workflow execution', () => {
     expect(config.name).toBe('epic-01-vertical-workflow')
     expect(config.steps).toHaveLength(3)
 
-    const result = await runHarness(config, { runId: 'run-e2e-100' })
+    const result = await runHarness(config, { runId: 'run-e2e-100', workspaceDir: tempDir })
 
     expect(result.status).toBe('passed')
     expect(result.runId).toBe('run-e2e-100')
@@ -98,7 +98,7 @@ describe('epic 1 E2E vertical workflow execution', () => {
   it('captures step output schema validation failure in loaded workflow', async () => {
     const configPath = await writeInvalidOutputHarnessConfig(tempDir)
     const config = await loadHarnessConfig(configPath)
-    const result = await runHarness(config, { runId: 'run-e2e-fail' })
+    const result = await runHarness(config, { runId: 'run-e2e-fail', workspaceDir: tempDir })
 
     expect(result.status).toBe('failed')
     expect(result.failedStepId).toBe('strict-step')

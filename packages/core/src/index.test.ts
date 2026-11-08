@@ -18,6 +18,11 @@ describe('@ludd/core public exports contract', () => {
     expect(typeof core.StepOutputValidationError).toBe('function')
   })
 
+  it('exports state store persistence utilities', () => {
+    expect(typeof core.resolveRunDir).toBe('function')
+    expect(typeof core.writeRunStateAtomic).toBe('function')
+  })
+
   it('does not export deprecated placeholder foo or bar', () => {
     expect((core as Record<string, unknown>).foo).toBeUndefined()
     expect((core as Record<string, unknown>).bar).toBeUndefined()

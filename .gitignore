@@ -18,5 +18,8 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Harness runtime state
+.harness/
+
 # Build and TypeScript cache
 *.tsbuildinfo
