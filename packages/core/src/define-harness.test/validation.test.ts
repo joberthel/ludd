@@ -155,3 +155,67 @@ describe('validateHarnessConfig step run handler', () => {
     })).toThrow('Step "s1" "if" property must be a function when provided.')
   })
 })
+
+describe('validateHarnessConfig invalid maxTotalTurns (AC 3.4.4)', () => {
+  it('rejects step with non-positive or non-integer maxTotalTurns', () => {
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          maxTotalTurns: 0,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" maxTotalTurns must be a positive integer, received 0.')
+
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          maxTotalTurns: -3,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" maxTotalTurns must be a positive integer, received -3.')
+
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          maxTotalTurns: 2.5,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" maxTotalTurns must be a positive integer, received 2.5.')
+
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          maxTotalTurns: '10' as any,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" maxTotalTurns must be a positive integer, received 10.')
+  })
+})
+
+describe('validateHarnessConfig valid maxTotalTurns', () => {
+  it('accepts step with valid positive integer maxTotalTurns', () => {
+    const valid = validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          maxTotalTurns: 5,
+          run: () => {},
+        },
+      ],
+    })
+    expect(valid.steps[0].maxTotalTurns).toBe(5)
+  })
+})

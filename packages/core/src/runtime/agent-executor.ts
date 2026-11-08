@@ -2,6 +2,10 @@ import type { AgentAccessMode, AgentRunner } from '../types/agent.js'
 import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
 import { randomUUID } from 'node:crypto'
+import {
+  DEFAULT_MAX_TOTAL_TURNS,
+  MaxTotalTurnsExceededError,
+} from '../errors/max-total-turns-exceeded-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { appendStreamEvent } from '../persistence/stream-writer.js'
@@ -42,6 +46,22 @@ export function createAgentStepOutput(
   }
 }
 
+export function formatRetryPrompt(
+  initialPrompt: string,
+  issues: readonly { path?: readonly (string | number | symbol)[], message: string }[],
+): string {
+  const formattedIssues = issues
+    .map((issue) => {
+      const fieldPath = issue.path && issue.path.length > 0
+        ? issue.path.map(String).join('.')
+        : '(root)'
+      return `- [${fieldPath}]: ${issue.message}`
+    })
+    .join('\n')
+
+  return `Your previous output did not match the required schema:\n${formattedIssues}\n\nPlease correct your output to conform to the schema.\n\nOriginal instruction:\n${initialPrompt}`
+}
+
 async function resolveSessionId(
   sessionIdProp: DynamicProperty<string | undefined> | undefined,
   ctx: StepContext,
@@ -57,13 +77,11 @@ async function resolveSessionId(
   return trimmed
 }
 
-function emitPreTurnEvents(
+function emitStreamLinked(
   runDir: string,
   ctx: StepContext,
   stepId: string,
   sessionId: string,
-  prompt: string,
-  mode: AgentAccessMode,
   attempt: number,
 ): void {
   appendLedgerEvent(runDir, {
@@ -78,7 +96,17 @@ function emitPreTurnEvents(
       attempt,
     },
   })
+}
 
+function emitTurnStarted(
+  runDir: string,
+  ctx: StepContext,
+  stepId: string,
+  sessionId: string,
+  prompt: string,
+  mode: AgentAccessMode,
+  attempt: number,
+): void {
   appendStreamEvent(runDir, sessionId, {
     schemaVersion: 1,
     timestamp: new Date().toISOString(),
@@ -94,7 +122,7 @@ function emitPreTurnEvents(
   })
 }
 
-function emitPostTurnEvent(
+function emitTurnCompleted(
   runDir: string,
   ctx: StepContext,
   stepId: string,
@@ -116,30 +144,81 @@ function emitPostTurnEvent(
   })
 }
 
+function emitStepRetry(
+  runDir: string,
+  ctx: StepContext,
+  stepId: string,
+  sessionId: string,
+  attempt: number,
+  issues: unknown,
+): void {
+  appendLedgerEvent(runDir, {
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    runId: ctx.runId,
+    stepId,
+    eventType: 'step.retry',
+    payload: {
+      attempt,
+      sessionId,
+      reason: 'output_schema_validation_failed',
+      issues,
+    },
+  })
+}
+
 export async function executeAgentStep(
   step: StepConfig,
   agent: AgentRunner,
   ctx: StepContext,
   runDir: string,
 ): Promise<unknown> {
-  const prompt = await resolveDynamicProperty(agent.prompt, ctx)
+  const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = await resolveSessionId(agent.sessionId, ctx)
-  const attempt = 1
+  const maxTotalTurns = step.maxTotalTurns ?? DEFAULT_MAX_TOTAL_TURNS
 
-  emitPreTurnEvents(runDir, ctx, step.id, sessionId, prompt, agent.mode, attempt)
+  let attempt = 1
+  let currentPrompt = initialPrompt
 
-  const turnResult = await agent.executeTurn({
-    ctx,
-    stepId: step.id,
-    prompt,
-    sessionId,
-    attempt,
-    mode: agent.mode,
-    runDir,
-  })
+  emitStreamLinked(runDir, ctx, step.id, sessionId, attempt)
 
-  emitPostTurnEvent(runDir, ctx, step.id, sessionId, turnResult.output, attempt)
+  while (true) {
+    ctx.step.attempt = attempt
 
-  const validatedOutput = await validateStepOutput(step.id, step.outputSchema, turnResult.output)
-  return createAgentStepOutput(validatedOutput, turnResult.sessionId)
+    emitTurnStarted(runDir, ctx, step.id, sessionId, currentPrompt, agent.mode, attempt)
+
+    const turnResult = await agent.executeTurn({
+      ctx,
+      stepId: step.id,
+      prompt: currentPrompt,
+      sessionId,
+      attempt,
+      mode: agent.mode,
+      runDir,
+    })
+
+    emitTurnCompleted(runDir, ctx, step.id, sessionId, turnResult.output, attempt)
+
+    try {
+      const validatedOutput = await validateStepOutput(
+        step.id,
+        step.outputSchema,
+        turnResult.output,
+      )
+      return createAgentStepOutput(validatedOutput, turnResult.sessionId)
+    }
+    catch (err: unknown) {
+      if (!(err instanceof StepOutputValidationError)) {
+        throw err
+      }
+      if (attempt >= maxTotalTurns) {
+        throw new MaxTotalTurnsExceededError(step.id, maxTotalTurns, err)
+      }
+
+      attempt += 1
+      ctx.step.attempt = attempt
+      emitStepRetry(runDir, ctx, step.id, sessionId, attempt, err.issues)
+      currentPrompt = formatRetryPrompt(initialPrompt, err.issues)
+    }
+  }
 }

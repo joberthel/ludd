@@ -12,6 +12,7 @@ import { readStreamEvents } from '../persistence/stream-writer.js'
 import {
   createAgentStepOutput,
   executeAgentStep,
+  formatRetryPrompt,
   validateStepOutput,
 } from './agent-executor.js'
 
@@ -192,5 +193,20 @@ describe('executeAgentStep and validateStepOutput schema handling', () => {
     await expect(validateStepOutput('step-err', schema, {
       requiredField: 123,
     })).rejects.toThrow(StepOutputValidationError)
+  })
+})
+
+describe('formatRetryPrompt helper', () => {
+  it('formats field paths and issues into a structured prompt', () => {
+    const formatted = formatRetryPrompt('original instruction', [
+      {
+        path: ['user', 'name'],
+        message: 'Required',
+      },
+      { path: [], message: 'Root invalid' },
+    ])
+    expect(formatted).toContain('- [user.name]: Required')
+    expect(formatted).toContain('- [(root)]: Root invalid')
+    expect(formatted).toContain('original instruction')
   })
 })

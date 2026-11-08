@@ -155,7 +155,7 @@ function recordStepResult(
   status: 'passed' | 'skipped',
   output?: unknown,
 ): void {
-  ctx.step = { id: stepId, output, attempt: 1 }
+  ctx.step = { id: stepId, output, attempt: ctx.step.attempt }
   ctx.steps[stepId] = { status, output }
   persistSnapshot(runDir, snapshot)
   const payload: Record<string, unknown> = {}

@@ -45,6 +45,7 @@ export interface StepConfig<TId extends string = string, TOutput = unknown> {
   name?: string
   if?: (ctx: StepContext) => boolean | Promise<boolean>
   outputSchema?: z.ZodType<TOutput>
+  maxTotalTurns?: number
   run: StepRunFn<TOutput> | AgentRunner<TOutput>
 }
 

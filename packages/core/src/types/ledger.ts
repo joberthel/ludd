@@ -7,6 +7,7 @@ export type LedgerEventType
     | 'step.passed'
     | 'step.skipped'
     | 'step.failed'
+    | 'step.retry'
     | 'agent.stream.linked'
 
 export interface LedgerEvent<TPayload = Record<string, unknown>> {

@@ -140,4 +140,20 @@ describe('readLedgerEvents structural validation (AC 2.3.3)', () => {
     ])
     expect(() => readLedgerEvents(runDirInvalidPayload)).toThrow(ZodError)
   })
+
+  it('accepts step.retry event envelope', () => {
+    const runDir = writeRawLedger([
+      {
+        schemaVersion: 1,
+        timestamp: '2026-11-08T20:00:00.000Z',
+        runId: 'r-1',
+        stepId: 'step-1',
+        eventType: 'step.retry',
+        payload: { attempt: 2, sessionId: 's-1', reason: 'output_schema_validation_failed' },
+      },
+    ])
+    const events = readLedgerEvents(runDir)
+    expect(events).toHaveLength(1)
+    expect(events[0].eventType).toBe('step.retry')
+  })
 })

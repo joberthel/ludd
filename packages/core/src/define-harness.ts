@@ -46,6 +46,17 @@ function validateStep(step: unknown, index: number, seenIds: Set<string>): void 
     )
   }
 
+  if (
+    rawStep.maxTotalTurns !== undefined
+    && (typeof rawStep.maxTotalTurns !== 'number'
+      || !Number.isInteger(rawStep.maxTotalTurns)
+      || rawStep.maxTotalTurns < 1)
+  ) {
+    throw new HarnessConfigError(
+      `Step "${id}" maxTotalTurns must be a positive integer, received ${String(rawStep.maxTotalTurns)}.`,
+    )
+  }
+
   if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
     throw new HarnessConfigError(
       `Step "${id}" must have a valid "run" property (function or AgentRunner).`,

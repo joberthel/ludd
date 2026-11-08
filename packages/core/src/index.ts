@@ -31,6 +31,10 @@ import type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError } from './errors/harness-config-load-error.js'
+export {
+  DEFAULT_MAX_TOTAL_TURNS,
+  MaxTotalTurnsExceededError,
+} from './errors/max-total-turns-exceeded-error.js'
 export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
@@ -55,6 +59,7 @@ export {
 export {
   createAgentStepOutput,
   executeAgentStep,
+  formatRetryPrompt,
   validateStepOutput,
 } from './runtime/agent-executor.js'
 export { runHarness } from './runtime/run-harness.js'
