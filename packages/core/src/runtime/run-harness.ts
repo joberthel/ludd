@@ -7,6 +7,7 @@ import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
+import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
 import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 
@@ -180,6 +181,33 @@ function recordStepPassed(
   emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.passed', { output })
 }
 
+async function runStep(
+  step: StepConfig,
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+  snapshot: RunStateSnapshot,
+  runDir: string,
+): Promise<HarnessRunResult | null> {
+  const stepId = step.id
+  ctx.step = { id: stepId, output: undefined, attempt: 1 }
+  snapshot.activeStepId = stepId
+  persistSnapshot(runDir, snapshot)
+
+  try {
+    if (step.if !== undefined && !(await step.if(ctx))) {
+      recordStepSkipped(runDir, snapshot, stepId, ctx)
+      return null
+    }
+
+    emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt: 1 })
+    const output = await executeStep(step, ctx)
+    recordStepPassed(runDir, snapshot, stepId, output, ctx)
+    return null
+  }
+  catch (error: unknown) {
+    return handleStepFailure(runDir, snapshot, stepId, error)
+  }
+}
+
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
@@ -188,36 +216,30 @@ export async function runHarness(
   const runId = resolveRunId(options)
   const workspaceDir = resolveWorkspaceDir(options)
   const runDir = resolveRunDir(workspaceDir, runId)
-  const ctx = createInitialContext(runId)
-  const steps = validatedConfig.steps as readonly StepConfig[]
-  const snapshot = initRunSnapshot(runDir, runId, validatedConfig.name, steps[0].id, ctx.steps)
-  emitLedgerEvent(runDir, runId, null, 'run.started', { harnessName: validatedConfig.name })
 
-  for (const step of steps) {
-    const stepId = step.id
-    ctx.step = { id: stepId, output: undefined, attempt: 1 }
-    snapshot.activeStepId = stepId
-    persistSnapshot(runDir, snapshot)
+  acquireRunPidLock(runDir, runId)
 
-    try {
-      if (step.if !== undefined && !(await step.if(ctx))) {
-        recordStepSkipped(runDir, snapshot, stepId, ctx)
-        continue
+  try {
+    const ctx = createInitialContext(runId)
+    const steps = validatedConfig.steps as readonly StepConfig[]
+    const snapshot = initRunSnapshot(runDir, runId, validatedConfig.name, steps[0].id, ctx.steps)
+    emitLedgerEvent(runDir, runId, null, 'run.started', { harnessName: validatedConfig.name })
+
+    for (const step of steps) {
+      const failure = await runStep(step, ctx, snapshot, runDir)
+      if (failure !== null) {
+        return failure
       }
+    }
 
-      emitLedgerEvent(runDir, runId, stepId, 'step.started', { attempt: 1 })
-      const output = await executeStep(step, ctx)
-      recordStepPassed(runDir, snapshot, stepId, output, ctx)
-    }
-    catch (error: unknown) {
-      return handleStepFailure(runDir, snapshot, stepId, error)
-    }
+    snapshot.status = 'passed'
+    snapshot.activeStepId = null
+    persistSnapshot(runDir, snapshot)
+    emitLedgerEvent(runDir, runId, null, 'run.passed', {})
+
+    return { runId, status: 'passed', steps: ctx.steps }
   }
-
-  snapshot.status = 'passed'
-  snapshot.activeStepId = null
-  persistSnapshot(runDir, snapshot)
-  emitLedgerEvent(runDir, runId, null, 'run.passed', {})
-
-  return { runId, status: 'passed', steps: ctx.steps }
+  finally {
+    releaseRunPidLock(runDir)
+  }
 }

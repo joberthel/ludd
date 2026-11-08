@@ -23,10 +23,16 @@ import type { RunStateSnapshot, RunStatus } from './types/state.js'
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError } from './errors/harness-config-load-error.js'
+export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
 export { appendLedgerEvent, readLedgerEvents } from './persistence/ledger-writer.js'
+export {
+  acquireRunPidLock,
+  isProcessAlive,
+  releaseRunPidLock,
+} from './persistence/pid-lock.js'
 export {
   readRunState,
   resolveRunDir,

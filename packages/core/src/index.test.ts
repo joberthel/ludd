@@ -15,6 +15,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.isAgentRunner).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
     expect(typeof core.HarnessConfigLoadError).toBe('function')
+    expect(typeof core.RunAlreadyActiveError).toBe('function')
     expect(typeof core.StepOutputValidationError).toBe('function')
   })
 
@@ -38,12 +39,15 @@ describe('@ludd/core harness and configuration exports', () => {
 })
 
 describe('@ludd/core persistence and execution exports', () => {
-  it('exports state store and ledger persistence utilities', () => {
+  it('exports state store, pid lock, and ledger persistence utilities', () => {
     expect(typeof core.resolveRunDir).toBe('function')
     expect(typeof core.writeRunStateAtomic).toBe('function')
     expect(typeof core.readRunState).toBe('function')
     expect(typeof core.appendLedgerEvent).toBe('function')
     expect(typeof core.readLedgerEvents).toBe('function')
+    expect(typeof core.acquireRunPidLock).toBe('function')
+    expect(typeof core.releaseRunPidLock).toBe('function')
+    expect(typeof core.isProcessAlive).toBe('function')
     expect(core.SUPPORTED_SCHEMA_VERSION).toBe(1)
     expect(typeof core.SchemaVersionMismatchError).toBe('function')
   })
