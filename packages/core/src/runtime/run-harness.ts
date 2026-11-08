@@ -7,11 +7,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
-import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
+import { executeAgentStep, validateStepOutput } from './agent-executor.js'
 
 export interface RunHarnessOptions {
   runId?: string
@@ -47,28 +47,15 @@ function createInitialContext(
   }
 }
 
-async function validateStepOutput(
-  stepId: string,
-  schema: StepConfig['outputSchema'],
-  rawOutput: unknown,
-): Promise<unknown> {
-  if (schema === undefined) {
-    return rawOutput
-  }
-  const parsed = await schema.safeParseAsync(rawOutput)
-  if (!parsed.success) {
-    throw new StepOutputValidationError(stepId, rawOutput, parsed.error.issues)
-  }
-  return parsed.data
-}
-
 async function executeStep(
   step: StepConfig,
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+  runDir: string,
 ): Promise<unknown> {
-  const rawOutput: unknown = isAgentRunner(step.run)
-    ? await step.run.execute(ctx)
-    : await step.run(ctx)
+  if (isAgentRunner(step.run)) {
+    return executeAgentStep(step, step.run, ctx, runDir)
+  }
+  const rawOutput: unknown = await step.run(ctx)
   return validateStepOutput(step.id, step.outputSchema, rawOutput)
 }
 
@@ -196,7 +183,7 @@ async function runStep(
     }
 
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt: 1 })
-    const output = await executeStep(step, ctx)
+    const output = await executeStep(step, ctx, runDir)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }

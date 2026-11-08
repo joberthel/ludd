@@ -15,4 +15,4 @@ This pnpm monorepo manages multiple related packages within a single repository.
 
 ## Commits and Git hygiene
 
-- **Follow Conventional Commits.** Commit messages follow `<type>(<scope>): <description>`. Types are restricted to: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`. Scopes are restricted to monorepo sub-packages (`core`); omitting the scope is permitted for repository-wide changes. An explanatory body separated by a blank line is encouraged for non-trivial context.
+- **Follow Conventional Commits.** Commit messages follow `<type>(<scope>): <description>`. Types are restricted to: `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style` and `test`. Scopes are restricted to monorepo sub-packages (`core`, `agents`); omitting the scope is permitted for repository-wide changes. An explanatory body separated by a blank line is encouraged for non-trivial context.

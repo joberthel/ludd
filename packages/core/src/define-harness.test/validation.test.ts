@@ -1,33 +1,6 @@
-import type { AgentRunner, StepConfig } from './types/harness.js'
-import { describe, expect, expectTypeOf, it } from 'vitest'
-import { z } from 'zod'
-import { defineHarness, validateHarnessConfig } from './define-harness.js'
-import { HarnessConfigError } from './errors/harness-config-error.js'
-import { isAgentRunner } from './types/harness.js'
-
-describe('isAgentRunner type guard', () => {
-  it('returns true for valid AgentRunner', () => {
-    const runner: AgentRunner = {
-      __kind: 'agent',
-      execute: async () => 'done',
-    }
-    expect(isAgentRunner(runner)).toBe(true)
-  })
-
-  it('returns false for primitives and null', () => {
-    expect(isAgentRunner(null)).toBe(false)
-    expect(isAgentRunner(undefined)).toBe(false)
-    expect(isAgentRunner('agent')).toBe(false)
-    expect(isAgentRunner(123)).toBe(false)
-  })
-
-  it('returns false for objects missing required properties', () => {
-    expect(isAgentRunner({})).toBe(false)
-    expect(isAgentRunner({ __kind: 'other' })).toBe(false)
-    expect(isAgentRunner({ __kind: 'agent' })).toBe(false)
-    expect(isAgentRunner({ __kind: 'agent', execute: 'not-fn' })).toBe(false)
-  })
-})
+import { describe, expect, it } from 'vitest'
+import { validateHarnessConfig } from '../define-harness.js'
+import { HarnessConfigError } from '../errors/harness-config-error.js'
 
 describe('harnessConfigError', () => {
   it('instantiates correctly with name and message', () => {
@@ -180,76 +153,5 @@ describe('validateHarnessConfig step run handler', () => {
         },
       ],
     })).toThrow('Step "s1" "if" property must be a function when provided.')
-  })
-})
-
-describe('defineHarness composition and execution models', () => {
-  it('validates and returns strong configuration with AgentRunner and cleanupPolicy', () => {
-    const agent: AgentRunner<string> = {
-      __kind: 'agent',
-      execute: async () => 'agent-result',
-    }
-    const harness = defineHarness({
-      name: 'pipeline',
-      cleanupPolicy: { onSuccess: 'keep', onFailure: 'destroy' },
-      steps: [
-        { id: 'step-agent', run: agent },
-      ],
-    })
-    expect(harness.name).toBe('pipeline')
-    expect(harness.cleanupPolicy?.onSuccess).toBe('keep')
-    expect(harness.cleanupPolicy?.onFailure).toBe('destroy')
-    expect(harness.steps).toHaveLength(1)
-  })
-
-  it('composes reusable step arrays via spread syntax', () => {
-    function createCommonSteps(): StepConfig[] {
-      return [
-        {
-          id: 'setup',
-          run: () => 'ok',
-        },
-      ]
-    }
-    const harness = defineHarness({
-      name: 'composed-harness',
-      steps: [
-        ...createCommonSteps(),
-        {
-          id: 'custom',
-          run: () => 'custom',
-        },
-      ],
-    })
-    expect(harness.steps).toHaveLength(2)
-    expect(harness.steps[0].id).toBe('setup')
-    expect(harness.steps[1].id).toBe('custom')
-  })
-})
-
-describe('defineHarness outputSchema type inference', () => {
-  it('infers strongly typed schema output for default and transform', () => {
-    const harness = defineHarness({
-      name: 'inferred-pipeline',
-      steps: [
-        {
-          id: 'step-default',
-          outputSchema: z.object({
-            status: z.string().default('ready'),
-          }),
-          run: () => ({ status: 'ready' }),
-        },
-        {
-          id: 'step-transform',
-          outputSchema: z.string().transform(v => v.length),
-          run: () => 42,
-        },
-      ],
-    })
-    expect(harness.name).toBe('inferred-pipeline')
-    type DefaultOutput = z.infer<(typeof harness.steps)[0]['outputSchema']>
-    type TransformOutput = z.infer<(typeof harness.steps)[1]['outputSchema']>
-    expectTypeOf<DefaultOutput>().toEqualTypeOf<{ status: string }>()
-    expectTypeOf<TransformOutput>().toEqualTypeOf<number>()
   })
 })

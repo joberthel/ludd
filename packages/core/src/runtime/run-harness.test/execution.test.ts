@@ -28,9 +28,14 @@ describe('runHarness pipeline order and agent runner', () => {
     const order: string[] = []
     const agent: AgentRunner<number> = {
       __kind: 'agent',
-      execute: async (ctx) => {
+      mode: 'read-only',
+      prompt: 'double output',
+      executeTurn: async ({ ctx }) => {
         order.push('s2')
-        return (ctx.steps.s1?.output as number) * 2
+        return {
+          output: (ctx.steps.s1?.output as number) * 2,
+          sessionId: 's2-session',
+        }
       },
     }
     const result = await runHarness({

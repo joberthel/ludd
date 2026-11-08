@@ -69,7 +69,12 @@ describe('runHarness outputSchema agent runner validation', () => {
           outputSchema: schema,
           run: {
             __kind: 'agent',
-            execute: async () => ({ score: 100 }),
+            mode: 'read-only',
+            prompt: 'evaluate score',
+            executeTurn: async () => ({
+              output: { score: 100 },
+              sessionId: 'agent-session',
+            }),
           },
         },
       ],

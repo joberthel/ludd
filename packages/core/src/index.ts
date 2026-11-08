@@ -1,6 +1,12 @@
 import type { HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
 import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.js'
 import type {
+  AgentAccessMode,
+  AgentRunner,
+  AgentTurnInput,
+  AgentTurnResult,
+} from './types/agent.js'
+import type {
   ArtifactClient,
   DynamicProperty,
   MatrixCursor,
@@ -10,7 +16,6 @@ import type {
   StepStatus,
 } from './types/context.js'
 import type {
-  AgentRunner,
   CleanupPolicy,
   CleanupPolicyAction,
   HarnessConfig,
@@ -39,12 +44,16 @@ export {
   SUPPORTED_SCHEMA_VERSION,
   writeRunStateAtomic,
 } from './persistence/state-store.js'
+export { executeAgentStep, validateStepOutput } from './runtime/agent-executor.js'
 export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
 
 export type {
+  AgentAccessMode,
   AgentRunner,
+  AgentTurnInput,
+  AgentTurnResult,
   ArtifactClient,
   CleanupPolicy,
   CleanupPolicyAction,
