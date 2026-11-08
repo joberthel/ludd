@@ -168,6 +168,19 @@ describe('validateHarnessConfig step run handler', () => {
       ],
     })).toThrow('Step "s1" must have a valid "run" property')
   })
+
+  it('rejects step with invalid if predicate', () => {
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          if: 123 as any,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" "if" property must be a function when provided.')
+  })
 })
 
 describe('defineHarness composition and execution models', () => {

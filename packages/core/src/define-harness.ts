@@ -40,6 +40,12 @@ function validateStep(step: unknown, index: number, seenIds: Set<string>): void 
   }
   seenIds.add(id)
 
+  if (rawStep.if !== undefined && typeof rawStep.if !== 'function') {
+    throw new HarnessConfigError(
+      `Step "${id}" "if" property must be a function when provided.`,
+    )
+  }
+
   if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
     throw new HarnessConfigError(
       `Step "${id}" must have a valid "run" property (function or AgentRunner).`,

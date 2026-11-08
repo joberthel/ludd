@@ -58,6 +58,11 @@ export async function runHarness(
     ctx.step = { id: stepId, output: undefined, attempt: 1 }
 
     try {
+      if (step.if !== undefined && !(await step.if(ctx))) {
+        ctx.steps[stepId] = { status: 'skipped', output: undefined }
+        continue
+      }
+
       const output: unknown = isAgentRunner(step.run)
         ? await step.run.execute(ctx)
         : await step.run(ctx)
