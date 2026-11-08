@@ -4,11 +4,11 @@ import { StepOutputValidationError } from './step-output-validation-error.js'
 
 describe('stepOutputValidationError instance and properties', () => {
   it('instantiates correctly and preserves properties', () => {
-    const issues: z.ZodIssue[] = [
+    const issues: z.core.$ZodIssue[] = [
       {
         code: 'too_small',
         minimum: 5,
-        type: 'string',
+        origin: 'string',
         inclusive: true,
         exact: false,
         message: 'String must contain at least 5 character(s)',
@@ -30,11 +30,11 @@ describe('stepOutputValidationError instance and properties', () => {
   })
 
   it('formats root path when issue path is empty', () => {
-    const issues: z.ZodIssue[] = [
+    const issues: z.core.$ZodIssue[] = [
       {
         code: 'invalid_type',
         expected: 'object',
-        received: 'string',
+        input: 'string',
         message: 'Expected object, received string',
         path: [],
       },
@@ -48,18 +48,18 @@ describe('stepOutputValidationError instance and properties', () => {
 
 describe('stepOutputValidationError issue formatting variants', () => {
   it('formats multiple issues joined with semicolon', () => {
-    const issues: z.ZodIssue[] = [
+    const issues: z.core.$ZodIssue[] = [
       {
         code: 'invalid_type',
         expected: 'string',
-        received: 'number',
+        input: 'number',
         message: 'Expected string, received number',
         path: ['nested', 'field'],
       },
       {
-        code: 'invalid_enum_value',
-        options: ['ready', 'needs_clarification'],
-        received: 'invalid',
+        code: 'invalid_value',
+        values: ['ready', 'needs_clarification'],
+        input: 'invalid',
         message: 'Invalid enum value',
         path: ['status'],
       },

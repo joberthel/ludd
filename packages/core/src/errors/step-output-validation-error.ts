@@ -1,13 +1,13 @@
 import type { z } from 'zod'
 
-function getIssuePath(issue: z.ZodIssue): string {
+function getIssuePath(issue: z.core.$ZodIssue): string {
   if (issue.path.length === 0) {
     return '<root>'
   }
   return issue.path.join('.')
 }
 
-function formatErrorMessage(stepId: string, issues: readonly z.ZodIssue[]): string {
+function formatErrorMessage(stepId: string, issues: readonly z.core.$ZodIssue[]): string {
   if (issues.length === 0) {
     return `Step "${stepId}" output validation failed.`
   }
@@ -23,9 +23,9 @@ function formatErrorMessage(stepId: string, issues: readonly z.ZodIssue[]): stri
 export class StepOutputValidationError extends Error {
   readonly stepId: string
   readonly rawOutput: unknown
-  readonly issues: z.ZodIssue[]
+  readonly issues: z.core.$ZodIssue[]
 
-  constructor(stepId: string, rawOutput: unknown, issues: z.ZodIssue[]) {
+  constructor(stepId: string, rawOutput: unknown, issues: z.core.$ZodIssue[]) {
     super(formatErrorMessage(stepId, issues))
     this.name = 'StepOutputValidationError'
     this.stepId = stepId

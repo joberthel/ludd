@@ -36,7 +36,7 @@ export interface StepConfig<TId extends string = string, TOutput = unknown> {
   id: TId
   name?: string
   if?: (ctx: StepContext) => boolean | Promise<boolean>
-  outputSchema?: z.ZodType<TOutput, z.ZodTypeDef, unknown>
+  outputSchema?: z.ZodType<TOutput>
   run: StepRunFn<TOutput> | AgentRunner<TOutput>
 }
 
