@@ -7,6 +7,13 @@ describe('@ludd/core public exports contract', () => {
     expect(typeof core.resolveDynamicProperty).toBe('function')
   })
 
+  it('exports harness configuration factory and utilities', () => {
+    expect(typeof core.defineHarness).toBe('function')
+    expect(typeof core.validateHarnessConfig).toBe('function')
+    expect(typeof core.isAgentRunner).toBe('function')
+    expect(typeof core.HarnessConfigError).toBe('function')
+  })
+
   it('does not export deprecated placeholder foo or bar', () => {
     expect((core as Record<string, unknown>).foo).toBeUndefined()
     expect((core as Record<string, unknown>).bar).toBeUndefined()

@@ -25,7 +25,9 @@
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "zod": "^3.24.2"
+  },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "typescript": "^6.0.3"
