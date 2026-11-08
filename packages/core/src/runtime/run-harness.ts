@@ -3,12 +3,14 @@ import type { HarnessConfig, StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
-import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
+import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 
 export interface RunHarnessOptions {
@@ -24,26 +26,12 @@ export interface HarnessRunResult {
   error?: unknown
 }
 
-function resolveRunId(options?: RunHarnessOptions): string {
-  const candidate = options?.runId
-  if (candidate !== undefined) {
-    const trimmed = candidate.trim()
-    if (trimmed !== '') {
-      return trimmed
-    }
+function resolveOption(value: string | undefined, fallback: () => string): string {
+  const trimmed = value?.trim()
+  if (trimmed !== undefined && trimmed !== '') {
+    return trimmed
   }
-  return randomUUID()
-}
-
-function resolveWorkspaceDir(options?: RunHarnessOptions): string {
-  const candidate = options?.workspaceDir
-  if (candidate !== undefined) {
-    const trimmed = candidate.trim()
-    if (trimmed !== '') {
-      return trimmed
-    }
-  }
-  return process.cwd()
+  return fallback()
 }
 
 function createInitialContext(
@@ -53,11 +41,7 @@ function createInitialContext(
     runId,
     environments: {},
     steps: {},
-    step: {
-      id: '',
-      output: undefined,
-      attempt: 1,
-    },
+    step: { id: '', output: undefined, attempt: 1 },
     matrix: undefined,
     artifacts: {},
   }
@@ -110,23 +94,42 @@ function emitLedgerEvent(
   })
 }
 
-function initRunSnapshot(
+function initOrRehydrateSnapshot(
   runDir: string,
   runId: string,
   harnessName: string,
-  firstStepId: string,
-  steps: Record<string, StepResult<unknown>>,
+  steps: readonly StepConfig[],
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
 ): RunStateSnapshot {
+  const isRehydrating = fs.existsSync(path.join(runDir, 'state.json'))
+  let activeStepId: string | null = steps[0].id
+
+  if (isRehydrating) {
+    const previous = readRunState(runDir)
+    for (const [id, result] of Object.entries(previous.steps)) {
+      if (result.status === 'passed' || result.status === 'skipped') {
+        ctx.steps[id] = result
+      }
+    }
+    activeStepId = steps.find(
+      s => ctx.steps[s.id]?.status !== 'passed' && ctx.steps[s.id]?.status !== 'skipped',
+    )?.id ?? null
+  }
+
   const snapshot: RunStateSnapshot = {
     schemaVersion: 1,
     runId,
     harnessName,
     status: 'running',
-    activeStepId: firstStepId,
-    steps,
+    activeStepId,
+    steps: ctx.steps,
     updatedAt: new Date().toISOString(),
   }
   writeRunStateAtomic(runDir, snapshot)
+  const eventType: LedgerEventType = isRehydrating
+    ? 'run.resumed'
+    : 'run.started'
+  emitLedgerEvent(runDir, runId, null, eventType, { harnessName })
   return snapshot
 }
 
@@ -157,28 +160,22 @@ function handleStepFailure(
   }
 }
 
-function recordStepSkipped(
+function recordStepResult(
   runDir: string,
   snapshot: RunStateSnapshot,
   stepId: string,
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
-): void {
-  ctx.steps[stepId] = { status: 'skipped', output: undefined }
-  persistSnapshot(runDir, snapshot)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.skipped', {})
-}
-
-function recordStepPassed(
-  runDir: string,
-  snapshot: RunStateSnapshot,
-  stepId: string,
-  output: unknown,
-  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+  status: 'passed' | 'skipped',
+  output?: unknown,
 ): void {
   ctx.step = { id: stepId, output, attempt: 1 }
-  ctx.steps[stepId] = { status: 'passed', output }
+  ctx.steps[stepId] = { status, output }
   persistSnapshot(runDir, snapshot)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.passed', { output })
+  const payload: Record<string, unknown> = {}
+  if (status === 'passed') {
+    payload.output = output
+  }
+  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, payload)
 }
 
 async function runStep(
@@ -194,13 +191,13 @@ async function runStep(
 
   try {
     if (step.if !== undefined && !(await step.if(ctx))) {
-      recordStepSkipped(runDir, snapshot, stepId, ctx)
+      recordStepResult(runDir, snapshot, stepId, ctx, 'skipped')
       return null
     }
 
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt: 1 })
     const output = await executeStep(step, ctx)
-    recordStepPassed(runDir, snapshot, stepId, output, ctx)
+    recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
   catch (error: unknown) {
@@ -213,8 +210,8 @@ export async function runHarness(
   options?: RunHarnessOptions,
 ): Promise<HarnessRunResult> {
   const validatedConfig = validateHarnessConfig(config)
-  const runId = resolveRunId(options)
-  const workspaceDir = resolveWorkspaceDir(options)
+  const runId = resolveOption(options?.runId, randomUUID)
+  const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
   const runDir = resolveRunDir(workspaceDir, runId)
 
   acquireRunPidLock(runDir, runId)
@@ -222,10 +219,12 @@ export async function runHarness(
   try {
     const ctx = createInitialContext(runId)
     const steps = validatedConfig.steps as readonly StepConfig[]
-    const snapshot = initRunSnapshot(runDir, runId, validatedConfig.name, steps[0].id, ctx.steps)
-    emitLedgerEvent(runDir, runId, null, 'run.started', { harnessName: validatedConfig.name })
+    const snapshot = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx)
 
     for (const step of steps) {
+      if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
+        continue
+      }
       const failure = await runStep(step, ctx, snapshot, runDir)
       if (failure !== null) {
         return failure
