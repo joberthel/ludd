@@ -1,8 +1,20 @@
 import type { z } from 'zod'
-import type { AgentAccessMode, AgentRunner, AgentTurnInput, AgentTurnResult } from './agent.js'
+import type {
+  AgentAccessMode,
+  AgentRunner,
+  AgentStepOutput,
+  AgentTurnInput,
+  AgentTurnResult,
+} from './agent.js'
 import type { StepContext } from './context.js'
 
-export type { AgentAccessMode, AgentRunner, AgentTurnInput, AgentTurnResult }
+export type {
+  AgentAccessMode,
+  AgentRunner,
+  AgentStepOutput,
+  AgentTurnInput,
+  AgentTurnResult,
+}
 
 export type CleanupPolicyAction = 'keep' | 'destroy'
 
@@ -35,6 +47,21 @@ export interface StepConfig<TId extends string = string, TOutput = unknown> {
   outputSchema?: z.ZodType<TOutput>
   run: StepRunFn<TOutput> | AgentRunner<TOutput>
 }
+
+export type InferStepOutput<TStep>
+  = TStep extends { run: { readonly __kind: 'agent' } | AgentRunner<any>, outputSchema: z.ZodType<infer TSchemaOutput> }
+    ? AgentStepOutput<TSchemaOutput>
+    : TStep extends { run: AgentRunner<infer TRunnerOutput> }
+      ? AgentStepOutput<TRunnerOutput>
+      : TStep extends { run: { readonly __kind: 'agent' } }
+        ? AgentStepOutput<unknown>
+        : TStep extends { outputSchema: z.ZodType<infer TSchemaOutput> }
+          ? TSchemaOutput
+          : TStep extends { run: (...args: any[]) => infer TReturn }
+            ? Awaited<TReturn>
+            : TStep extends StepConfig<string, infer TOutput>
+              ? TOutput
+              : unknown
 
 export interface HarnessConfig<
   TSteps extends readonly StepConfig<any, any>[] = readonly StepConfig<any, any>[],

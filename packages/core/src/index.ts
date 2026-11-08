@@ -3,6 +3,7 @@ import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.
 import type {
   AgentAccessMode,
   AgentRunner,
+  AgentStepOutput,
   AgentTurnInput,
   AgentTurnResult,
 } from './types/agent.js'
@@ -19,6 +20,7 @@ import type {
   CleanupPolicy,
   CleanupPolicyAction,
   HarnessConfig,
+  InferStepOutput,
   StepConfig,
   StepRunFn,
 } from './types/harness.js'
@@ -44,7 +46,11 @@ export {
   SUPPORTED_SCHEMA_VERSION,
   writeRunStateAtomic,
 } from './persistence/state-store.js'
-export { executeAgentStep, validateStepOutput } from './runtime/agent-executor.js'
+export {
+  createAgentStepOutput,
+  executeAgentStep,
+  validateStepOutput,
+} from './runtime/agent-executor.js'
 export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
@@ -52,6 +58,7 @@ export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
 export type {
   AgentAccessMode,
   AgentRunner,
+  AgentStepOutput,
   AgentTurnInput,
   AgentTurnResult,
   ArtifactClient,
@@ -61,6 +68,7 @@ export type {
   HarnessConfig,
   HarnessConfigLoadErrorOptions,
   HarnessRunResult,
+  InferStepOutput,
   LedgerEvent,
   LedgerEventType,
   MatrixCursor,

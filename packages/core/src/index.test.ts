@@ -14,6 +14,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.runHarness).toBe('function')
     expect(typeof core.isAgentRunner).toBe('function')
     expect(typeof core.executeAgentStep).toBe('function')
+    expect(typeof core.createAgentStepOutput).toBe('function')
     expect(typeof core.validateStepOutput).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
     expect(typeof core.HarnessConfigLoadError).toBe('function')

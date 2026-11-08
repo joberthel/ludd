@@ -17,6 +17,11 @@ export interface AgentTurnResult<TOutput = unknown> {
   sessionId: string
 }
 
+export type AgentStepOutput<TOutput>
+  = TOutput extends Record<string, unknown>
+    ? TOutput & { sessionId: string }
+    : { value: TOutput, sessionId: string }
+
 export interface AgentRunner<
   TOutput = unknown,
   TContext extends StepContext = StepContext,

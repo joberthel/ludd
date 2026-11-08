@@ -1,5 +1,5 @@
 import type { AgentRunner } from '../types/agent.js'
-import type { StepContext } from '../types/context.js'
+import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
 import { randomUUID } from 'node:crypto'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
@@ -20,6 +20,41 @@ export async function validateStepOutput(
   return parsed.data
 }
 
+export function createAgentStepOutput(
+  validatedOutput: unknown,
+  sessionId: string,
+): unknown {
+  if (
+    typeof validatedOutput === 'object'
+    && validatedOutput !== null
+    && !Array.isArray(validatedOutput)
+  ) {
+    return {
+      ...(validatedOutput as Record<string, unknown>),
+      sessionId,
+    }
+  }
+  return {
+    value: validatedOutput,
+    sessionId,
+  }
+}
+
+async function resolveSessionId(
+  sessionIdProp: DynamicProperty<string | undefined> | undefined,
+  ctx: StepContext,
+): Promise<string> {
+  if (sessionIdProp === undefined) {
+    return `session-${randomUUID()}`
+  }
+  const resolved = await resolveDynamicProperty(sessionIdProp, ctx)
+  const trimmed = resolved?.trim()
+  if (trimmed === undefined || trimmed === '') {
+    return `session-${randomUUID()}`
+  }
+  return trimmed
+}
+
 export async function executeAgentStep(
   step: StepConfig,
   agent: AgentRunner,
@@ -27,10 +62,7 @@ export async function executeAgentStep(
   runDir: string,
 ): Promise<unknown> {
   const prompt = await resolveDynamicProperty(agent.prompt, ctx)
-  const resolvedSessionId = agent.sessionId !== undefined
-    ? await resolveDynamicProperty(agent.sessionId, ctx)
-    : undefined
-  const sessionId = resolvedSessionId ?? `session-${randomUUID()}`
+  const sessionId = await resolveSessionId(agent.sessionId, ctx)
 
   const turnResult = await agent.executeTurn({
     ctx,
@@ -42,5 +74,6 @@ export async function executeAgentStep(
     runDir,
   })
 
-  return validateStepOutput(step.id, step.outputSchema, turnResult.output)
+  const validatedOutput = await validateStepOutput(step.id, step.outputSchema, turnResult.output)
+  return createAgentStepOutput(validatedOutput, turnResult.sessionId)
 }

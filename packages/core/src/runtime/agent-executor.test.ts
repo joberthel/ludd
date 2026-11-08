@@ -4,7 +4,11 @@ import type { StepConfig } from '../types/harness.js'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
-import { executeAgentStep, validateStepOutput } from './agent-executor.js'
+import {
+  createAgentStepOutput,
+  executeAgentStep,
+  validateStepOutput,
+} from './agent-executor.js'
 
 function createDummyContext(): StepContext {
   return {
@@ -18,7 +22,7 @@ function createDummyContext(): StepContext {
 }
 
 describe('executeAgentStep dynamic prompt and default session resolution', () => {
-  it('resolves dynamic prompt and generates default sessionId', async () => {
+  it('resolves dynamic prompt, generates default sessionId, and merges output', async () => {
     let captured: AgentTurnInput | undefined
     const agent: AgentRunner<string> = {
       __kind: 'agent',
@@ -34,13 +38,13 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
 
     const output = await executeAgentStep(step, agent, ctx, '/tmp/run-dir')
 
-    expect(output).toBe('done')
     expect(captured?.stepId).toBe('s-1')
     expect(captured?.prompt).toBe('Prompt for r-exec-test')
     expect(captured?.sessionId).toMatch(/^session-[0-9a-f-]+$/)
     expect(captured?.mode).toBe('read-only')
     expect(captured?.attempt).toBe(1)
     expect(captured?.runDir).toBe('/tmp/run-dir')
+    expect(output).toEqual({ value: 'done', sessionId: captured?.sessionId })
   })
 })
 
@@ -78,6 +82,31 @@ describe('executeAgentStep dynamic sessionId and fallback handling', () => {
   })
 })
 
+describe('createAgentStepOutput output merging helper', () => {
+  it('merges sessionId directly on plain objects and wraps primitives / arrays', () => {
+    expect(createAgentStepOutput({ key: 'val' }, 's-1')).toEqual({
+      key: 'val',
+      sessionId: 's-1',
+    })
+    expect(createAgentStepOutput('str', 's-2')).toEqual({
+      value: 'str',
+      sessionId: 's-2',
+    })
+    expect(createAgentStepOutput([1, 2], 's-3')).toEqual({
+      value: [1, 2],
+      sessionId: 's-3',
+    })
+    expect(createAgentStepOutput(null, 's-4')).toEqual({
+      value: null,
+      sessionId: 's-4',
+    })
+    expect(createAgentStepOutput(undefined, 's-5')).toEqual({
+      value: undefined,
+      sessionId: 's-5',
+    })
+  })
+})
+
 describe('executeAgentStep and validateStepOutput schema handling', () => {
   it('validates and transforms output according to step outputSchema', async () => {
     const agent: AgentRunner<{ count: number }> = {
@@ -95,8 +124,12 @@ describe('executeAgentStep and validateStepOutput schema handling', () => {
     const step: StepConfig = { id: 's-schema', run: agent, outputSchema: schema }
     const ctx = createDummyContext()
 
-    const output = await executeAgentStep(step, agent, ctx, '/tmp/run-dir')
-    expect(output).toEqual({ count: 84 })
+    const output = (await executeAgentStep(step, agent, ctx, '/tmp/run-dir')) as {
+      count: number
+      sessionId: string
+    }
+    expect(output.count).toBe(84)
+    expect(output.sessionId).toMatch(/^session-[0-9a-f-]+$/)
   })
 
   it('throws StepOutputValidationError when output violates outputSchema', async () => {

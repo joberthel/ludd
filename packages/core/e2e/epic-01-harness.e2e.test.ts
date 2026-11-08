@@ -91,7 +91,11 @@ describe('epic 1 E2E vertical workflow execution', () => {
     expect(result.steps['plan-step']?.status).toBe('passed')
     expect(result.steps['plan-step']?.output).toEqual({ action: 'apply', priority: 'high' })
     expect(result.steps['agent-step']?.status).toBe('passed')
-    expect(result.steps['agent-step']?.output).toEqual({ applied: true, prompt: 'Run:run-e2e-100' })
+    expect(result.steps['agent-step']?.output).toEqual({
+      applied: true,
+      prompt: 'Run:run-e2e-100',
+      sessionId: expect.stringMatching(/^session-[0-9a-f-]+$/),
+    })
     expect(result.steps['skipped-step']?.status).toBe('skipped')
     expect(result.steps['skipped-step']?.output).toBeUndefined()
   })

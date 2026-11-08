@@ -1,6 +1,7 @@
 import type {
   AgentAccessMode,
   AgentRunner,
+  AgentStepOutput,
   AgentTurnInput,
   AgentTurnResult,
 } from '@ludd/core'
@@ -11,6 +12,7 @@ export { mockAgent } from './mock-agent.js'
 export type {
   AgentAccessMode,
   AgentRunner,
+  AgentStepOutput,
   AgentTurnInput,
   AgentTurnResult,
   MockAgentConfig,

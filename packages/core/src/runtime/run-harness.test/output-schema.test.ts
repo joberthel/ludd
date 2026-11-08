@@ -80,7 +80,7 @@ describe('runHarness outputSchema agent runner validation', () => {
       ],
     }, { workspaceDir: tempDir })
     expect(result.status).toBe('passed')
-    expect(result.steps['agent-step']?.output).toEqual({ score: 100 })
+    expect(result.steps['agent-step']?.output).toEqual({ score: 100, sessionId: 'agent-session' })
   })
 })
 

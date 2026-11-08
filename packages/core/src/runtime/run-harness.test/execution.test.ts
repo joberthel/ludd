@@ -48,14 +48,14 @@ describe('runHarness pipeline order and agent runner', () => {
         s('s2', agent),
         s('s3', (ctx) => {
           order.push('s3')
-          return (ctx.steps.s2?.output as number) + 5
+          return ((ctx.steps.s2?.output as { value: number })?.value) + 5
         }),
       ],
     }, { workspaceDir: tempDir })
     expect(order).toEqual(['s1', 's2', 's3'])
     expect(result.status).toBe('passed')
     expect(result.steps.s1?.output).toBe(10)
-    expect(result.steps.s2?.output).toBe(20)
+    expect(result.steps.s2?.output).toEqual({ value: 20, sessionId: 's2-session' })
     expect(result.steps.s3?.output).toBe(25)
   })
 })
