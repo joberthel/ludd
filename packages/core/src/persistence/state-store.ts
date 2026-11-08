@@ -17,6 +17,8 @@ export const runStateSnapshotSchema = z.object({
   harnessName: z.string(),
   status: z.enum(['running', 'passed', 'failed']),
   activeStepId: z.string().nullable(),
+  activeSessionId: z.string().nullable().optional(),
+  activeStepAttempt: z.number().optional(),
   steps: z.record(z.string(), stepResultSchema),
   updatedAt: z.string(),
 })

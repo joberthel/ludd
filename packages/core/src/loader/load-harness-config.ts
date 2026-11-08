@@ -1,11 +1,19 @@
 import type { HarnessConfig } from '../types/harness.js'
 import { access } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createJiti } from 'jiti'
 import { defineHarness, validateHarnessConfig } from '../define-harness.js'
 import { HarnessConfigError } from '../errors/harness-config-error.js'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
+import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
+import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
+import { SchemaVersionMismatchError } from '../errors/schema-version-mismatch-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
+import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-writer.js'
+import { acquireRunPidLock, isProcessAlive, releaseRunPidLock } from '../persistence/pid-lock.js'
+import { readRunState, resolveRunDir, SUPPORTED_SCHEMA_VERSION, writeRunStateAtomic } from '../persistence/state-store.js'
+import { appendStreamEvent, readStreamEvents, resolveStreamPath } from '../persistence/stream-writer.js'
 import { runHarness } from '../runtime/run-harness.js'
 import { isAgentRunner } from '../types/harness.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
@@ -32,16 +40,38 @@ function formatErrorDetail(cause: unknown): string {
 
 function createCoreModule(): Record<string, unknown> {
   return {
-    defineHarness,
-    validateHarnessConfig,
+    DEFAULT_MAX_TOTAL_TURNS,
     HarnessConfigError,
     HarnessConfigLoadError,
+    MaxTotalTurnsExceededError,
+    RunAlreadyActiveError,
+    SUPPORTED_SCHEMA_VERSION,
+    SchemaVersionMismatchError,
     StepOutputValidationError,
-    loadHarnessConfig,
-    runHarness,
+    acquireRunPidLock,
+    appendLedgerEvent,
+    appendStreamEvent,
+    defineHarness,
     isAgentRunner,
+    isProcessAlive,
+    loadHarnessConfig,
+    readLedgerEvents,
+    readRunState,
+    readStreamEvents,
+    releaseRunPidLock,
     resolveDynamicProperty,
+    resolveRunDir,
+    resolveStreamPath,
+    runHarness,
+    validateHarnessConfig,
+    writeRunStateAtomic,
   }
+}
+
+async function loadAgentsModule(): Promise<Record<string, unknown>> {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url))
+  const candidateSrc = path.resolve(currentDir, '../../../agents/src/index.ts')
+  return import(candidateSrc) as Promise<Record<string, unknown>>
 }
 
 export async function loadHarnessConfig(configPath: string): Promise<HarnessConfig> {
@@ -59,12 +89,16 @@ export async function loadHarnessConfig(configPath: string): Promise<HarnessConf
     )
   }
 
+  const agentsModule = await loadAgentsModule()
+  const virtualModules: Record<string, unknown> = {
+    '@ludd/core': createCoreModule(),
+    '@ludd/agents': agentsModule,
+  }
+
   const jiti = createJiti(import.meta.url, {
     moduleCache: false,
     interopDefault: false,
-    virtualModules: {
-      '@ludd/core': createCoreModule(),
-    },
+    virtualModules,
   })
 
   let mod: Record<string, unknown>

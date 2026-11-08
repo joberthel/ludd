@@ -8,6 +8,8 @@ export interface RunStateSnapshot {
   harnessName: string
   status: RunStatus
   activeStepId: string | null
+  activeSessionId?: string | null
+  activeStepAttempt?: number
   steps: Record<string, StepResult<unknown>>
   updatedAt: string // ISO-8601 timestamp
 }

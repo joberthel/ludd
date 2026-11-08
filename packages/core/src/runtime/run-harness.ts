@@ -1,7 +1,8 @@
 import type { StepContext, StepResult } from '../types/context.js'
-import type { HarnessConfig, StepConfig } from '../types/harness.js'
+import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import type { RehydratedAgentState } from './agent-executor.js'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -13,30 +14,22 @@ import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence
 import { isAgentRunner } from '../types/harness.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
 
-export interface RunHarnessOptions {
-  runId?: string
-  workspaceDir?: string
-}
+export type { HarnessRunResult, RunHarnessOptions }
 
-export interface HarnessRunResult {
-  runId: string
-  status: 'passed' | 'failed'
-  steps: Record<string, StepResult<unknown>>
-  failedStepId?: string
-  error?: unknown
+interface RehydrationInfo {
+  stepId: string
+  sessionId: string
+  attempt: number
 }
 
 function resolveOption(value: string | undefined, fallback: () => string): string {
-  const trimmed = value?.trim()
-  if (trimmed !== undefined && trimmed !== '') {
-    return trimmed
+  if (value !== undefined && value.trim() !== '') {
+    return value.trim()
   }
   return fallback()
 }
 
-function createInitialContext(
-  runId: string,
-): StepContext<unknown, Record<string, StepResult<unknown>>> {
+function createInitialContext(runId: string): StepContext<unknown, Record<string, StepResult<unknown>>> {
   return {
     runId,
     environments: {},
@@ -50,13 +43,22 @@ function createInitialContext(
 async function executeStep(
   step: StepConfig,
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+  snapshot: RunStateSnapshot,
   runDir: string,
+  rehydration?: RehydratedAgentState,
 ): Promise<unknown> {
   if (isAgentRunner(step.run)) {
-    return executeAgentStep(step, step.run, ctx, runDir)
+    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration)
   }
   const rawOutput: unknown = await step.run(ctx)
   return validateStepOutput(step.id, step.outputSchema, rawOutput)
+}
+
+function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
+  snapshot.activeStepId = null
+  snapshot.activeSessionId = null
+  snapshot.activeStepAttempt = 1
+  persistSnapshot(runDir, snapshot)
 }
 
 function persistSnapshot(runDir: string, snapshot: RunStateSnapshot): void {
@@ -87,9 +89,10 @@ function initOrRehydrateSnapshot(
   harnessName: string,
   steps: readonly StepConfig[],
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
-): RunStateSnapshot {
+): { snapshot: RunStateSnapshot, rehydration?: RehydrationInfo } {
   const isRehydrating = fs.existsSync(path.join(runDir, 'state.json'))
   let activeStepId: string | null = steps[0].id
+  let rehydration: RehydrationInfo | undefined
 
   if (isRehydrating) {
     const previous = readRunState(runDir)
@@ -101,6 +104,16 @@ function initOrRehydrateSnapshot(
     activeStepId = steps.find(
       s => ctx.steps[s.id]?.status !== 'passed' && ctx.steps[s.id]?.status !== 'skipped',
     )?.id ?? null
+
+    const interruptedStepId = previous.activeStepId ?? activeStepId
+    const prevSession = previous.activeSessionId
+    if (typeof prevSession === 'string' && prevSession.trim() !== '' && activeStepId !== null && interruptedStepId === activeStepId) {
+      rehydration = {
+        stepId: activeStepId,
+        sessionId: prevSession,
+        attempt: previous.activeStepAttempt ?? 1,
+      }
+    }
   }
 
   const snapshot: RunStateSnapshot = {
@@ -109,15 +122,14 @@ function initOrRehydrateSnapshot(
     harnessName,
     status: 'running',
     activeStepId,
+    activeSessionId: null,
+    activeStepAttempt: 1,
     steps: ctx.steps,
     updatedAt: new Date().toISOString(),
   }
   writeRunStateAtomic(runDir, snapshot)
-  const eventType: LedgerEventType = isRehydrating
-    ? 'run.resumed'
-    : 'run.started'
-  emitLedgerEvent(runDir, runId, null, eventType, { harnessName })
-  return snapshot
+  emitLedgerEvent(runDir, runId, null, isRehydrating ? 'run.resumed' : 'run.started', { harnessName })
+  return { snapshot, rehydration }
 }
 
 function handleStepFailure(
@@ -130,10 +142,7 @@ function handleStepFailure(
     ? error.message
     : String(error)
   emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage })
-  emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', {
-    failedStepId: stepId,
-    error: errorMessage,
-  })
+  emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
   snapshot.steps[stepId] = { status: 'failed', output: undefined }
   snapshot.status = 'failed'
   snapshot.activeStepId = null
@@ -157,12 +166,10 @@ function recordStepResult(
 ): void {
   ctx.step = { id: stepId, output, attempt: ctx.step.attempt }
   ctx.steps[stepId] = { status, output }
-  persistSnapshot(runDir, snapshot)
-  const payload: Record<string, unknown> = {}
-  if (status === 'passed') {
-    payload.output = output
-  }
-  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, payload)
+  clearActiveAndPersist(runDir, snapshot)
+  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, status === 'passed'
+    ? { output }
+    : {})
 }
 
 async function runStep(
@@ -170,9 +177,11 @@ async function runStep(
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
   snapshot: RunStateSnapshot,
   runDir: string,
+  rehydration?: RehydrationInfo,
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
-  ctx.step = { id: stepId, output: undefined, attempt: 1 }
+  const attempt = rehydration?.attempt ?? 1
+  ctx.step = { id: stepId, output: undefined, attempt }
   snapshot.activeStepId = stepId
   persistSnapshot(runDir, snapshot)
 
@@ -182,8 +191,8 @@ async function runStep(
       return null
     }
 
-    emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt: 1 })
-    const output = await executeStep(step, ctx, runDir)
+    emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
+    const output = await executeStep(step, ctx, snapshot, runDir, rehydration)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
@@ -206,21 +215,29 @@ export async function runHarness(
   try {
     const ctx = createInitialContext(runId)
     const steps = validatedConfig.steps as readonly StepConfig[]
-    const snapshot = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx)
+    const { snapshot, rehydration } = initOrRehydrateSnapshot(
+      runDir,
+      runId,
+      validatedConfig.name,
+      steps,
+      ctx,
+    )
 
     for (const step of steps) {
       if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
         continue
       }
-      const failure = await runStep(step, ctx, snapshot, runDir)
+      const stepRehydration = rehydration?.stepId === step.id
+        ? rehydration
+        : undefined
+      const failure = await runStep(step, ctx, snapshot, runDir, stepRehydration)
       if (failure !== null) {
         return failure
       }
     }
 
     snapshot.status = 'passed'
-    snapshot.activeStepId = null
-    persistSnapshot(runDir, snapshot)
+    clearActiveAndPersist(runDir, snapshot)
     emitLedgerEvent(runDir, runId, null, 'run.passed', {})
 
     return { runId, status: 'passed', steps: ctx.steps }

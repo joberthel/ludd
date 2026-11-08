@@ -133,4 +133,22 @@ describe('readRunState structural validation (AC 2.3.3)', () => {
 
     expect(() => readRunState(runDir)).toThrow(ZodError)
   })
+
+  it('accepts valid activeSessionId and activeStepAttempt properties', () => {
+    const runDir = writeRawState({
+      schemaVersion: 1,
+      runId: 'run-active-sess',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: 'step-agent',
+      activeSessionId: 'session-xyz',
+      activeStepAttempt: 2,
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+
+    const parsed = readRunState(runDir)
+    expect(parsed.activeSessionId).toBe('session-xyz')
+    expect(parsed.activeStepAttempt).toBe(2)
+  })
 })

@@ -1,20 +1,15 @@
-import type { AgentRunner, AgentTurnInput } from '../types/agent.js'
-import type { StepContext } from '../types/context.js'
-import type { StepConfig } from '../types/harness.js'
+import type { AgentRunner, AgentTurnInput } from '../../types/agent.js'
+import type { StepContext } from '../../types/context.js'
+import type { StepConfig } from '../../types/harness.js'
+import type { RunStateSnapshot } from '../../types/state.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
-import { readLedgerEvents } from '../persistence/ledger-writer.js'
-import { readStreamEvents } from '../persistence/stream-writer.js'
-import {
-  createAgentStepOutput,
-  executeAgentStep,
-  formatRetryPrompt,
-  validateStepOutput,
-} from './agent-executor.js'
+import { readLedgerEvents } from '../../persistence/ledger-writer.js'
+import { readStreamEvents } from '../../persistence/stream-writer.js'
+import { executeAgentStep } from '../agent-executor.js'
 
 function createDummyContext(): StepContext {
   return {
@@ -24,6 +19,20 @@ function createDummyContext(): StepContext {
     step: { id: 'test-step', output: undefined, attempt: 1 },
     matrix: undefined,
     artifacts: {},
+  }
+}
+
+function createDummySnapshot(stepId = 'test-step'): RunStateSnapshot {
+  return {
+    schemaVersion: 1,
+    runId: 'r-exec-test',
+    harnessName: 'test-harness',
+    status: 'running',
+    activeStepId: stepId,
+    activeSessionId: null,
+    activeStepAttempt: 1,
+    steps: {},
+    updatedAt: new Date().toISOString(),
   }
 }
 
@@ -51,7 +60,7 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
     const step: StepConfig = { id: 's-1', run: agent }
     const ctx = createDummyContext()
 
-    const output = await executeAgentStep(step, agent, ctx, tempDir)
+    const output = await executeAgentStep(step, agent, ctx, createDummySnapshot('s-1'), tempDir)
 
     expect(captured?.stepId).toBe('s-1')
     expect(captured?.prompt).toBe('Prompt for r-exec-test')
@@ -109,7 +118,7 @@ describe('executeAgentStep dynamic sessionId and fallback handling', () => {
     const step: StepConfig = { id: 's-2', run: customAgent }
     const ctx = createDummyContext()
 
-    await executeAgentStep(step, customAgent, ctx, tempDir)
+    await executeAgentStep(step, customAgent, ctx, createDummySnapshot('s-2'), tempDir)
     expect(capturedSessId).toBe('sess-r-exec-test')
 
     const fallbackAgent: AgentRunner<string> = {
@@ -122,37 +131,12 @@ describe('executeAgentStep dynamic sessionId and fallback handling', () => {
         return { output: 'fallback', sessionId: input.sessionId }
       },
     }
-    await executeAgentStep({ id: 's-3', run: fallbackAgent }, fallbackAgent, ctx, tempDir)
+    await executeAgentStep({ id: 's-3', run: fallbackAgent }, fallbackAgent, ctx, createDummySnapshot('s-3'), tempDir)
     expect(capturedSessId).toMatch(/^session-[0-9a-f-]+$/)
   })
 })
 
-describe('createAgentStepOutput output merging helper', () => {
-  it('merges sessionId directly on plain objects and wraps primitives / arrays', () => {
-    expect(createAgentStepOutput({ key: 'val' }, 's-1')).toEqual({
-      key: 'val',
-      sessionId: 's-1',
-    })
-    expect(createAgentStepOutput('str', 's-2')).toEqual({
-      value: 'str',
-      sessionId: 's-2',
-    })
-    expect(createAgentStepOutput([1, 2], 's-3')).toEqual({
-      value: [1, 2],
-      sessionId: 's-3',
-    })
-    expect(createAgentStepOutput(null, 's-4')).toEqual({
-      value: null,
-      sessionId: 's-4',
-    })
-    expect(createAgentStepOutput(undefined, 's-5')).toEqual({
-      value: undefined,
-      sessionId: 's-5',
-    })
-  })
-})
-
-describe('executeAgentStep and validateStepOutput schema handling', () => {
+describe('executeAgentStep outputSchema handling and transformation', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -178,35 +162,11 @@ describe('executeAgentStep and validateStepOutput schema handling', () => {
     const step: StepConfig = { id: 's-schema', run: agent, outputSchema: schema }
     const ctx = createDummyContext()
 
-    const output = (await executeAgentStep(step, agent, ctx, tempDir)) as {
+    const output = (await executeAgentStep(step, agent, ctx, createDummySnapshot('s-schema'), tempDir)) as {
       count: number
       sessionId: string
     }
     expect(output.count).toBe(84)
     expect(output.sessionId).toMatch(/^session-[0-9a-f-]+$/)
-  })
-
-  it('throws StepOutputValidationError when output violates outputSchema', async () => {
-    const schema = z.object({
-      requiredField: z.string(),
-    })
-    await expect(validateStepOutput('step-err', schema, {
-      requiredField: 123,
-    })).rejects.toThrow(StepOutputValidationError)
-  })
-})
-
-describe('formatRetryPrompt helper', () => {
-  it('formats field paths and issues into a structured prompt', () => {
-    const formatted = formatRetryPrompt('original instruction', [
-      {
-        path: ['user', 'name'],
-        message: 'Required',
-      },
-      { path: [], message: 'Root invalid' },
-    ])
-    expect(formatted).toContain('- [user.name]: Required')
-    expect(formatted).toContain('- [(root)]: Root invalid')
-    expect(formatted).toContain('original instruction')
   })
 })

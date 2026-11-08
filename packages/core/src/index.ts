@@ -1,4 +1,5 @@
 import type { HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
+import type { RehydratedAgentState } from './runtime/agent-executor.js'
 import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.js'
 import type {
   AgentAccessMode,
@@ -86,6 +87,7 @@ export type {
   LedgerEventType,
   MatrixCursor,
   ProvisionedEnvironment,
+  RehydratedAgentState,
   RunHarnessOptions,
   RunStateSnapshot,
   RunStatus,

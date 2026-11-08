@@ -6,7 +6,7 @@ import type {
   AgentTurnInput,
   AgentTurnResult,
 } from './agent.js'
-import type { StepContext } from './context.js'
+import type { StepContext, StepResult } from './context.js'
 
 export type {
   AgentAccessMode,
@@ -70,4 +70,17 @@ export interface HarnessConfig<
   name: string
   cleanupPolicy?: CleanupPolicy
   steps: TSteps
+}
+
+export interface RunHarnessOptions {
+  runId?: string
+  workspaceDir?: string
+}
+
+export interface HarnessRunResult {
+  runId: string
+  status: 'passed' | 'failed'
+  steps: Record<string, StepResult<unknown>>
+  failedStepId?: string
+  error?: unknown
 }
