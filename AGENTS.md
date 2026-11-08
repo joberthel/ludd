@@ -2,6 +2,12 @@
 
 @[Coding Guidelines](CODING_GUIDELINES.md)
 
+## Documentation & Architecture References
+
+For design context, architectural specifications, and decision rationale, refer to:
+- **Technical Design Document (TDD):** [`docs/technical-design-document.md`](docs/technical-design-document.md)
+- **Architecture Decision Records (ADRs):** [`docs/adr/`](docs/adr/)
+
 ## Checks before handing work back
 
 All of the following checks must pass before handing work back:
