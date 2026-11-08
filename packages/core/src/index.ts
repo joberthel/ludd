@@ -17,6 +17,7 @@ import type {
   StepConfig,
   StepRunFn,
 } from './types/harness.js'
+import type { LedgerEvent, LedgerEventType } from './types/ledger.js'
 import type { RunStateSnapshot, RunStatus } from './types/state.js'
 
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
@@ -24,6 +25,7 @@ export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError } from './errors/harness-config-load-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
+export { appendLedgerEvent } from './persistence/ledger-writer.js'
 export { resolveRunDir, writeRunStateAtomic } from './persistence/state-store.js'
 export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
@@ -38,6 +40,8 @@ export type {
   HarnessConfig,
   HarnessConfigLoadErrorOptions,
   HarnessRunResult,
+  LedgerEvent,
+  LedgerEventType,
   MatrixCursor,
   ProvisionedEnvironment,
   RunHarnessOptions,

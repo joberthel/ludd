@@ -1,10 +1,12 @@
 import type { StepContext, StepResult } from '../types/context.js'
 import type { HarnessConfig, StepConfig } from '../types/harness.js'
+import type { LedgerEventType } from '../types/ledger.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
+import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 
@@ -90,6 +92,23 @@ function persistSnapshot(runDir: string, snapshot: RunStateSnapshot): void {
   writeRunStateAtomic(runDir, snapshot)
 }
 
+function emitLedgerEvent(
+  runDir: string,
+  runId: string,
+  stepId: string | null,
+  eventType: LedgerEventType,
+  payload: Record<string, unknown>,
+): void {
+  appendLedgerEvent(runDir, {
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    runId,
+    stepId,
+    eventType,
+    payload,
+  })
+}
+
 function initRunSnapshot(
   runDir: string,
   runId: string,
@@ -116,6 +135,14 @@ function handleStepFailure(
   stepId: string,
   error: unknown,
 ): HarnessRunResult {
+  const errorMessage = error instanceof Error
+    ? error.message
+    : String(error)
+  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage })
+  emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', {
+    failedStepId: stepId,
+    error: errorMessage,
+  })
   snapshot.steps[stepId] = { status: 'failed', output: undefined }
   snapshot.status = 'failed'
   snapshot.activeStepId = null
@@ -129,6 +156,30 @@ function handleStepFailure(
   }
 }
 
+function recordStepSkipped(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  stepId: string,
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+): void {
+  ctx.steps[stepId] = { status: 'skipped', output: undefined }
+  persistSnapshot(runDir, snapshot)
+  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.skipped', {})
+}
+
+function recordStepPassed(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  stepId: string,
+  output: unknown,
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+): void {
+  ctx.step = { id: stepId, output, attempt: 1 }
+  ctx.steps[stepId] = { status: 'passed', output }
+  persistSnapshot(runDir, snapshot)
+  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.passed', { output })
+}
+
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
@@ -140,6 +191,7 @@ export async function runHarness(
   const ctx = createInitialContext(runId)
   const steps = validatedConfig.steps as readonly StepConfig[]
   const snapshot = initRunSnapshot(runDir, runId, validatedConfig.name, steps[0].id, ctx.steps)
+  emitLedgerEvent(runDir, runId, null, 'run.started', { harnessName: validatedConfig.name })
 
   for (const step of steps) {
     const stepId = step.id
@@ -149,15 +201,13 @@ export async function runHarness(
 
     try {
       if (step.if !== undefined && !(await step.if(ctx))) {
-        ctx.steps[stepId] = { status: 'skipped', output: undefined }
-        persistSnapshot(runDir, snapshot)
+        recordStepSkipped(runDir, snapshot, stepId, ctx)
         continue
       }
 
+      emitLedgerEvent(runDir, runId, stepId, 'step.started', { attempt: 1 })
       const output = await executeStep(step, ctx)
-      ctx.step = { id: stepId, output, attempt: 1 }
-      ctx.steps[stepId] = { status: 'passed', output }
-      persistSnapshot(runDir, snapshot)
+      recordStepPassed(runDir, snapshot, stepId, output, ctx)
     }
     catch (error: unknown) {
       return handleStepFailure(runDir, snapshot, stepId, error)
@@ -167,6 +217,7 @@ export async function runHarness(
   snapshot.status = 'passed'
   snapshot.activeStepId = null
   persistSnapshot(runDir, snapshot)
+  emitLedgerEvent(runDir, runId, null, 'run.passed', {})
 
   return { runId, status: 'passed', steps: ctx.steps }
 }

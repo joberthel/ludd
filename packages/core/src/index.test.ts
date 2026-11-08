@@ -1,4 +1,4 @@
-import type { StepContext } from './index.js'
+import type { LedgerEvent, LedgerEventType, StepContext } from './index.js'
 import { describe, expect, it } from 'vitest'
 import * as core from './index.js'
 
@@ -18,9 +18,25 @@ describe('@ludd/core public exports contract', () => {
     expect(typeof core.StepOutputValidationError).toBe('function')
   })
 
-  it('exports state store persistence utilities', () => {
+  it('exports state store and ledger persistence utilities', () => {
     expect(typeof core.resolveRunDir).toBe('function')
     expect(typeof core.writeRunStateAtomic).toBe('function')
+    expect(typeof core.appendLedgerEvent).toBe('function')
+  })
+
+  it('exports typed ledger structures', () => {
+    const eventType: LedgerEventType = 'run.started'
+    const event: LedgerEvent<{ test: boolean }> = {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-1',
+      stepId: null,
+      eventType,
+      payload: { test: true },
+    }
+    expect(event.schemaVersion).toBe(1)
+    expect(event.eventType).toBe('run.started')
+    expect(event.payload.test).toBe(true)
   })
 
   it('does not export deprecated placeholder foo or bar', () => {
