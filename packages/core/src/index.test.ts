@@ -1,4 +1,10 @@
-import type { LedgerEvent, LedgerEventType, StepContext } from './index.js'
+import type {
+  AgentStreamEvent,
+  AgentStreamEventType,
+  LedgerEvent,
+  LedgerEventType,
+  StepContext,
+} from './index.js'
 import { describe, expect, it } from 'vitest'
 import * as core from './index.js'
 
@@ -42,17 +48,37 @@ describe('@ludd/core harness and configuration exports', () => {
 })
 
 describe('@ludd/core persistence and execution exports', () => {
-  it('exports state store, pid lock, and ledger persistence utilities', () => {
+  it('exports state store, pid lock, ledger, and stream persistence utilities', () => {
     expect(typeof core.resolveRunDir).toBe('function')
     expect(typeof core.writeRunStateAtomic).toBe('function')
     expect(typeof core.readRunState).toBe('function')
     expect(typeof core.appendLedgerEvent).toBe('function')
     expect(typeof core.readLedgerEvents).toBe('function')
+    expect(typeof core.appendStreamEvent).toBe('function')
+    expect(typeof core.readStreamEvents).toBe('function')
+    expect(typeof core.resolveStreamPath).toBe('function')
     expect(typeof core.acquireRunPidLock).toBe('function')
     expect(typeof core.releaseRunPidLock).toBe('function')
     expect(typeof core.isProcessAlive).toBe('function')
     expect(core.SUPPORTED_SCHEMA_VERSION).toBe(1)
     expect(typeof core.SchemaVersionMismatchError).toBe('function')
+  })
+
+  it('exports typed stream structures', () => {
+    const eventType: AgentStreamEventType = 'turn.started'
+    const event: AgentStreamEvent<{ prompt: string }> = {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-1',
+      stepId: 's-1',
+      sessionId: 'sess-1',
+      attempt: 1,
+      eventType,
+      payload: { prompt: 'hello' },
+    }
+    expect(event.schemaVersion).toBe(1)
+    expect(event.eventType).toBe('turn.started')
+    expect(event.payload.prompt).toBe('hello')
   })
 
   it('exports typed ledger structures', () => {

@@ -1,9 +1,14 @@
 import type { AgentRunner, AgentTurnInput } from '../types/agent.js'
 import type { StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
-import { describe, expect, it } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
+import { readLedgerEvents } from '../persistence/ledger-writer.js'
+import { readStreamEvents } from '../persistence/stream-writer.js'
 import {
   createAgentStepOutput,
   executeAgentStep,
@@ -22,6 +27,15 @@ function createDummyContext(): StepContext {
 }
 
 describe('executeAgentStep dynamic prompt and default session resolution', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-exec-test-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
   it('resolves dynamic prompt, generates default sessionId, and merges output', async () => {
     let captured: AgentTurnInput | undefined
     const agent: AgentRunner<string> = {
@@ -36,19 +50,49 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
     const step: StepConfig = { id: 's-1', run: agent }
     const ctx = createDummyContext()
 
-    const output = await executeAgentStep(step, agent, ctx, '/tmp/run-dir')
+    const output = await executeAgentStep(step, agent, ctx, tempDir)
 
     expect(captured?.stepId).toBe('s-1')
     expect(captured?.prompt).toBe('Prompt for r-exec-test')
     expect(captured?.sessionId).toMatch(/^session-[0-9a-f-]+$/)
     expect(captured?.mode).toBe('read-only')
     expect(captured?.attempt).toBe(1)
-    expect(captured?.runDir).toBe('/tmp/run-dir')
+    expect(captured?.runDir).toBe(tempDir)
     expect(output).toEqual({ value: 'done', sessionId: captured?.sessionId })
+
+    const ledgerEvents = readLedgerEvents(tempDir)
+    expect(ledgerEvents).toHaveLength(1)
+    expect(ledgerEvents[0].eventType).toBe('agent.stream.linked')
+    expect(ledgerEvents[0].payload).toEqual({
+      sessionId: captured?.sessionId,
+      streamPath: `streams/${captured?.sessionId}.jsonl`,
+      attempt: 1,
+    })
+
+    const streamEvents = readStreamEvents(tempDir, captured!.sessionId)
+    expect(streamEvents).toHaveLength(2)
+    expect(streamEvents[0].eventType).toBe('turn.started')
+    expect(streamEvents[0].payload).toEqual({
+      prompt: 'Prompt for r-exec-test',
+      mode: 'read-only',
+    })
+    expect(streamEvents[1].eventType).toBe('turn.completed')
+    expect(streamEvents[1].payload).toEqual({
+      output: 'done',
+    })
   })
 })
 
 describe('executeAgentStep dynamic sessionId and fallback handling', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-exec-sess-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
   it('resolves dynamic sessionId and handles undefined resolution fallback', async () => {
     let capturedSessId: string | undefined
     const customAgent: AgentRunner<string> = {
@@ -64,7 +108,7 @@ describe('executeAgentStep dynamic sessionId and fallback handling', () => {
     const step: StepConfig = { id: 's-2', run: customAgent }
     const ctx = createDummyContext()
 
-    await executeAgentStep(step, customAgent, ctx, '/tmp/run-dir')
+    await executeAgentStep(step, customAgent, ctx, tempDir)
     expect(capturedSessId).toBe('sess-r-exec-test')
 
     const fallbackAgent: AgentRunner<string> = {
@@ -77,7 +121,7 @@ describe('executeAgentStep dynamic sessionId and fallback handling', () => {
         return { output: 'fallback', sessionId: input.sessionId }
       },
     }
-    await executeAgentStep({ id: 's-3', run: fallbackAgent }, fallbackAgent, ctx, '/tmp/run-dir')
+    await executeAgentStep({ id: 's-3', run: fallbackAgent }, fallbackAgent, ctx, tempDir)
     expect(capturedSessId).toMatch(/^session-[0-9a-f-]+$/)
   })
 })
@@ -108,6 +152,15 @@ describe('createAgentStepOutput output merging helper', () => {
 })
 
 describe('executeAgentStep and validateStepOutput schema handling', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-exec-schema-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
   it('validates and transforms output according to step outputSchema', async () => {
     const agent: AgentRunner<{ count: number }> = {
       __kind: 'agent',
@@ -124,7 +177,7 @@ describe('executeAgentStep and validateStepOutput schema handling', () => {
     const step: StepConfig = { id: 's-schema', run: agent, outputSchema: schema }
     const ctx = createDummyContext()
 
-    const output = (await executeAgentStep(step, agent, ctx, '/tmp/run-dir')) as {
+    const output = (await executeAgentStep(step, agent, ctx, tempDir)) as {
       count: number
       sessionId: string
     }

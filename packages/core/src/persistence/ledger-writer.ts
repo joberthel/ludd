@@ -14,6 +14,7 @@ export const ledgerEventTypeSchema = z.enum([
   'step.passed',
   'step.skipped',
   'step.failed',
+  'agent.stream.linked',
 ])
 
 export const ledgerEventSchema = z.object({

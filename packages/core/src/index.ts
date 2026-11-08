@@ -26,6 +26,7 @@ import type {
 } from './types/harness.js'
 import type { LedgerEvent, LedgerEventType } from './types/ledger.js'
 import type { RunStateSnapshot, RunStatus } from './types/state.js'
+import type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
@@ -47,6 +48,11 @@ export {
   writeRunStateAtomic,
 } from './persistence/state-store.js'
 export {
+  appendStreamEvent,
+  readStreamEvents,
+  resolveStreamPath,
+} from './persistence/stream-writer.js'
+export {
   createAgentStepOutput,
   executeAgentStep,
   validateStepOutput,
@@ -59,6 +65,8 @@ export type {
   AgentAccessMode,
   AgentRunner,
   AgentStepOutput,
+  AgentStreamEvent,
+  AgentStreamEventType,
   AgentTurnInput,
   AgentTurnResult,
   ArtifactClient,
