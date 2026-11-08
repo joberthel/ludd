@@ -13,6 +13,7 @@ describe('@ludd/core public exports contract', () => {
     expect(typeof core.runHarness).toBe('function')
     expect(typeof core.isAgentRunner).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
+    expect(typeof core.StepOutputValidationError).toBe('function')
   })
 
   it('does not export deprecated placeholder foo or bar', () => {

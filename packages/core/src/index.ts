@@ -19,6 +19,7 @@ import type {
 
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
+export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'

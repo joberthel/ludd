@@ -2,6 +2,7 @@ import type { StepContext, StepResult } from '../types/context.js'
 import type { HarnessConfig, StepConfig } from '../types/harness.js'
 import { randomUUID } from 'node:crypto'
 import { validateHarnessConfig } from '../define-harness.js'
+import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { isAgentRunner } from '../types/harness.js'
 
 export interface RunHarnessOptions {
@@ -44,6 +45,21 @@ function createInitialContext(
   }
 }
 
+async function validateStepOutput(
+  stepId: string,
+  schema: StepConfig['outputSchema'],
+  rawOutput: unknown,
+): Promise<unknown> {
+  if (schema === undefined) {
+    return rawOutput
+  }
+  const parsed = await schema.safeParseAsync(rawOutput)
+  if (!parsed.success) {
+    throw new StepOutputValidationError(stepId, rawOutput, parsed.error.issues)
+  }
+  return parsed.data
+}
+
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
@@ -63,9 +79,11 @@ export async function runHarness(
         continue
       }
 
-      const output: unknown = isAgentRunner(step.run)
+      const rawOutput: unknown = isAgentRunner(step.run)
         ? await step.run.execute(ctx)
         : await step.run(ctx)
+
+      const output = await validateStepOutput(stepId, step.outputSchema, rawOutput)
 
       ctx.step = { id: stepId, output, attempt: 1 }
       ctx.steps[stepId] = { status: 'passed', output }
