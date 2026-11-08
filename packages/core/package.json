@@ -26,6 +26,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "jiti": "^2.7.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
