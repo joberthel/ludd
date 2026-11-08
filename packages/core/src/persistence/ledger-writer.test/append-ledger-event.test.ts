@@ -1,15 +1,15 @@
-import type { LedgerEvent } from '../types/ledger.js'
+import type { LedgerEvent } from '../../types/ledger.js'
 import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { appendLedgerEvent } from './ledger-writer.js'
+import { appendLedgerEvent } from '../ledger-writer.js'
 
 let tempDir: string
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-ledger-writer-test-'))
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-ledger-append-test-'))
 })
 
 afterEach(async () => {

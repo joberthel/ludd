@@ -2,7 +2,7 @@ export type StepStatus = 'passed' | 'failed' | 'skipped'
 
 export interface StepResult<TOutput = unknown> {
   status: StepStatus
-  output: TOutput
+  output?: TOutput
 }
 
 export interface ProvisionedEnvironment {

@@ -1,11 +1,11 @@
-import type { RunStateSnapshot } from '../types/state.js'
+import type { RunStateSnapshot } from '../../types/state.js'
 import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveRunDir, writeRunStateAtomic } from './state-store.js'
+import { resolveRunDir, writeRunStateAtomic } from '../state-store.js'
 
 describe('resolveRunDir', () => {
   it('resolves scoped run path under .harness/runs/<runId>', () => {
