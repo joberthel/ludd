@@ -4,6 +4,10 @@
 
 This pnpm monorepo manages multiple related packages within a single repository. They reside inside the central `./packages` folder. Their namespace starts with `@ludd/`.
 
+## Dependencies
+
+**Use latest compatible versions:** When adding new dependencies, verify current releases to ensure no outdated versions are introduced. Always select the most up-to-date versions compatible with the existing repository stack, runtime, and peer dependencies.
+
 ## Tests
 
 - **Colocate unit tests (`*.test.ts`) with the file they test:** When a unit test file grows large, split it into a `<source-file>.test/` sibling folder with each file inside named by the behaviour it covers and ending in `.test.ts`.
