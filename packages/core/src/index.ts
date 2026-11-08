@@ -1,8 +1,5 @@
-export { defineHarness, validateHarnessConfig } from './define-harness.js'
-
-export { HarnessConfigError } from './errors/harness-config-error.js'
-
-export type {
+import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.js'
+import type {
   ArtifactClient,
   DynamicProperty,
   MatrixCursor,
@@ -11,7 +8,7 @@ export type {
   StepResult,
   StepStatus,
 } from './types/context.js'
-export type {
+import type {
   AgentRunner,
   CleanupPolicy,
   CleanupPolicyAction,
@@ -19,5 +16,27 @@ export type {
   StepConfig,
   StepRunFn,
 } from './types/harness.js'
+
+export { defineHarness, validateHarnessConfig } from './define-harness.js'
+export { HarnessConfigError } from './errors/harness-config-error.js'
+export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
+
+export type {
+  AgentRunner,
+  ArtifactClient,
+  CleanupPolicy,
+  CleanupPolicyAction,
+  DynamicProperty,
+  HarnessConfig,
+  HarnessRunResult,
+  MatrixCursor,
+  ProvisionedEnvironment,
+  RunHarnessOptions,
+  StepConfig,
+  StepContext,
+  StepResult,
+  StepRunFn,
+  StepStatus,
+}

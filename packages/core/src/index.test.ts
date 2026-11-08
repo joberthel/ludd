@@ -10,6 +10,7 @@ describe('@ludd/core public exports contract', () => {
   it('exports harness configuration factory and utilities', () => {
     expect(typeof core.defineHarness).toBe('function')
     expect(typeof core.validateHarnessConfig).toBe('function')
+    expect(typeof core.runHarness).toBe('function')
     expect(typeof core.isAgentRunner).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
   })
