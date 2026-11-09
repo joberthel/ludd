@@ -1,3 +1,5 @@
+import type { StepContext } from './context.js'
+
 export interface EnvironmentExecOptions {
   cwd?: string
   env?: Record<string, string>
@@ -22,9 +24,18 @@ export interface ProvisionedEnvironment {
   readonly supportsDangerMode?: boolean
   readonly branchName?: string
   readonly containerId?: string
+  readonly ephemeralPorts?: Record<string, number>
+  readonly injectedEnv?: Record<string, string>
   exec: (command: string | readonly string[], options?: EnvironmentExecOptions) => Promise<EnvironmentExecResult>
   ping: () => Promise<boolean>
   teardown: () => Promise<void>
+}
+
+export interface ProvisionContext {
+  runId: string
+  workspaceDir: string
+  defaultSignal?: AbortSignal
+  ctx?: StepContext
 }
 
 export interface EnvironmentAdapter {
@@ -32,11 +43,7 @@ export interface EnvironmentAdapter {
   readonly id: string
   readonly type: string
   readonly supportsDangerMode?: boolean
-  provision: (context: {
-    runId: string
-    workspaceDir: string
-    defaultSignal?: AbortSignal
-  }) => Promise<ProvisionedEnvironment>
+  provision: (context: ProvisionContext) => Promise<ProvisionedEnvironment>
 }
 
 export function isProvisionedEnvironment(value: unknown): value is ProvisionedEnvironment {

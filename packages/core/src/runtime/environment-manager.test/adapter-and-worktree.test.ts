@@ -35,7 +35,14 @@ function makeMockCtx(environments: Record<string, ProvisionedEnvironment> = {}):
   }
 }
 
-function makeMockProvisionedEnv(id: string, branchName?: string): ProvisionedEnvironment {
+function makeMockProvisionedEnv(
+  id: string,
+  branchName?: string,
+  extra?: {
+    ephemeralPorts?: Record<string, number>
+    injectedEnv?: Record<string, string>
+  },
+): ProvisionedEnvironment {
   return {
     __kind: 'environment',
     id,
@@ -43,6 +50,12 @@ function makeMockProvisionedEnv(id: string, branchName?: string): ProvisionedEnv
     workingDir: path.join(tmpDir, id),
     ...(branchName !== undefined
       ? { branchName }
+      : {}),
+    ...(extra?.ephemeralPorts !== undefined
+      ? { ephemeralPorts: extra.ephemeralPorts }
+      : {}),
+    ...(extra?.injectedEnv !== undefined
+      ? { injectedEnv: extra.injectedEnv }
       : {}),
     exec: vi.fn().mockResolvedValue({
       exitCode: 0,
@@ -67,23 +80,26 @@ function makeMockSnapshot(): RunStateSnapshot {
   }
 }
 
-describe('resolveStepEnvironment with EnvironmentAdapter', () => {
+describe('resolveStepEnvironment with unprovisioned EnvironmentAdapter', () => {
   it('provisions adapter and registers in ctx and snapshot when not yet provisioned', async () => {
     const ctx = makeMockCtx()
     const snapshot = makeMockSnapshot()
-    const mockEnv = makeMockProvisionedEnv('wt-env', 'ludd/run-wt-env')
+    const mockEnv = makeMockProvisionedEnv('wt-env', 'ludd/run-wt-env', {
+      ephemeralPorts: { APP_PORT: 8080 },
+      injectedEnv: { APP_PORT: '8080', VAR: 'val' },
+    })
     const provisionMock = vi.fn().mockResolvedValue(mockEnv)
 
     const adapter: EnvironmentAdapter = {
       __kind: 'environment-adapter',
       id: 'wt-env',
-      type: 'git-worktree',
       provision: provisionMock,
+      type: 'git-worktree',
     }
 
     const step: StepConfig = {
-      id: 'step-wt',
       environment: adapter,
+      id: 'step-wt',
       run: () => {},
     }
 
@@ -92,14 +108,18 @@ describe('resolveStepEnvironment with EnvironmentAdapter', () => {
     expect(provisionMock).toHaveBeenCalledTimes(1)
     expect(ctx.environments['wt-env']).toBe(mockEnv)
     expect(snapshot.environments?.['wt-env']).toEqual({
+      branchName: 'ludd/run-wt-env',
+      ephemeralPorts: { APP_PORT: 8080 },
       id: 'wt-env',
+      injectedEnv: { APP_PORT: '8080', VAR: 'val' },
+      tornDown: false,
       type: 'git-worktree',
       workingDir: mockEnv.workingDir,
-      branchName: 'ludd/run-wt-env',
-      tornDown: false,
     })
   })
+})
 
+describe('resolveStepEnvironment with existing EnvironmentAdapter', () => {
   it('reuses existing environment in ctx without calling provision again', async () => {
     const existingEnv = makeMockProvisionedEnv('wt-env', 'ludd/run-wt-env')
     const ctx = makeMockCtx({ 'wt-env': existingEnv })
@@ -109,13 +129,13 @@ describe('resolveStepEnvironment with EnvironmentAdapter', () => {
     const adapter: EnvironmentAdapter = {
       __kind: 'environment-adapter',
       id: 'wt-env',
-      type: 'git-worktree',
       provision: provisionMock,
+      type: 'git-worktree',
     }
 
     const step: StepConfig = {
-      id: 'step-wt-reuse',
       environment: adapter,
+      id: 'step-wt-reuse',
       run: () => {},
     }
 

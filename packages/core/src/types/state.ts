@@ -20,6 +20,8 @@ export interface EnvironmentDescriptor {
   branchName?: string
   containerId?: string
   tornDown?: boolean
+  ephemeralPorts?: Record<string, number>
+  injectedEnv?: Record<string, string>
 }
 
 export interface RunStateSnapshot {

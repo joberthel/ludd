@@ -1,13 +1,16 @@
 import type {
+  DynamicProperty,
   EnvironmentAdapter,
   EnvironmentExecOptions,
   EnvironmentExecResult,
+  ProvisionContext,
   ProvisionedEnvironment,
 } from '@ludd/core'
 import type { DockerMount } from './security/mount-validator.js'
 import path from 'node:path'
 import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
+import { resolveEnvironmentVariables } from './isolation/env-resolver.js'
 import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
 import {
   buildMountFlags,
@@ -30,7 +33,8 @@ export interface DockerWorktreeEnvOptions {
   baseBranch?: string
   branchPrefix?: string
   whitelistEnv?: readonly string[]
-  env?: Record<string, string>
+  env?: DynamicProperty<Record<string, string>>
+  ephemeralPorts?: readonly string[]
   customMounts?: readonly DockerMount[]
   mounts?: readonly DockerMount[]
 }
@@ -118,6 +122,7 @@ async function execDockerEnv(
   command: string | readonly string[],
   options: DockerWorktreeEnvOptions,
   bridgeHost: string,
+  injectedEnv?: Record<string, string>,
   execOptions?: EnvironmentExecOptions,
   defaultSignal?: AbortSignal,
 ): Promise<EnvironmentExecResult> {
@@ -125,7 +130,7 @@ async function execDockerEnv(
   const isolatedEnv = buildIsolatedEnvironmentVars({
     hostProcessEnv: process.env,
     whitelistEnv: options.whitelistEnv,
-    staticEnv: options.env,
+    staticEnv: injectedEnv,
     injectedEnv: execOptions?.env,
   })
   const envFlags = buildDockerEnvFlags(isolatedEnv, bridgeHost)
@@ -156,6 +161,8 @@ function createProvisionedDockerEnv(
   branchName: string,
   workspaceDir: string,
   defaultSignal?: AbortSignal,
+  ephemeralPorts?: Record<string, number>,
+  injectedEnv?: Record<string, string>,
 ): ProvisionedEnvironment {
   const bridgeHost = options.bridgeHost ?? 'host.docker.internal'
   return {
@@ -166,12 +173,19 @@ function createProvisionedDockerEnv(
     workingDir: worktreePath,
     containerId,
     branchName,
+    ...(ephemeralPorts !== undefined
+      ? { ephemeralPorts }
+      : {}),
+    ...(injectedEnv !== undefined
+      ? { injectedEnv }
+      : {}),
     exec: async (command, execOptions) => execDockerEnv(
       worktreePath,
       containerId,
       command,
       options,
       bridgeHost,
+      injectedEnv,
       execOptions,
       defaultSignal,
     ),
@@ -191,7 +205,8 @@ export function dockerWorktreeEnv(options: DockerWorktreeEnvOptions): Environmen
     id,
     type: 'docker-worktree',
     supportsDangerMode: true,
-    provision: async ({ runId, workspaceDir, defaultSignal }) => {
+    provision: async (context: ProvisionContext) => {
+      const { runId, workspaceDir, defaultSignal } = context
       const workspace = path.resolve(workspaceDir)
       const worktreePath = path.resolve(workspace, '.harness', 'worktrees', `${runId}-${id}`)
       validateAllMountPaths(workspace, worktreePath, options.customMounts ?? options.mounts)
@@ -201,6 +216,7 @@ export function dockerWorktreeEnv(options: DockerWorktreeEnvOptions): Environmen
 
       await addGitWorktree(workspace, worktreePath, branchName, options.baseBranch, defaultSignal)
       const containerId = await spawnContainer(workspace, worktreePath, containerName, options, defaultSignal)
+      const { ephemeralPorts, injectedEnv } = await resolveEnvironmentVariables(options, context)
 
       return createProvisionedDockerEnv(
         { ...options, id },
@@ -209,6 +225,8 @@ export function dockerWorktreeEnv(options: DockerWorktreeEnvOptions): Environmen
         branchName,
         workspace,
         defaultSignal,
+        ephemeralPorts,
+        injectedEnv,
       )
     },
   }

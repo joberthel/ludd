@@ -32,6 +32,8 @@ const environmentDescriptorSchema = z.object({
   branchName: z.string().optional(),
   containerId: z.string().optional(),
   tornDown: z.boolean().optional(),
+  ephemeralPorts: z.record(z.string(), z.number()).optional(),
+  injectedEnv: z.record(z.string(), z.string()).optional(),
 })
 
 const activeGateStateSchema = z.object({

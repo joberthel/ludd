@@ -45,6 +45,8 @@ export function createGitWorktreeEnvironmentFromDescriptor(
     type?: string
     workingDir: string
     branchName?: string
+    ephemeralPorts?: Record<string, number>
+    injectedEnv?: Record<string, string>
   },
   defaultSignal?: AbortSignal,
   workspaceDir?: string,
@@ -58,10 +60,25 @@ export function createGitWorktreeEnvironmentFromDescriptor(
     ...(descriptor.branchName !== undefined
       ? { branchName: descriptor.branchName }
       : {}),
-    exec: async (command, options) => execHostCommand(workingDir, command, {
-      signal: options?.signal ?? defaultSignal,
-      ...options,
-    }),
+    ...(descriptor.ephemeralPorts !== undefined
+      ? { ephemeralPorts: descriptor.ephemeralPorts }
+      : {}),
+    ...(descriptor.injectedEnv !== undefined
+      ? { injectedEnv: descriptor.injectedEnv }
+      : {}),
+    exec: async (command, options) => {
+      const mergedEnv = descriptor.injectedEnv !== undefined
+        ? {
+            ...descriptor.injectedEnv,
+            ...(options?.env ?? {}),
+          }
+        : options?.env
+      return execHostCommand(workingDir, command, {
+        signal: options?.signal ?? defaultSignal,
+        ...options,
+        env: mergedEnv,
+      })
+    },
     ping: async () => pingGitWorktreeDir(workingDir, defaultSignal),
     teardown: async () => teardownGitWorktreeDir(workingDir, workspaceDir, defaultSignal),
   }

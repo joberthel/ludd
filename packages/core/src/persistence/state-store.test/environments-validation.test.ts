@@ -55,6 +55,39 @@ describe('readRunState host environment descriptor validation', () => {
   })
 })
 
+describe('readRunState host environment with ports and injected env', () => {
+  it('accepts host environment descriptor with ephemeralPorts and injectedEnv', () => {
+    const runDir = writeRawState({
+      schemaVersion: 1,
+      runId: 'run-env-ports',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: null,
+      environments: {
+        host: {
+          id: 'host',
+          type: 'host',
+          workingDir: '/foo/bar',
+          ephemeralPorts: { APP_PORT: 54321 },
+          injectedEnv: { APP_PORT: '54321', DB_NAME: 'test_db' },
+          tornDown: false,
+        },
+      },
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+    const parsed = readRunState(runDir)
+    expect(parsed.environments?.host).toEqual({
+      id: 'host',
+      type: 'host',
+      workingDir: '/foo/bar',
+      ephemeralPorts: { APP_PORT: 54321 },
+      injectedEnv: { APP_PORT: '54321', DB_NAME: 'test_db' },
+      tornDown: false,
+    })
+  })
+})
+
 describe('readRunState docker-worktree environment descriptor validation', () => {
   it('accepts valid docker-worktree environment descriptor with containerId', () => {
     const dockerDir = writeRawState({

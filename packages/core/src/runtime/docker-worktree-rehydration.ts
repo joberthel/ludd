@@ -96,16 +96,49 @@ async function execDockerWorktree(
   const userArgs = options?.dangerMode
     ? ['-u', '0:0']
     : []
+  const envArgs: string[] = []
+  if (options?.env) {
+    for (const [key, value] of Object.entries(options.env)) {
+      envArgs.push('-e', `${key}=${value}`)
+    }
+  }
   return execHostCommand(workingDir, [
     'docker',
     'exec',
     ...userArgs,
+    ...envArgs,
     containerId,
     ...cmdArgs,
   ], {
     signal,
     ...options,
   })
+}
+
+async function execRehydratedDocker(
+  workingDir: string,
+  containerId: string | undefined,
+  injectedEnv: Record<string, string> | undefined,
+  command: string | readonly string[],
+  options?: EnvironmentExecOptions,
+  defaultSignal?: AbortSignal,
+): Promise<EnvironmentExecResult> {
+  const mergedEnv = injectedEnv !== undefined
+    ? {
+        ...injectedEnv,
+        ...(options?.env ?? {}),
+      }
+    : options?.env
+  return execDockerWorktree(
+    workingDir,
+    containerId,
+    command,
+    {
+      ...options,
+      env: mergedEnv,
+    },
+    defaultSignal,
+  )
 }
 
 export function createDockerWorktreeEnvironmentFromDescriptor(
@@ -115,6 +148,8 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     workingDir: string
     containerId?: string
     branchName?: string
+    ephemeralPorts?: Record<string, number>
+    injectedEnv?: Record<string, string>
   },
   defaultSignal?: AbortSignal,
   workspaceDir?: string,
@@ -132,9 +167,16 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     ...(descriptor.branchName !== undefined
       ? { branchName: descriptor.branchName }
       : {}),
-    exec: async (command, options) => execDockerWorktree(
+    ...(descriptor.ephemeralPorts !== undefined
+      ? { ephemeralPorts: descriptor.ephemeralPorts }
+      : {}),
+    ...(descriptor.injectedEnv !== undefined
+      ? { injectedEnv: descriptor.injectedEnv }
+      : {}),
+    exec: async (command, options) => execRehydratedDocker(
       workingDir,
       descriptor.containerId,
+      descriptor.injectedEnv,
       command,
       options,
       defaultSignal,

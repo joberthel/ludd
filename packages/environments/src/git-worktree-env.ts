@@ -1,13 +1,16 @@
 import type {
+  DynamicProperty,
   EnvironmentAdapter,
   EnvironmentExecOptions,
   EnvironmentExecResult,
+  ProvisionContext,
   ProvisionedEnvironment,
 } from '@ludd/core'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
+import { resolveEnvironmentVariables } from './isolation/env-resolver.js'
 import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
 
 export interface GitWorktreeEnvOptions {
@@ -15,7 +18,8 @@ export interface GitWorktreeEnvOptions {
   baseBranch?: string
   branchPrefix?: string
   whitelistEnv?: readonly string[]
-  env?: Record<string, string>
+  env?: DynamicProperty<Record<string, string>>
+  ephemeralPorts?: readonly string[]
 }
 
 function validateOptions(options: GitWorktreeEnvOptions): string {
@@ -113,6 +117,8 @@ function createProvisionedWorktree(
   worktreePath: string,
   workspaceDir: string,
   defaultSignal?: AbortSignal,
+  ephemeralPorts?: Record<string, number>,
+  injectedEnv?: Record<string, string>,
 ): ProvisionedEnvironment {
   const env: ProvisionedEnvironment = {
     __kind: 'environment',
@@ -120,11 +126,17 @@ function createProvisionedWorktree(
     type: 'git-worktree',
     workingDir: worktreePath,
     branchName,
+    ...(ephemeralPorts !== undefined
+      ? { ephemeralPorts }
+      : {}),
+    ...(injectedEnv !== undefined
+      ? { injectedEnv }
+      : {}),
     exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> => {
       const isolatedEnv = buildIsolatedEnvironmentVars({
         hostProcessEnv: process.env,
         whitelistEnv: options.whitelistEnv,
-        staticEnv: options.env,
+        staticEnv: injectedEnv,
         injectedEnv: execOptions?.env,
       })
       return execHostEnvCommand(env.workingDir, command, {
@@ -147,14 +159,24 @@ export function gitWorktreeEnv(options: GitWorktreeEnvOptions): EnvironmentAdapt
     __kind: 'environment-adapter',
     id,
     type: 'git-worktree',
-    provision: async ({ runId, workspaceDir, defaultSignal }) => {
+    provision: async (context: ProvisionContext) => {
+      const { runId, workspaceDir, defaultSignal } = context
       const { workspace, worktreePath } = resolveWorktreePaths(workspaceDir, runId, id)
       const branchPrefix = options.branchPrefix ?? 'ludd'
       const branchName = `${branchPrefix}/${runId}-${id}`
 
       await addGitWorktree(workspace, worktreePath, branchName, options.baseBranch, defaultSignal)
+      const { ephemeralPorts, injectedEnv } = await resolveEnvironmentVariables(options, context)
 
-      return createProvisionedWorktree({ ...options, id }, branchName, worktreePath, workspace, defaultSignal)
+      return createProvisionedWorktree(
+        { ...options, id },
+        branchName,
+        worktreePath,
+        workspace,
+        defaultSignal,
+        ephemeralPorts,
+        injectedEnv,
+      )
     },
   }
 }

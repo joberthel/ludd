@@ -137,6 +137,7 @@ export {
   type EnvironmentExecResult,
   isEnvironmentAdapter,
   isProvisionedEnvironment,
+  type ProvisionContext,
   type ProvisionedEnvironment,
 } from './types/environment.js'
 

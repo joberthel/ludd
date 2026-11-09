@@ -3,50 +3,24 @@ import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { Guardrail } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { EnvironmentDescriptor, RunStateSnapshot } from '../types/state.js'
-import fs from 'node:fs'
-import path from 'node:path'
 import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isEnvironmentAdapter, isProvisionedEnvironment } from '../types/environment.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { createDockerWorktreeEnvironmentFromDescriptor } from './docker-worktree-rehydration.js'
-import { execHostCommand } from './environment-exec.js'
 import { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
+import {
+  createDefaultHostEnvironment,
+  createHostEnvironmentFromDescriptor,
+} from './host-rehydration.js'
 
 export { createDockerWorktreeEnvironmentFromDescriptor } from './docker-worktree-rehydration.js'
 export { execHostCommand, killProcessTree } from './environment-exec.js'
 export { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
-
-export function createHostEnvironmentFromDescriptor(descriptor: {
-  id: string
-  type: string
-  workingDir: string
-}, defaultSignal?: AbortSignal): ProvisionedEnvironment {
-  const workingDir = path.resolve(descriptor.workingDir)
-  return {
-    __kind: 'environment',
-    id: descriptor.id,
-    type: descriptor.type,
-    workingDir,
-    exec: async (command, options) => execHostCommand(workingDir, command, {
-      signal: options?.signal ?? defaultSignal,
-      ...options,
-    }),
-    ping: async () => fs.existsSync(workingDir),
-    teardown: async () => {},
-  }
-}
-
-export function createDefaultHostEnvironment(
-  workspaceDir: string,
-  defaultSignal?: AbortSignal,
-): ProvisionedEnvironment {
-  return createHostEnvironmentFromDescriptor({
-    id: 'host',
-    type: 'host',
-    workingDir: workspaceDir,
-  }, defaultSignal)
-}
+export {
+  createDefaultHostEnvironment,
+  createHostEnvironmentFromDescriptor,
+} from './host-rehydration.js'
 
 export function recordEnvironment(
   env: ProvisionedEnvironment,
@@ -69,6 +43,12 @@ export function recordEnvironment(
         : {}),
       ...(containerId !== undefined
         ? { containerId }
+        : {}),
+      ...(env.ephemeralPorts !== undefined
+        ? { ephemeralPorts: env.ephemeralPorts }
+        : {}),
+      ...(env.injectedEnv !== undefined
+        ? { injectedEnv: env.injectedEnv }
         : {}),
       tornDown: false,
     }
@@ -94,6 +74,7 @@ async function resolveAdapterOrEnvironment(
       runId: ctx.runId,
       workspaceDir,
       defaultSignal,
+      ctx,
     })
     ctx.environments[resolved.id] = provisioned
     return provisioned
@@ -154,6 +135,7 @@ async function resolveGuardrailAdapterOrEnv(
     const provisioned = await resolved.provision({
       runId: ctx.runId,
       workspaceDir: stepEnvironment.workingDir,
+      ctx,
     })
     ctx.environments[resolved.id] = provisioned
     return provisioned

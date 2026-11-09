@@ -6,6 +6,7 @@ import type { BuildIsolatedEnvOptions } from './security/env-sanitizer.js'
 export { dockerWorktreeEnv, translateMcpServerUrl } from './docker-worktree-env.js'
 export { gitWorktreeEnv } from './git-worktree-env.js'
 export { hostEnv, killProcessTree } from './host-env.js'
+export { allocateEphemeralPorts } from './isolation/port-allocator.js'
 export { buildIsolatedEnvironmentVars, SAFE_BASELINE_KEYS } from './security/env-sanitizer.js'
 export type {
   BuildIsolatedEnvOptions,
