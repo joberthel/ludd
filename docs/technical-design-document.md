@@ -221,7 +221,7 @@ Within each isolated run directory, the runner maintains:
 ### 5.5.2 Runtime, Database, and Ephemeral Port Isolation
 
 * **\[DECISION\]** Parallel workflow runs require strict isolation of stateful resources such as MySQL or PostgreSQL databases:  
-  * **Dynamic Schema & Container Isolation \[DECISION\]:** Environment adapters can dynamically create isolated database schemas (`test_run_<runId>`) or spin up namespaced Docker Compose networks.  
+  * **Declarative Run-Scoped Environment Variables & Container Isolation \[DECISION\]:** Following the *Code-First* (`ADR-0001`) and *Declarative Rather Than Imposed* (`ADR-0008`) principles, `@ludd/environments` does not hardcode database-specific naming magic. Instead, environment adapters accept dynamic `env: (ctx) => Record<string, string>` callbacks so workflow authors can declaratively derive run-scoped database schemas (e.g., `` DB_DATABASE: `test_run_${ctx.runId}` ``) or spin up namespaced Docker Compose networks directly in `harness.config.ts`.  
   * **Ephemeral Port Allocation \[DECISION\]:** To avoid port collisions across concurrent runs without requiring a global lock registry, container services operate internally without host port mappings whenever possible, or dynamically bind to OS-assigned free ephemeral ports.  
   * **Automatic Environment Injection \[DECISION\]:** The orchestrator injects dynamic connection parameters (DB URLs, ephemeral ports, MCP server URL, and `MCP_AUTH_TOKEN`) as environment variables into the step's execution context.
 
