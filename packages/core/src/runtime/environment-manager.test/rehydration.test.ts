@@ -101,6 +101,7 @@ describe('recordEnvironment', () => {
       id: 'env-1',
       type: 'host',
       workingDir: tmpDir,
+      tornDown: false,
     })
 
     const persisted = readRunState(tmpDir)
@@ -108,6 +109,7 @@ describe('recordEnvironment', () => {
       id: 'env-1',
       type: 'host',
       workingDir: tmpDir,
+      tornDown: false,
     })
   })
 

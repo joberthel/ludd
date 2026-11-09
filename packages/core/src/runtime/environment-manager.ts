@@ -2,16 +2,18 @@ import type { StepContext } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { Guardrail } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
-import type { RunStateSnapshot } from '../types/state.js'
+import type { EnvironmentDescriptor, RunStateSnapshot } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
-import { isProvisionedEnvironment } from '../types/environment.js'
+import { isEnvironmentAdapter, isProvisionedEnvironment } from '../types/environment.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { execHostCommand } from './environment-exec.js'
+import { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
 
 export { execHostCommand, killProcessTree } from './environment-exec.js'
+export { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
 
 export function createHostEnvironmentFromDescriptor(descriptor: {
   id: string
@@ -59,12 +61,41 @@ export function recordEnvironment(
       id: env.id,
       type: env.type,
       workingDir: env.workingDir,
+      ...(env.branchName !== undefined
+        ? { branchName: env.branchName }
+        : {}),
+      tornDown: false,
     }
     if (runDir !== undefined) {
       snapshot.updatedAt = new Date().toISOString()
       writeRunStateAtomic(runDir, snapshot)
     }
   }
+}
+
+async function resolveAdapterOrEnvironment(
+  resolved: unknown,
+  ctx: StepContext,
+  workspaceDir: string,
+  stepId: string,
+  defaultSignal?: AbortSignal,
+): Promise<ProvisionedEnvironment> {
+  if (isEnvironmentAdapter(resolved)) {
+    if (ctx.environments[resolved.id] !== undefined) {
+      return ctx.environments[resolved.id]
+    }
+    const provisioned = await resolved.provision({
+      runId: ctx.runId,
+      workspaceDir,
+      defaultSignal,
+    })
+    ctx.environments[resolved.id] = provisioned
+    return provisioned
+  }
+  if (isProvisionedEnvironment(resolved)) {
+    return resolved
+  }
+  throw new Error(`Step "${stepId}" environment must resolve to a valid ProvisionedEnvironment.`)
 }
 
 export async function resolveStepEnvironment(
@@ -78,10 +109,7 @@ export async function resolveStepEnvironment(
   let env: ProvisionedEnvironment
   if (step.environment !== undefined) {
     const resolved = await resolveDynamicProperty(step.environment, ctx)
-    if (!isProvisionedEnvironment(resolved)) {
-      throw new Error(`Step "${step.id}" environment must resolve to a valid ProvisionedEnvironment.`)
-    }
-    env = resolved
+    env = await resolveAdapterOrEnvironment(resolved, ctx, workspaceDir, step.id, defaultSignal)
   }
   else {
     env = createDefaultHostEnvironment(workspaceDir, defaultSignal)
@@ -97,6 +125,28 @@ export async function resolveStepEnvironment(
   return env
 }
 
+async function resolveGuardrailAdapterOrEnv(
+  resolved: unknown,
+  ctx: StepContext,
+  stepEnvironment: ProvisionedEnvironment,
+): Promise<ProvisionedEnvironment> {
+  if (isEnvironmentAdapter(resolved)) {
+    if (ctx.environments[resolved.id] !== undefined) {
+      return ctx.environments[resolved.id]
+    }
+    const provisioned = await resolved.provision({
+      runId: ctx.runId,
+      workspaceDir: stepEnvironment.workingDir,
+    })
+    ctx.environments[resolved.id] = provisioned
+    return provisioned
+  }
+  if (isProvisionedEnvironment(resolved)) {
+    return resolved
+  }
+  throw new Error('Guardrail environment must resolve to a valid ProvisionedEnvironment.')
+}
+
 export async function resolveGuardrailEnvironment(
   guardrail: Guardrail<any, any>,
   ctx: StepContext,
@@ -106,23 +156,35 @@ export async function resolveGuardrailEnvironment(
 ): Promise<ProvisionedEnvironment> {
   if (guardrail.environment !== undefined) {
     const resolved = await resolveDynamicProperty(guardrail.environment, ctx)
-    if (!isProvisionedEnvironment(resolved)) {
-      throw new Error('Guardrail environment must resolve to a valid ProvisionedEnvironment.')
-    }
-    recordEnvironment(resolved, ctx, snapshot, runDir)
-    return resolved
+    const env = await resolveGuardrailAdapterOrEnv(resolved, ctx, stepEnvironment)
+    recordEnvironment(env, ctx, snapshot, runDir)
+    return env
   }
   return stepEnvironment
 }
 
 export interface RehydrateEnvironmentsParams {
-  previousEnvironments?: Record<string, { id: string, type: string, workingDir: string }>
+  previousEnvironments?: Record<string, EnvironmentDescriptor>
   ctx: StepContext
   activeStep?: StepConfig
   workspaceDir: string
   snapshot?: RunStateSnapshot
   runDir?: string
   defaultSignal?: AbortSignal
+}
+
+function rehydrateEnvironmentDescriptor(
+  desc: EnvironmentDescriptor,
+  ctx: StepContext,
+  workspaceDir: string,
+  defaultSignal?: AbortSignal,
+): void {
+  if (desc.tornDown || ctx.environments[desc.id] !== undefined) {
+    return
+  }
+  ctx.environments[desc.id] = desc.type === 'git-worktree'
+    ? createGitWorktreeEnvironmentFromDescriptor(desc, defaultSignal, workspaceDir)
+    : createHostEnvironmentFromDescriptor(desc, defaultSignal)
 }
 
 export async function rehydrateEnvironmentsAndCheckHealth(
@@ -132,9 +194,7 @@ export async function rehydrateEnvironmentsAndCheckHealth(
 
   if (previousEnvironments !== undefined) {
     for (const desc of Object.values(previousEnvironments)) {
-      if (ctx.environments[desc.id] === undefined) {
-        ctx.environments[desc.id] = createHostEnvironmentFromDescriptor(desc, defaultSignal)
-      }
+      rehydrateEnvironmentDescriptor(desc, ctx, workspaceDir, defaultSignal)
     }
   }
 

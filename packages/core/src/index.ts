@@ -75,6 +75,7 @@ export {
 } from './runtime/before-step-executor.js'
 export {
   createDefaultHostEnvironment,
+  createGitWorktreeEnvironmentFromDescriptor,
   createHostEnvironmentFromDescriptor,
   recordEnvironment,
   rehydrateEnvironmentsAndCheckHealth,
@@ -128,8 +129,10 @@ export type {
   StepStatus,
 } from './types/context.js'
 export {
+  type EnvironmentAdapter,
   type EnvironmentExecOptions,
   type EnvironmentExecResult,
+  isEnvironmentAdapter,
   isProvisionedEnvironment,
   type ProvisionedEnvironment,
 } from './types/environment.js'

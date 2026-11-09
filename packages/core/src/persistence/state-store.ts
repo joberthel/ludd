@@ -29,6 +29,8 @@ const environmentDescriptorSchema = z.object({
   id: z.string(),
   type: z.string(),
   workingDir: z.string(),
+  branchName: z.string().optional(),
+  tornDown: z.boolean().optional(),
 })
 
 const activeGateStateSchema = z.object({

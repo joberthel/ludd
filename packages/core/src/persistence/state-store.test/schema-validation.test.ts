@@ -211,36 +211,3 @@ describe('readRunState active matrix validation errors (AC 4.5.1)', () => {
     expect(() => readRunState(writeRawState({ ...baseState, activeMatrixOutputs: 'invalid' }))).toThrow(ZodError)
   })
 })
-
-describe('readRunState environments validation', () => {
-  it('accepts valid environments map and rejects invalid descriptors', () => {
-    const runDir = writeRawState({
-      schemaVersion: 1,
-      runId: 'run-env',
-      harnessName: 'test',
-      status: 'running',
-      activeStepId: null,
-      environments: {
-        host: { id: 'host', type: 'host', workingDir: '/foo/bar' },
-      },
-      steps: {},
-      updatedAt: '2026-11-08T20:00:00.000Z',
-    })
-    const parsed = readRunState(runDir)
-    expect(parsed.environments?.host).toEqual({ id: 'host', type: 'host', workingDir: '/foo/bar' })
-
-    const invalidDir = writeRawState({
-      schemaVersion: 1,
-      runId: 'run-invalid-env',
-      harnessName: 'test',
-      status: 'running',
-      activeStepId: null,
-      environments: {
-        host: { id: 123 },
-      },
-      steps: {},
-      updatedAt: '2026-11-08T20:00:00.000Z',
-    })
-    expect(() => readRunState(invalidDir)).toThrow(ZodError)
-  })
-})

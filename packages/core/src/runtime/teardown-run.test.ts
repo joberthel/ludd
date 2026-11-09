@@ -29,7 +29,7 @@ function createSnapshot(
   }
 }
 
-describe('teardownRun inactive runs (AC 6.6.2)', () => {
+describe('teardownRun inactive runs with options (AC 6.6.2)', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -71,6 +71,18 @@ describe('teardownRun inactive runs (AC 6.6.2)', () => {
     const tdEvent = events.find(e => e.eventType === 'run.teardown')
     expect(tdEvent?.payload.environments).toEqual(['custom'])
   })
+})
+
+describe('teardownRun inactive runs reconstructed from state.json (AC 6.6.2)', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-teardown-run-'))
+  })
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
 
   it('tears down inactive run reconstructed from state.json descriptors (AC 6.6.2)', async () => {
     const runId = 'inactive-run-reconstructed'
@@ -85,6 +97,27 @@ describe('teardownRun inactive runs (AC 6.6.2)', () => {
 
     const events = readLedgerEvents(runDir)
     expect(events.some(e => e.eventType === 'run.teardown')).toBe(true)
+  })
+
+  it('tears down git-worktree environments reconstructed from state.json', async () => {
+    const runId = 'git-wt-reconstructed'
+    const runDir = resolveRunDir(tempDir, runId)
+    const wtDir = path.join(tempDir, '.harness', 'worktrees', 'run-wt')
+    fs.mkdirSync(wtDir, { recursive: true })
+
+    writeRunStateAtomic(runDir, createSnapshot(runId, 'failed', {
+      'wt-env': {
+        id: 'wt-env',
+        type: 'git-worktree',
+        workingDir: wtDir,
+        branchName: 'ludd/run-wt',
+      },
+    }))
+
+    const result = await teardownRun(runId, { workspaceDir: tempDir })
+    expect(result.ok).toBe(true)
+    expect(readRunState(runDir).environments).toEqual({})
+    expect(fs.existsSync(wtDir)).toBe(false)
   })
 })
 

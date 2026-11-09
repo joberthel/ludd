@@ -1,5 +1,5 @@
 import type { ProvisionedEnvironment } from '../types/environment.js'
-import type { RunStateSnapshot } from '../types/state.js'
+import type { EnvironmentDescriptor, RunStateSnapshot } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
@@ -7,7 +7,10 @@ import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { isProcessAlive, RUNNER_PID_FILE } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
-import { createHostEnvironmentFromDescriptor } from './environment-manager.js'
+import {
+  createGitWorktreeEnvironmentFromDescriptor,
+  createHostEnvironmentFromDescriptor,
+} from './environment-manager.js'
 
 export interface TeardownRunOptions {
   workspaceDir?: string
@@ -36,6 +39,15 @@ function verifyRunnerNotActive(runDir: string, runId: string, force?: boolean): 
   }
 }
 
+function createEnvironmentFromDescriptor(
+  desc: EnvironmentDescriptor,
+  workspaceDir?: string,
+): ProvisionedEnvironment {
+  return desc.type === 'git-worktree'
+    ? createGitWorktreeEnvironmentFromDescriptor(desc, undefined, workspaceDir)
+    : createHostEnvironmentFromDescriptor(desc)
+}
+
 function collectEnvironmentsToTeardown(
   snapshot: RunStateSnapshot,
   options?: TeardownRunOptions,
@@ -49,7 +61,7 @@ function collectEnvironmentsToTeardown(
   if (snapshot.environments !== undefined) {
     for (const [id, desc] of Object.entries(snapshot.environments)) {
       if (!envMap.has(id)) {
-        envMap.set(id, createHostEnvironmentFromDescriptor(desc))
+        envMap.set(id, createEnvironmentFromDescriptor(desc, options?.workspaceDir))
       }
     }
   }

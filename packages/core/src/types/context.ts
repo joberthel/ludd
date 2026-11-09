@@ -1,7 +1,7 @@
 import type { ArtifactClient } from './artifact.js'
-import type { ProvisionedEnvironment } from './environment.js'
+import type { EnvironmentAdapter, ProvisionedEnvironment } from './environment.js'
 
-export type { ArtifactClient, ProvisionedEnvironment }
+export type { ArtifactClient, EnvironmentAdapter, ProvisionedEnvironment }
 
 export type StepStatus = 'passed' | 'failed' | 'skipped'
 

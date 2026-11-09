@@ -17,6 +17,8 @@ export interface EnvironmentDescriptor {
   id: string
   type: string
   workingDir: string
+  branchName?: string
+  tornDown?: boolean
 }
 
 export interface RunStateSnapshot {
