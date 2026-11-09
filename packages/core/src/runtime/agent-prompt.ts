@@ -34,6 +34,7 @@ export function resolveInitialPrompt(
   stepId: string,
   rehydration?: RehydratedAgentPromptState,
   matrixIndex?: number,
+  mcpServerUrl?: string,
 ): string {
   if (rehydration?.attempt === undefined || rehydration.attempt <= 1) {
     return initialPrompt
@@ -55,7 +56,7 @@ export function resolveInitialPrompt(
   }
   if (payload.reason === 'guardrail_failed') {
     const issues = payload.issues as { guardrailIndex: number, verdict: GuardrailVerdict<unknown> }
-    return formatGuardrailRetryPrompt(initialPrompt, issues.guardrailIndex, issues.verdict)
+    return formatGuardrailRetryPrompt(initialPrompt, issues.guardrailIndex, issues.verdict, mcpServerUrl)
   }
   return formatRetryPrompt(initialPrompt, payload.issues as RetryIssueList)
 }

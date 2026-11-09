@@ -115,12 +115,14 @@ async function resolveGuardrailEnv(
   ctx: StepContext,
   stepId: string,
   stepEnvironment?: ProvisionedEnvironment,
+  snapshot?: RunStateSnapshot,
+  runDir?: string,
 ): Promise<ProvisionedEnvironment> {
   const fallback = stepEnvironment
     ?? ctx.environments[stepId]
     ?? ctx.environments.host
     ?? createDefaultHostEnvironment(process.cwd())
-  return resolveGuardrailEnvironment(guardrail, ctx, fallback)
+  return resolveGuardrailEnvironment(guardrail, ctx, fallback, snapshot, runDir)
 }
 
 async function executeGuardrail(
@@ -132,8 +134,9 @@ async function executeGuardrail(
   runDir: string,
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
   stepEnvironment?: ProvisionedEnvironment,
+  snapshot?: RunStateSnapshot,
 ): Promise<GuardrailVerdict> {
-  const env = await resolveGuardrailEnv(guardrail, ctx, stepId, stepEnvironment)
+  const env = await resolveGuardrailEnv(guardrail, ctx, stepId, stepEnvironment, snapshot, runDir)
   return guardrail.execute({
     ctx,
     stepId,
@@ -201,7 +204,7 @@ async function processGuardrailResult(
 ): Promise<void> {
   const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
   emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', { phase: 'afterStep', guardrailIndex: k, attempt })
-  const verdict = await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment)
+  const verdict = await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment, snapshot)
 
   if (verdict.status === 'pass' || verdict.status === 'skip') {
     const eventType = verdict.status === 'pass'

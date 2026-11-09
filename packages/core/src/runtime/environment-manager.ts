@@ -1,180 +1,28 @@
-import type { ChildProcess } from 'node:child_process'
 import type { StepContext } from '../types/context.js'
-import type {
-  EnvironmentExecOptions,
-  EnvironmentExecResult,
-  ProvisionedEnvironment,
-} from '../types/environment.js'
+import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { Guardrail } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
-import { spawn } from 'node:child_process'
+import type { RunStateSnapshot } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
-import process from 'node:process'
+import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
+import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isProvisionedEnvironment } from '../types/environment.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
+import { execHostCommand } from './environment-exec.js'
 
-interface ExecutionState {
-  stdout: string
-  stderr: string
-  settled: boolean
-}
+export { execHostCommand, killProcessTree } from './environment-exec.js'
 
-export function killProcessTree(pid: number | undefined, gracePeriodMs = 200): void {
-  if (pid === undefined || pid === 0) {
-    return
-  }
-  const target = process.platform === 'win32'
-    ? pid
-    : -pid
-  try {
-    process.kill(target, 'SIGTERM')
-  }
-  catch {
-    return
-  }
-  const timer = setTimeout(() => {
-    try {
-      process.kill(target, 'SIGKILL')
-    }
-    catch {
-      // Process already terminated
-    }
-  }, gracePeriodMs)
-  timer.unref?.()
-}
-
-function parseCommand(command: string | readonly string[]): {
-  file: string
-  args: readonly string[]
-  shell: boolean
-} {
-  if (Array.isArray(command)) {
-    if (command.length === 0) {
-      throw new Error('Command array must not be empty.')
-    }
-    const file = String(command[0])
-    const args = command.slice(1).map(String)
-    return {
-      file,
-      args,
-      shell: false,
-    }
-  }
-  if (typeof command === 'string') {
-    if (command.trim() === '') {
-      throw new Error('Command string must not be empty.')
-    }
-    return {
-      file: command,
-      args: [],
-      shell: true,
-    }
-  }
-  throw new TypeError('Command must be a non-empty string or array of strings.')
-}
-
-function resolveExecCwd(workingDir: string, cwdOption?: string): string {
-  if (cwdOption !== undefined && cwdOption.trim() !== '') {
-    return path.resolve(workingDir, cwdOption)
-  }
-  return workingDir
-}
-
-function attachChildStreams(child: ChildProcess, state: ExecutionState): void {
-  child.stdout?.on('data', (chunk: unknown) => {
-    state.stdout += String(chunk)
-  })
-  child.stderr?.on('data', (chunk: unknown) => {
-    state.stderr += String(chunk)
-  })
-}
-
-function setupTimeoutTimer(
-  pid: number | undefined,
-  timeoutMs: number | undefined,
-  state: ExecutionState,
-  resolve: (res: EnvironmentExecResult) => void,
-): NodeJS.Timeout | undefined {
-  if (timeoutMs === undefined || timeoutMs <= 0) {
-    return undefined
-  }
-  return setTimeout(() => {
-    state.settled = true
-    killProcessTree(pid)
-    resolve({
-      exitCode: null,
-      stdout: state.stdout,
-      stderr: state.stderr,
-      timedOut: true,
-    })
-  }, timeoutMs)
-}
-
-function attachProcessLifecycle(
-  child: ChildProcess,
-  timer: NodeJS.Timeout | undefined,
-  state: ExecutionState,
-  resolve: (res: EnvironmentExecResult) => void,
-  reject: (err: Error) => void,
-): void {
-  child.on('error', (err: Error) => {
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-    state.settled = true
-    reject(err)
-  })
-
-  child.on('close', (code: number | null) => {
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-    if (!state.settled) {
-      state.settled = true
-      resolve({
-        exitCode: code,
-        stdout: state.stdout,
-        stderr: state.stderr,
-        timedOut: false,
-      })
-    }
-  })
-}
-
-export async function execHostCommand(
-  workingDir: string,
-  command: string | readonly string[],
-  options?: EnvironmentExecOptions,
-): Promise<EnvironmentExecResult> {
-  const { file, args, shell } = parseCommand(command)
-  const cwd = resolveExecCwd(workingDir, options?.cwd)
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...(options?.env ?? {}),
-  }
-
-  return new Promise((resolve, reject) => {
-    const child = spawn(file, args as string[], {
-      cwd,
-      env,
-      shell,
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    const state: ExecutionState = { stdout: '', stderr: '', settled: false }
-    attachChildStreams(child, state)
-    const timer = setupTimeoutTimer(child.pid, options?.timeoutMs, state, resolve)
-    attachProcessLifecycle(child, timer, state, resolve, reject)
-  })
-}
-
-export function createDefaultHostEnvironment(workspaceDir: string): ProvisionedEnvironment {
-  const workingDir = path.resolve(workspaceDir)
+export function createHostEnvironmentFromDescriptor(descriptor: {
+  id: string
+  type: string
+  workingDir: string
+}): ProvisionedEnvironment {
+  const workingDir = path.resolve(descriptor.workingDir)
   return {
     __kind: 'environment',
-    id: 'host',
-    type: 'host',
+    id: descriptor.id,
+    type: descriptor.type,
     workingDir,
     exec: async (command, options) => execHostCommand(workingDir, command, options),
     ping: async () => fs.existsSync(workingDir),
@@ -182,10 +30,43 @@ export function createDefaultHostEnvironment(workspaceDir: string): ProvisionedE
   }
 }
 
+export function createDefaultHostEnvironment(workspaceDir: string): ProvisionedEnvironment {
+  return createHostEnvironmentFromDescriptor({
+    id: 'host',
+    type: 'host',
+    workingDir: workspaceDir,
+  })
+}
+
+export function recordEnvironment(
+  env: ProvisionedEnvironment,
+  ctx: StepContext,
+  snapshot?: RunStateSnapshot,
+  runDir?: string,
+): void {
+  ctx.environments[env.id] = env
+  if (snapshot !== undefined) {
+    if (!snapshot.environments) {
+      snapshot.environments = {}
+    }
+    snapshot.environments[env.id] = {
+      id: env.id,
+      type: env.type,
+      workingDir: env.workingDir,
+    }
+    if (runDir !== undefined) {
+      snapshot.updatedAt = new Date().toISOString()
+      writeRunStateAtomic(runDir, snapshot)
+    }
+  }
+}
+
 export async function resolveStepEnvironment(
   step: StepConfig,
   ctx: StepContext,
   workspaceDir: string,
+  snapshot?: RunStateSnapshot,
+  runDir?: string,
 ): Promise<ProvisionedEnvironment> {
   let env: ProvisionedEnvironment
   if (step.environment !== undefined) {
@@ -198,7 +79,7 @@ export async function resolveStepEnvironment(
   else {
     env = createDefaultHostEnvironment(workspaceDir)
   }
-  ctx.environments[env.id] = env
+  recordEnvironment(env, ctx, snapshot, runDir)
   return env
 }
 
@@ -206,13 +87,50 @@ export async function resolveGuardrailEnvironment(
   guardrail: Guardrail<any, any>,
   ctx: StepContext,
   stepEnvironment: ProvisionedEnvironment,
+  snapshot?: RunStateSnapshot,
+  runDir?: string,
 ): Promise<ProvisionedEnvironment> {
   if (guardrail.environment !== undefined) {
     const resolved = await resolveDynamicProperty(guardrail.environment, ctx)
     if (!isProvisionedEnvironment(resolved)) {
       throw new Error('Guardrail environment must resolve to a valid ProvisionedEnvironment.')
     }
+    recordEnvironment(resolved, ctx, snapshot, runDir)
     return resolved
   }
   return stepEnvironment
+}
+
+export interface RehydrateEnvironmentsParams {
+  previousEnvironments?: Record<string, { id: string, type: string, workingDir: string }>
+  ctx: StepContext
+  activeStep?: StepConfig
+  workspaceDir: string
+  snapshot?: RunStateSnapshot
+  runDir?: string
+}
+
+export async function rehydrateEnvironmentsAndCheckHealth(
+  params: RehydrateEnvironmentsParams,
+): Promise<void> {
+  const { previousEnvironments, ctx, activeStep, workspaceDir, snapshot, runDir } = params
+
+  if (previousEnvironments !== undefined) {
+    for (const desc of Object.values(previousEnvironments)) {
+      if (ctx.environments[desc.id] === undefined) {
+        ctx.environments[desc.id] = createHostEnvironmentFromDescriptor(desc)
+      }
+    }
+  }
+
+  if (activeStep?.environment !== undefined) {
+    await resolveStepEnvironment(activeStep, ctx, workspaceDir, snapshot, runDir)
+  }
+
+  for (const env of Object.values(ctx.environments)) {
+    const reachable = await env.ping()
+    if (!reachable) {
+      throw new EnvironmentUnreachableError(env.id, env.workingDir)
+    }
+  }
 }

@@ -12,6 +12,7 @@ export interface RehydrationInfo {
   attempt?: number
   matrixIndex?: number | null
   matrixOutputs?: readonly unknown[]
+  guardrailRetries?: Record<string, number>
 }
 
 function resolvePreviousRehydration(
@@ -21,7 +22,14 @@ function resolvePreviousRehydration(
   const prevSession = previous.activeSessionId
   const hasValidSession = typeof prevSession === 'string' && prevSession.trim() !== ''
   const isMatchingStep = activeStepId !== null && (previous.activeStepId ?? activeStepId) === activeStepId
-  const hasRehydrationData = hasValidSession || typeof previous.activeMatrixIndex === 'number'
+  const hasRehydrationData = hasValidSession
+    || typeof previous.activeMatrixIndex === 'number'
+    || typeof previous.activeStepAttempt === 'number'
+    || previous.activeGuardrailRetries !== undefined
+
+  const guardrailRetries = previous.activeGuardrailRetries
+    ? { ...previous.activeGuardrailRetries }
+    : undefined
 
   if (isMatchingStep && hasRehydrationData) {
     return {
@@ -30,7 +38,51 @@ function resolvePreviousRehydration(
       attempt: previous.activeStepAttempt ?? 1,
       matrixIndex: previous.activeMatrixIndex ?? null,
       matrixOutputs: previous.activeMatrixOutputs ?? [],
+      guardrailRetries,
     }
+  }
+}
+
+function buildSnapshot(
+  runId: string,
+  harnessName: string,
+  activeStepId: string | null,
+  ctxSteps: Record<string, StepResult<unknown>>,
+  rehydration?: RehydrationInfo,
+  previous?: RunStateSnapshot,
+): RunStateSnapshot {
+  const matrixOutputs = rehydration?.matrixOutputs
+    ? [...rehydration.matrixOutputs]
+    : []
+  const guardrailRetries = rehydration?.guardrailRetries
+    ? { ...rehydration.guardrailRetries }
+    : undefined
+  const environments = previous?.environments
+    ? { ...previous.environments }
+    : undefined
+  const artifacts = previous?.artifacts
+    ? [...previous.artifacts]
+    : undefined
+  const logs = previous?.logs
+    ? { ...previous.logs }
+    : undefined
+
+  return {
+    schemaVersion: 1,
+    runId,
+    harnessName,
+    status: 'running',
+    activeStepId,
+    activeSessionId: rehydration?.sessionId ?? null,
+    activeStepAttempt: rehydration?.attempt ?? 1,
+    activeMatrixIndex: rehydration?.matrixIndex ?? null,
+    activeMatrixOutputs: matrixOutputs,
+    activeGuardrailRetries: guardrailRetries,
+    environments,
+    steps: ctxSteps,
+    artifacts,
+    logs,
+    updatedAt: new Date().toISOString(),
   }
 }
 
@@ -40,7 +92,11 @@ export function initOrRehydrateSnapshot(
   harnessName: string,
   steps: readonly StepConfig[],
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
-): { snapshot: RunStateSnapshot, rehydration?: RehydrationInfo } {
+): {
+  snapshot: RunStateSnapshot
+  rehydration?: RehydrationInfo
+  previous?: RunStateSnapshot
+} {
   const isRehydrating = fs.existsSync(path.join(runDir, 'state.json'))
   let activeStepId: string | null = steps[0].id
   let rehydration: RehydrationInfo | undefined
@@ -57,20 +113,7 @@ export function initOrRehydrateSnapshot(
     rehydration = resolvePreviousRehydration(previous, activeStepId)
   }
 
-  const snapshot: RunStateSnapshot = {
-    schemaVersion: 1,
-    runId,
-    harnessName,
-    status: 'running',
-    activeStepId,
-    activeSessionId: null,
-    activeStepAttempt: 1,
-    activeMatrixIndex: null,
-    activeMatrixOutputs: [],
-    activeGuardrailRetries: isRehydrating ? previous?.activeGuardrailRetries : undefined,
-    steps: ctx.steps,
-    updatedAt: new Date().toISOString(),
-  }
+  const snapshot = buildSnapshot(runId, harnessName, activeStepId, ctx.steps, rehydration, previous)
   writeRunStateAtomic(runDir, snapshot)
   appendLedgerEvent(runDir, {
     schemaVersion: 1,
@@ -80,5 +123,5 @@ export function initOrRehydrateSnapshot(
     eventType: isRehydrating ? 'run.resumed' : 'run.started',
     payload: { harnessName },
   })
-  return { snapshot, rehydration }
+  return { snapshot, rehydration, previous }
 }

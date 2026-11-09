@@ -208,7 +208,7 @@ export async function executeAgentStep(
     ?? ctx.environments.host
     ?? createDefaultHostEnvironment(process.cwd())
   let attempt = rehydration?.attempt ?? 1
-  let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index)
+  let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index, mcpServer?.url)
   if (attempt === 1 && typeof beforeStepNotification === 'string' && beforeStepNotification.length > 0) {
     currentPrompt = `${beforeStepNotification}\n\n${currentPrompt}`
   }

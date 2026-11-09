@@ -25,6 +25,12 @@ const logMetadataSchema = z.object({
   createdAt: z.string().optional(),
 })
 
+const environmentDescriptorSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  workingDir: z.string(),
+})
+
 export const runStateSnapshotSchema = z.object({
   schemaVersion: z.literal(SUPPORTED_SCHEMA_VERSION),
   runId: z.string(),
@@ -36,6 +42,7 @@ export const runStateSnapshotSchema = z.object({
   activeMatrixIndex: z.number().int().nonnegative().nullable().optional(),
   activeMatrixOutputs: z.array(z.unknown()).optional(),
   activeGuardrailRetries: z.record(z.string(), z.number()).optional(),
+  environments: z.record(z.string(), environmentDescriptorSchema).optional(),
   steps: z.record(z.string(), stepResultSchema),
   artifacts: z.array(z.string()).optional(),
   logs: z.record(z.string(), logMetadataSchema).optional(),

@@ -3,6 +3,12 @@ import type { LogMetadata } from './log.js'
 
 export type RunStatus = 'running' | 'passed' | 'failed'
 
+export interface EnvironmentDescriptor {
+  id: string
+  type: string
+  workingDir: string
+}
+
 export interface RunStateSnapshot {
   schemaVersion: 1
   runId: string
@@ -14,6 +20,7 @@ export interface RunStateSnapshot {
   activeMatrixIndex?: number | null
   activeMatrixOutputs?: unknown[]
   activeGuardrailRetries?: Record<string, number>
+  environments?: Record<string, EnvironmentDescriptor>
   steps: Record<string, StepResult<unknown>>
   artifacts?: string[]
   logs?: Record<string, LogMetadata>

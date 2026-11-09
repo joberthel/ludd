@@ -1,90 +1,8 @@
-import type { HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
-import type { RehydratedAgentState } from './runtime/agent-executor.js'
-import type {
-  BeforeStepExecutionResult,
-  RunBeforeStepGuardrailsParams,
-} from './runtime/before-step-executor.js'
-import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.js'
-import type {
-  AgentAccessMode,
-  AgentRunner,
-  AgentStepOutput,
-  AgentTurnInput,
-  AgentTurnResult,
-} from './types/agent.js'
-import type {
-  ArtifactClient,
-  ArtifactValidationIssue,
-  ArtifactValidationRule,
-  EmbeddedMcpServer,
-} from './types/artifact.js'
-import type {
-  DynamicProperty,
-  MatrixCursor,
-  StepContext,
-  StepResult,
-  StepStatus,
-} from './types/context.js'
-import type {
-  EnvironmentExecOptions,
-  EnvironmentExecResult,
-  ProvisionedEnvironment,
-} from './types/environment.js'
-import type {
-  ExecLogPaginationConfig,
-  ExecLogPaginationSelector,
-  Guardrail,
-  GuardrailExecutionInput,
-  GuardrailPhase,
-  GuardrailStatus,
-  GuardrailVerdict,
-  OnMaxRetriesExceededAction,
-} from './types/guardrail.js'
-import type {
-  AccumulateArtifactItemMap,
-  AccumulatePriorSteps,
-  ArtifactMatrixStepDef,
-  CleanupPolicy,
-  CleanupPolicyAction,
-  DerivedStepContext,
-  HarnessConfig,
-  InferArrayItem,
-  InferMatrixItem,
-  InferSingleStepOutput,
-  InferStepOutput,
-  ItemsMatrixStepDef,
-  MatrixArtifactConfig,
-  MatrixConfig,
-  MatrixItemsConfig,
-  PlainStepDef,
-  PriorStepContext,
-  StepArtifactItemMap,
-  StepConfig,
-  StepHasMatrix,
-  StepRunFn,
-  StepTupleEntry,
-  TypedStep,
-} from './types/harness.js'
-import type { LedgerEvent, LedgerEventType } from './types/ledger.js'
-import type {
-  LogFormat,
-  LogMetadata,
-  LogStore,
-  OffloadLogOptions,
-  ReadLogLinesResult,
-  ReadLogPageJsonResult,
-  ReadLogPageResult,
-  ReadLogPageTextResult,
-  SearchLogMatch,
-  SearchLogResult,
-} from './types/log.js'
-import type { RunStateSnapshot, RunStatus } from './types/state.js'
-import type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
-
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
+export { EnvironmentUnreachableError } from './errors/environment-unreachable-error.js'
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
-export { HarnessConfigLoadError } from './errors/harness-config-load-error.js'
+export { HarnessConfigLoadError, type HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
 export {
   DEFAULT_MAX_TOTAL_TURNS,
   MaxTotalTurnsExceededError,
@@ -125,6 +43,7 @@ export {
   createAgentStepOutput,
   executeAgentStep,
   formatRetryPrompt,
+  type RehydratedAgentState,
   validateStepOutput,
 } from './runtime/agent-executor.js'
 export {
@@ -132,11 +51,17 @@ export {
   validateStepArtifacts,
 } from './runtime/artifact-validator.js'
 export {
+  type BeforeStepExecutionResult,
   formatBeforeStepNotification,
   runBeforeStepGuardrails,
+  type RunBeforeStepGuardrailsParams,
 } from './runtime/before-step-executor.js'
 export {
   createDefaultHostEnvironment,
+  createHostEnvironmentFromDescriptor,
+  recordEnvironment,
+  rehydrateEnvironmentsAndCheckHealth,
+  type RehydrateEnvironmentsParams,
   resolveGuardrailEnvironment,
   resolveStepEnvironment,
 } from './runtime/environment-manager.js'
@@ -149,81 +74,84 @@ export {
   executeMatrixStep,
   resolveMatrixItems,
 } from './runtime/matrix-executor.js'
-export { runHarness } from './runtime/run-harness.js'
-export { isProvisionedEnvironment } from './types/environment.js'
-export { isGuardrail } from './types/guardrail.js'
-export { isAgentRunner } from './types/harness.js'
-export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
-
+export { type HarnessRunResult, runHarness, type RunHarnessOptions } from './runtime/run-harness.js'
 export type {
-  AccumulateArtifactItemMap,
-  AccumulatePriorSteps,
   AgentAccessMode,
   AgentRunner,
   AgentStepOutput,
-  AgentStreamEvent,
-  AgentStreamEventType,
   AgentTurnInput,
   AgentTurnResult,
+} from './types/agent.js'
+export type {
   ArtifactClient,
-  ArtifactMatrixStepDef,
   ArtifactValidationIssue,
   ArtifactValidationRule,
-  BeforeStepExecutionResult,
-  CleanupPolicy,
-  CleanupPolicyAction,
-  DerivedStepContext,
-  DynamicProperty,
   EmbeddedMcpServer,
-  EnvironmentExecOptions,
-  EnvironmentExecResult,
-  ExecLogPaginationConfig,
-  ExecLogPaginationSelector,
-  Guardrail,
-  GuardrailExecutionInput,
-  GuardrailPhase,
-  GuardrailStatus,
-  GuardrailVerdict,
-  HarnessConfig,
-  HarnessConfigLoadErrorOptions,
-  HarnessRunResult,
-  InferArrayItem,
-  InferMatrixItem,
-  InferSingleStepOutput,
-  InferStepOutput,
-  ItemsMatrixStepDef,
-  LedgerEvent,
-  LedgerEventType,
+} from './types/artifact.js'
+export type {
+  DynamicProperty,
+  MatrixCursor,
+  StepContext,
+  StepResult,
+  StepStatus,
+} from './types/context.js'
+export {
+  type EnvironmentExecOptions,
+  type EnvironmentExecResult,
+  isProvisionedEnvironment,
+  type ProvisionedEnvironment,
+} from './types/environment.js'
+
+export {
+  type ExecLogPaginationConfig,
+  type ExecLogPaginationSelector,
+  type Guardrail,
+  type GuardrailExecutionInput,
+  type GuardrailPhase,
+  type GuardrailStatus,
+  type GuardrailVerdict,
+  isGuardrail,
+  type OnMaxRetriesExceededAction,
+} from './types/guardrail.js'
+export {
+  type AccumulateArtifactItemMap,
+  type AccumulatePriorSteps,
+  type ArtifactMatrixStepDef,
+  type CleanupPolicy,
+  type CleanupPolicyAction,
+  type DerivedStepContext,
+  type HarnessConfig,
+  type InferArrayItem,
+  type InferMatrixItem,
+  type InferSingleStepOutput,
+  type InferStepOutput,
+  isAgentRunner,
+  type ItemsMatrixStepDef,
+  type MatrixArtifactConfig,
+  type MatrixConfig,
+  type MatrixItemsConfig,
+  type PlainStepDef,
+  type PriorStepContext,
+  type StepArtifactItemMap,
+  type StepConfig,
+  type StepHasMatrix,
+  type StepRunFn,
+  type StepTupleEntry,
+  type TypedStep,
+} from './types/harness.js'
+export type { LedgerEvent, LedgerEventType } from './types/ledger.js'
+export type {
   LogFormat,
   LogMetadata,
   LogStore,
-  MatrixArtifactConfig,
-  MatrixConfig,
-  MatrixCursor,
-  MatrixItemsConfig,
   OffloadLogOptions,
-  OnMaxRetriesExceededAction,
-  PlainStepDef,
-  PriorStepContext,
-  ProvisionedEnvironment,
   ReadLogLinesResult,
   ReadLogPageJsonResult,
   ReadLogPageResult,
   ReadLogPageTextResult,
-  RehydratedAgentState,
-  RunBeforeStepGuardrailsParams,
-  RunHarnessOptions,
-  RunStateSnapshot,
-  RunStatus,
   SearchLogMatch,
   SearchLogResult,
-  StepArtifactItemMap,
-  StepConfig,
-  StepContext,
-  StepHasMatrix,
-  StepResult,
-  StepRunFn,
-  StepStatus,
-  StepTupleEntry,
-  TypedStep,
-}
+} from './types/log.js'
+export type { EnvironmentDescriptor, RunStateSnapshot, RunStatus } from './types/state.js'
+export type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
+export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'

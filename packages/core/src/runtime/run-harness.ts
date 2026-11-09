@@ -1,8 +1,7 @@
-import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
+import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
-import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
@@ -10,39 +9,28 @@ import type { RehydrationInfo } from './harness-rehydration.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
-import { createArtifactStore } from '../mcp/artifact-store.js'
-import { createLogStore } from '../mcp/log-store.js'
+import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
-import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
-import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
-import { resolveStepEnvironment } from './environment-manager.js'
+import { readRunState, resolveRunDir } from '../persistence/state-store.js'
+import {
+  rehydrateEnvironmentsAndCheckHealth,
+  resolveStepEnvironment,
+} from './environment-manager.js'
 import { initOrRehydrateSnapshot } from './harness-rehydration.js'
 import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
+import {
+  clearActiveAndPersist,
+  createInitialContext,
+  emitLedgerEvent,
+  handleStepFailure,
+  persistSnapshot,
+  recordStepResult,
+  resolveOption,
+  setupHarnessStores,
+} from './run-harness-lifecycle.js'
 
 export type { HarnessRunResult, RunHarnessOptions }
-
-function resolveOption(value: string | undefined, fallback: () => string): string {
-  const trimmed = value?.trim()
-  return (trimmed !== undefined && trimmed.length > 0)
-    ? trimmed
-    : fallback()
-}
-
-function createInitialContext(
-  runId: string,
-  runDir: string,
-  artifacts: ArtifactClient = createArtifactStore(runDir),
-): StepContext<unknown, Record<string, StepResult<unknown>>> {
-  return {
-    runId,
-    environments: {},
-    steps: {},
-    step: { id: '', output: undefined, attempt: 1 },
-    matrix: undefined,
-    artifacts,
-  }
-}
 
 async function executeStep(
   step: StepConfig,
@@ -57,79 +45,6 @@ async function executeStep(
   return step.matrix !== undefined
     ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
     : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
-}
-
-function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
-  snapshot.activeStepId = null
-  snapshot.activeSessionId = null
-  snapshot.activeStepAttempt = 1
-  snapshot.activeMatrixIndex = null
-  snapshot.activeMatrixOutputs = []
-  snapshot.activeGuardrailRetries = undefined
-  persistSnapshot(runDir, snapshot)
-}
-
-function persistSnapshot(runDir: string, snapshot: RunStateSnapshot): void {
-  snapshot.updatedAt = new Date().toISOString()
-  writeRunStateAtomic(runDir, snapshot)
-}
-
-function emitLedgerEvent(
-  runDir: string,
-  runId: string,
-  stepId: string | null,
-  eventType: LedgerEventType,
-  payload: Record<string, unknown>,
-  matrixIndex?: number,
-): void {
-  appendLedgerEvent(runDir, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId,
-    stepId,
-    matrixIndex,
-    eventType,
-    payload,
-  })
-}
-
-function handleStepFailure(
-  runDir: string,
-  snapshot: RunStateSnapshot,
-  stepId: string,
-  error: unknown,
-  matrixIndex?: number,
-): HarnessRunResult {
-  const errorMessage = (error as { message?: string } | null)?.message ?? String(error)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage }, matrixIndex)
-  emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
-  snapshot.steps[stepId] = { status: 'failed', output: undefined }
-  snapshot.status = 'failed'
-  snapshot.activeStepId = null
-  persistSnapshot(runDir, snapshot)
-  return {
-    runId: snapshot.runId,
-    status: 'failed',
-    steps: snapshot.steps,
-    failedStepId: stepId,
-    error,
-  }
-}
-
-function recordStepResult(
-  runDir: string,
-  snapshot: RunStateSnapshot,
-  stepId: string,
-  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
-  status: 'passed' | 'skipped',
-  output?: unknown,
-): void {
-  ctx.step = { id: stepId, output, attempt: ctx.step.attempt }
-  ctx.steps[stepId] = { status, output }
-  clearActiveAndPersist(runDir, snapshot)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, status === 'passed'
-    ? { output }
-    : {})
 }
 
 async function runStep(
@@ -154,7 +69,7 @@ async function runStep(
       return null
     }
 
-    const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir)
+    const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir)
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
     const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
@@ -168,26 +83,83 @@ async function runStep(
   }
 }
 
-function setupHarnessStores(
-  runDir: string,
+async function executeStepPipeline(
+  steps: readonly StepConfig[],
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
   snapshot: RunStateSnapshot,
-): { artifactStore: ArtifactClient, logStore: LogStore } {
-  const artifactStore = createArtifactStore(runDir, {
-    onArtifactPut: (key) => {
-      const items = snapshot.artifacts ?? []
-      if (!items.includes(key)) {
-        snapshot.artifacts = [...items, key]
-        persistSnapshot(runDir, snapshot)
-      }
-    },
-  })
-  const logStore = createLogStore(runDir, {
-    onLogPersisted: (key, meta) => {
-      snapshot.logs = { ...snapshot.logs, [key]: meta }
-      persistSnapshot(runDir, snapshot)
-    },
-  })
-  return { artifactStore, logStore }
+  runDir: string,
+  workspaceDir: string,
+  rehydration?: RehydrationInfo,
+  mcpServer?: EmbeddedMcpServer,
+  logStore?: LogStore,
+): Promise<HarnessRunResult | null> {
+  for (const step of steps) {
+    if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
+      continue
+    }
+    const stepRehydration = rehydration?.stepId === step.id
+      ? rehydration
+      : undefined
+    const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore)
+    if (failure !== null) {
+      return failure
+    }
+  }
+  return null
+}
+
+interface PreparedRun {
+  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>
+  snapshot: RunStateSnapshot
+  rehydration?: RehydrationInfo
+  mcpServer: EmbeddedMcpServer
+  logStore: LogStore
+}
+
+async function prepareRunContext(
+  validatedConfig: HarnessConfig,
+  runDir: string,
+  runId: string,
+  workspaceDir: string,
+): Promise<PreparedRun> {
+  const ctx = createInitialContext(runId, runDir)
+  const steps = validatedConfig.steps
+  const initResult = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx)
+  const snapshot = initResult.snapshot
+  if (initResult.previous !== undefined) {
+    const activeStep = steps.find(s => !['passed', 'skipped'].includes(ctx.steps[s.id]?.status ?? ''))
+    await rehydrateEnvironmentsAndCheckHealth({
+      previousEnvironments: initResult.previous.environments,
+      ctx,
+      activeStep,
+      workspaceDir,
+      snapshot,
+      runDir,
+    })
+  }
+  const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
+  ctx.artifacts = artifactStore
+  const mcpServer = await startEmbeddedMcpServer(runDir, { artifactStore, logStore })
+  return {
+    ctx,
+    snapshot,
+    rehydration: initResult.rehydration,
+    mcpServer,
+    logStore,
+  }
+}
+
+function handleRunError(error: unknown, runDir: string, runId: string, snapshot?: RunStateSnapshot): void {
+  if (error instanceof EnvironmentUnreachableError) {
+    emitLedgerEvent(runDir, runId, null, 'run.failed', {
+      error: error.message,
+      envId: error.envId,
+      workingDir: error.workingDir,
+    })
+    const state = snapshot ?? readRunState(runDir)
+    state.status = 'failed'
+    persistSnapshot(runDir, state)
+  }
 }
 
 export async function runHarness(
@@ -198,42 +170,36 @@ export async function runHarness(
   const runId = resolveOption(options?.runId, randomUUID)
   const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
   const runDir = resolveRunDir(workspaceDir, runId)
-
   acquireRunPidLock(runDir, runId)
   let mcpServer: EmbeddedMcpServer | undefined
+  let snapshot: RunStateSnapshot | undefined
 
   try {
-    const ctx = createInitialContext(runId, runDir)
-    const steps = validatedConfig.steps
-    const { snapshot, rehydration } = initOrRehydrateSnapshot(
+    const prepared = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir)
+    mcpServer = prepared.mcpServer
+    snapshot = prepared.snapshot
+
+    const failure = await executeStepPipeline(
+      validatedConfig.steps,
+      prepared.ctx,
+      snapshot,
       runDir,
-      runId,
-      validatedConfig.name,
-      steps,
-      ctx,
+      workspaceDir,
+      prepared.rehydration,
+      mcpServer,
+      prepared.logStore,
     )
-    const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
-    ctx.artifacts = artifactStore
-    mcpServer = await startEmbeddedMcpServer(runDir, { artifactStore, logStore })
-
-    for (const step of steps) {
-      if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
-        continue
-      }
-      const stepRehydration = rehydration?.stepId === step.id
-        ? rehydration
-        : undefined
-      const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore)
-      if (failure !== null) {
-        return failure
-      }
+    if (failure !== null) {
+      return failure
     }
-
     snapshot.status = 'passed'
     clearActiveAndPersist(runDir, snapshot)
     emitLedgerEvent(runDir, runId, null, 'run.passed', {})
-
-    return { runId, status: 'passed', steps: ctx.steps }
+    return { runId, status: 'passed', steps: prepared.ctx.steps }
+  }
+  catch (error: unknown) {
+    handleRunError(error, runDir, runId, snapshot)
+    throw error
   }
   finally {
     await mcpServer?.close()

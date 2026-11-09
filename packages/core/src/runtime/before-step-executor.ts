@@ -63,12 +63,14 @@ async function resolveGuardrailEnv(
   ctx: StepContext,
   stepId: string,
   stepEnvironment?: ProvisionedEnvironment,
+  snapshot?: RunStateSnapshot,
+  runDir?: string,
 ): Promise<ProvisionedEnvironment> {
   const fallback = stepEnvironment
     ?? ctx.environments[stepId]
     ?? ctx.environments.host
     ?? createDefaultHostEnvironment(process.cwd())
-  return resolveGuardrailEnvironment(guardrail, ctx, fallback)
+  return resolveGuardrailEnvironment(guardrail, ctx, fallback, snapshot, runDir)
 }
 
 function resolveBeforeStepContent(guardrailIndex: number, verdict: GuardrailVerdict): string {
@@ -129,7 +131,7 @@ async function executeSingleBeforeStepGuardrail(
     attempt: 1,
   })
 
-  const env = await resolveGuardrailEnv(guardrail, ctx, step.id, environment)
+  const env = await resolveGuardrailEnv(guardrail, ctx, step.id, environment, snapshot, runDir)
   const verdict = await guardrail.execute({
     ctx,
     stepId: step.id,
