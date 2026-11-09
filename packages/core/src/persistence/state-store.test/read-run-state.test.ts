@@ -26,6 +26,7 @@ describe('readRunState writeRunStateAtomic round-trip', () => {
       harnessName: 'roundtrip-harness',
       status: 'passed',
       activeStepId: null,
+      activeGuardrailRetries: { 0: 2 },
       steps: {
         'step-passed-with-payload': {
           status: 'passed',

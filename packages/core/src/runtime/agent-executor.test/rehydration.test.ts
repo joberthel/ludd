@@ -159,3 +159,54 @@ describe('executeAgentStep rehydration without ledger file', () => {
     expect(capturedPrompt).toBe('initial prompt text')
   })
 })
+
+describe('executeAgentStep rehydration with guardrail retry event', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-rehydrate-guard-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('reconstructs prompt using formatGuardrailRetryPrompt on guardrail_failed', async () => {
+    appendLedgerEvent(tempDir, {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-exec-test',
+      stepId: 's-guard-rehydrate',
+      eventType: 'step.retry',
+      payload: {
+        attempt: 2,
+        sessionId: 'sess-guard',
+        reason: 'guardrail_failed',
+        issues: {
+          guardrailIndex: 1,
+          verdict: { status: 'fail', body: 'phpstan error on line 42' },
+        },
+      },
+    })
+
+    let capturedPrompt: string | undefined
+    const agent: AgentRunner<string> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'initial prompt text',
+      executeTurn: async (input) => {
+        capturedPrompt = input.prompt
+        return { output: 'resumed-output', sessionId: input.sessionId }
+      },
+    }
+    const step: StepConfig = { id: 's-guard-rehydrate', run: agent }
+
+    await executeAgentStep(step, agent, createDummyContext(), createDummySnapshot('s-guard-rehydrate'), tempDir, {
+      sessionId: 'sess-guard',
+      attempt: 2,
+    })
+
+    expect(capturedPrompt).toContain('The step failed afterStep guardrail #1.')
+    expect(capturedPrompt).toContain('phpstan error on line 42')
+    expect(capturedPrompt).toContain('initial prompt text')
+  })
+})

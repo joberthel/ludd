@@ -9,6 +9,7 @@ import { isAgentRunner } from '../types/harness.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
 import { validateStepArtifacts } from './artifact-validator.js'
+import { runAfterStepGuardrails } from './guardrail-executor.js'
 
 export async function resolveMatrixItems(
   stepId: string,
@@ -64,7 +65,34 @@ export async function executeSingleSlice(
   const rawOutput: unknown = await step.run(ctx)
   const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
   await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
+  ctx.step = { id: step.id, output: validated, attempt: ctx.step.attempt }
+  await runAfterStepGuardrails({
+    step,
+    ctx,
+    snapshot,
+    runDir,
+    attempt: ctx.step.attempt,
+    sessionId: undefined,
+    maxTotalTurns: 1,
+    initialPrompt: '',
+    mcpServer,
+  })
   return validated
+}
+
+function persistSliceState(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  outputs: unknown[],
+  index: number | null,
+): void {
+  snapshot.activeMatrixOutputs = [...outputs]
+  snapshot.activeMatrixIndex = index
+  snapshot.activeSessionId = null
+  snapshot.activeStepAttempt = 1
+  snapshot.activeGuardrailRetries = undefined
+  snapshot.updatedAt = new Date().toISOString()
+  writeRunStateAtomic(runDir, snapshot)
 }
 
 export async function executeMatrixStep(
@@ -109,14 +137,9 @@ export async function executeMatrixStep(
     )
     outputs.push(sliceOutput)
 
-    snapshot.activeMatrixOutputs = [...outputs]
-    snapshot.activeMatrixIndex = index + 1 < total
+    persistSliceState(runDir, snapshot, outputs, index + 1 < total
       ? index + 1
-      : null
-    snapshot.activeSessionId = null
-    snapshot.activeStepAttempt = 1
-    snapshot.updatedAt = new Date().toISOString()
-    writeRunStateAtomic(runDir, snapshot)
+      : null)
   }
   ctx.matrix = undefined
   return outputs

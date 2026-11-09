@@ -28,10 +28,9 @@ interface RehydrationInfo {
 
 function resolveOption(value: string | undefined, fallback: () => string): string {
   const trimmed = value?.trim()
-  if (typeof trimmed === 'string' && trimmed.length > 0) {
-    return trimmed
-  }
-  return fallback()
+  return (trimmed !== undefined && trimmed.length > 0)
+    ? trimmed
+    : fallback()
 }
 
 function createInitialContext(runId: string, runDir: string): StepContext<unknown, Record<string, StepResult<unknown>>> {
@@ -64,6 +63,7 @@ function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void
   snapshot.activeStepAttempt = 1
   snapshot.activeMatrixIndex = null
   snapshot.activeMatrixOutputs = []
+  snapshot.activeGuardrailRetries = undefined
   persistSnapshot(runDir, snapshot)
 }
 
@@ -119,9 +119,10 @@ function initOrRehydrateSnapshot(
   const isRehydrating = fs.existsSync(path.join(runDir, 'state.json'))
   let activeStepId: string | null = steps[0].id
   let rehydration: RehydrationInfo | undefined
+  let previous: RunStateSnapshot | undefined
 
   if (isRehydrating) {
-    const previous = readRunState(runDir)
+    previous = readRunState(runDir)
     for (const [id, result] of Object.entries(previous.steps)) {
       if (result.status === 'passed' || result.status === 'skipped') {
         ctx.steps[id] = result
@@ -141,6 +142,7 @@ function initOrRehydrateSnapshot(
     activeStepAttempt: 1,
     activeMatrixIndex: null,
     activeMatrixOutputs: [],
+    activeGuardrailRetries: isRehydrating ? previous?.activeGuardrailRetries : undefined,
     steps: ctx.steps,
     updatedAt: new Date().toISOString(),
   }
@@ -183,10 +185,9 @@ function recordStepResult(
   ctx.step = { id: stepId, output, attempt: ctx.step.attempt }
   ctx.steps[stepId] = { status, output }
   clearActiveAndPersist(runDir, snapshot)
-  const payload = status === 'passed'
+  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, status === 'passed'
     ? { output }
-    : {}
-  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, payload)
+    : {})
 }
 
 async function runStep(

@@ -157,3 +157,27 @@ describe('readLedgerEvents structural validation (AC 2.3.3)', () => {
     expect(events[0].eventType).toBe('step.retry')
   })
 })
+
+describe('readLedgerEvents guardrail events validation', () => {
+  it('accepts guardrail event envelopes', () => {
+    const types = [
+      'guardrail.started',
+      'guardrail.passed',
+      'guardrail.skipped',
+      'guardrail.failed',
+    ] as const
+    const runDir = writeRawLedger(
+      types.map((eventType, i) => ({
+        schemaVersion: 1,
+        timestamp: '2026-11-08T20:00:00.000Z',
+        runId: 'r-1',
+        stepId: 'step-1',
+        eventType,
+        payload: { guardrailIndex: i, phase: 'afterStep' },
+      })),
+    )
+    const events = readLedgerEvents(runDir)
+    expect(events).toHaveLength(4)
+    expect(events.map(e => e.eventType)).toEqual(types)
+  })
+})

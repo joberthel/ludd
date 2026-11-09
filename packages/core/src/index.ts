@@ -23,6 +23,16 @@ import type {
   StepStatus,
 } from './types/context.js'
 import type {
+  ExecLogPaginationConfig,
+  ExecLogPaginationSelector,
+  Guardrail,
+  GuardrailExecutionInput,
+  GuardrailPhase,
+  GuardrailStatus,
+  GuardrailVerdict,
+  OnMaxRetriesExceededAction,
+} from './types/guardrail.js'
+import type {
   AccumulateArtifactItemMap,
   AccumulatePriorSteps,
   ArtifactMatrixStepDef,
@@ -52,6 +62,7 @@ import type { RunStateSnapshot, RunStatus } from './types/state.js'
 import type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
+export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError } from './errors/harness-config-load-error.js'
 export {
@@ -98,6 +109,7 @@ export {
   resolveMatrixItems,
 } from './runtime/matrix-executor.js'
 export { runHarness } from './runtime/run-harness.js'
+export { isGuardrail } from './types/guardrail.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
 
@@ -120,6 +132,13 @@ export type {
   DerivedStepContext,
   DynamicProperty,
   EmbeddedMcpServer,
+  ExecLogPaginationConfig,
+  ExecLogPaginationSelector,
+  Guardrail,
+  GuardrailExecutionInput,
+  GuardrailPhase,
+  GuardrailStatus,
+  GuardrailVerdict,
   HarnessConfig,
   HarnessConfigLoadErrorOptions,
   HarnessRunResult,
@@ -134,6 +153,7 @@ export type {
   MatrixConfig,
   MatrixCursor,
   MatrixItemsConfig,
+  OnMaxRetriesExceededAction,
   PlainStepDef,
   PriorStepContext,
   ProvisionedEnvironment,

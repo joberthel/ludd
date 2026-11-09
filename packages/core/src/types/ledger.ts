@@ -9,6 +9,10 @@ export type LedgerEventType
     | 'step.failed'
     | 'step.retry'
     | 'agent.stream.linked'
+    | 'guardrail.started'
+    | 'guardrail.passed'
+    | 'guardrail.skipped'
+    | 'guardrail.failed'
 
 export interface LedgerEvent<TPayload = Record<string, unknown>> {
   schemaVersion: 1

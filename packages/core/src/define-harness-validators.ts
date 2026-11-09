@@ -1,4 +1,5 @@
 import { HarnessConfigError } from './errors/harness-config-error.js'
+import { isGuardrail } from './types/guardrail.js'
 import { isAgentRunner } from './types/harness.js'
 
 export function validateCleanupPolicy(policy: unknown): void {
@@ -104,6 +105,28 @@ export function validateStepMatrixConfig(id: string, matrix: unknown): void {
   }
 }
 
+export function validateStepGuardrailsConfig(
+  id: string,
+  phase: 'beforeStep' | 'afterStep',
+  guardrails: unknown,
+): void {
+  if (guardrails === undefined) {
+    return
+  }
+  if (!Array.isArray(guardrails)) {
+    throw new HarnessConfigError(
+      `Step "${id}" "${phase}" property must be an array when provided.`,
+    )
+  }
+  for (let i = 0; i < guardrails.length; i++) {
+    if (!isGuardrail(guardrails[i])) {
+      throw new HarnessConfigError(
+        `Step "${id}" ${phase} at index ${i} must be a valid Guardrail instance.`,
+      )
+    }
+  }
+}
+
 export function validateStep(step: unknown, index: number, seenIds: Set<string>): void {
   if (typeof step !== 'object' || step === null || Array.isArray(step)) {
     throw new HarnessConfigError(`Step at index ${index} must be a non-null object.`)
@@ -141,6 +164,8 @@ export function validateStep(step: unknown, index: number, seenIds: Set<string>)
 
   validateStepArtifactsConfig(id, rawStep.artifacts)
   validateStepMatrixConfig(id, rawStep.matrix)
+  validateStepGuardrailsConfig(id, 'beforeStep', rawStep.beforeStep)
+  validateStepGuardrailsConfig(id, 'afterStep', rawStep.afterStep)
 
   if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
     throw new HarnessConfigError(

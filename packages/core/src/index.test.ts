@@ -33,6 +33,8 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.StepOutputValidationError).toBe('function')
     expect(typeof core.StepArtifactValidationError).toBe('function')
     expect(typeof core.StepMatrixResolutionError).toBe('function')
+    expect(typeof core.GuardrailMaxRetriesExceededError).toBe('function')
+    expect(typeof core.isGuardrail).toBe('function')
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
     expect(typeof core.formatRetryPrompt).toBe('function')

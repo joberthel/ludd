@@ -8,6 +8,9 @@ import type {
 } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
 import type { DynamicProperty, StepContext, StepResult } from './context.js'
+import type { Guardrail } from './guardrail.js'
+
+export { isGuardrail } from './guardrail.js'
 
 export type {
   AgentAccessMode,
@@ -94,6 +97,8 @@ export interface StepConfig<
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
   artifacts?: TArtifacts
+  beforeStep?: readonly Guardrail<any, any>[]
+  afterStep?: readonly Guardrail<any, any>[]
   run: StepRunFn<TOutput, TContext> | AgentRunner<TOutput, TContext>
 }
 
