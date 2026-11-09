@@ -1,4 +1,5 @@
 import type { AgentAccessMode, AgentRunner } from '../types/agent.js'
+import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
 import type { RunStateSnapshot } from '../types/state.js'
@@ -179,6 +180,7 @@ export async function executeAgentStep(
   snapshot: RunStateSnapshot,
   runDir: string,
   rehydration?: RehydratedAgentState,
+  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
@@ -203,6 +205,8 @@ export async function executeAgentStep(
       attempt,
       mode: agent.mode,
       runDir,
+      mcpServerUrl: mcpServer?.url ?? '',
+      mcpAuthToken: mcpServer?.authToken ?? '',
     })
     emitTurnCompleted(runDir, ctx, step.id, sessionId, turnResult.output, attempt)
 

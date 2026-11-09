@@ -1,3 +1,7 @@
+import type { ArtifactClient } from './artifact.js'
+
+export type { ArtifactClient }
+
 export type StepStatus = 'passed' | 'failed' | 'skipped'
 
 export interface StepResult<TOutput = unknown> {
@@ -9,8 +13,6 @@ export interface ProvisionedEnvironment {
   id: string
   [key: string]: unknown
 }
-
-export type ArtifactClient = Record<string, unknown>
 
 export interface MatrixCursor<TMatrixItem = unknown> {
   index: number

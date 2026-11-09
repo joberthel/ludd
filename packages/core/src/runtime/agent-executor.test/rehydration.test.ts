@@ -1,5 +1,5 @@
 import type { AgentRunner } from '../../types/agent.js'
-import type { StepContext } from '../../types/context.js'
+import type { ArtifactClient, StepContext } from '../../types/context.js'
 import type { StepConfig } from '../../types/harness.js'
 import type { RunStateSnapshot } from '../../types/state.js'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -16,7 +16,7 @@ function createDummyContext(): StepContext {
     steps: {},
     step: { id: 'test-step', output: undefined, attempt: 1 },
     matrix: undefined,
-    artifacts: {},
+    artifacts: {} as ArtifactClient,
   }
 }
 

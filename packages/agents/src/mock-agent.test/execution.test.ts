@@ -1,4 +1,4 @@
-import type { AgentTurnInput } from '@ludd/core'
+import type { AgentTurnInput, ArtifactClient } from '@ludd/core'
 import { describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 
@@ -10,7 +10,7 @@ describe('mockAgent turn execution and response exhaustion', () => {
       steps: {},
       step: { id: 's-1', output: undefined, attempt: 1 },
       matrix: undefined,
-      artifacts: {},
+      artifacts: {} as ArtifactClient,
     },
     stepId: 's-1',
     prompt: 'hello',
@@ -18,6 +18,8 @@ describe('mockAgent turn execution and response exhaustion', () => {
     attempt: 1,
     mode: 'read-only',
     runDir: '/tmp/run',
+    mcpServerUrl: 'http://127.0.0.1:0/mcp',
+    mcpAuthToken: 'dummy-token',
   }
 
   it('sequentially consumes static values and function responses', async () => {

@@ -13,17 +13,20 @@ describe('runHarness configuration validation', () => {
   let tempDir: string
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-cfg-val-'))
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-cfg-test-'))
   })
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
   it('rejects invalid harness configuration with HarnessConfigError', async () => {
-    const invalid = { name: '', steps: [] } as unknown as HarnessConfig
+    const invalid = {
+      name: 'invalid',
+      steps: [],
+    } as unknown as HarnessConfig
     await expect(runHarness(invalid, { workspaceDir: tempDir })).rejects.toThrow(HarnessConfigError)
     const noRun = {
-      name: 'inv',
+      name: 'invalid-run',
       steps: [
         { id: 's1' },
       ],
@@ -32,7 +35,7 @@ describe('runHarness configuration validation', () => {
   })
 })
 
-describe('runHarness runId and workspaceDir resolution', () => {
+describe('runHarness runId and workspaceDir defaults', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -65,8 +68,19 @@ describe('runHarness runId and workspaceDir resolution', () => {
     expect((await runHarness(minimal, { workspaceDir: '   ' })).status).toBe('passed')
     expect(cwdSpy).toHaveBeenCalled()
   })
+})
 
-  it('passes runId and initializes empty context properties', async () => {
+describe('runHarness context initialization', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-cfg-ctx-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('passes runId and initializes context properties and artifact store', async () => {
     let captured: any
     const result = await runHarness({
       name: 'ctx-init',
@@ -82,6 +96,9 @@ describe('runHarness runId and workspaceDir resolution', () => {
     expect(result.runId).toBe('issue-124-9f8a')
     expect(captured.runId).toBe('issue-124-9f8a')
     expect(captured.environments).toEqual({})
-    expect(captured.artifacts).toEqual({})
+    expect(typeof captured.artifacts.put).toBe('function')
+    expect(typeof captured.artifacts.get).toBe('function')
+    expect(typeof captured.artifacts.getJson).toBe('function')
+    expect(typeof captured.artifacts.has).toBe('function')
   })
 })

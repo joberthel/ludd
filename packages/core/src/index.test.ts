@@ -22,6 +22,8 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.executeAgentStep).toBe('function')
     expect(typeof core.createAgentStepOutput).toBe('function')
     expect(typeof core.validateStepOutput).toBe('function')
+    expect(typeof core.createArtifactStore).toBe('function')
+    expect(typeof core.startEmbeddedMcpServer).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
     expect(typeof core.HarnessConfigLoadError).toBe('function')
     expect(typeof core.RunAlreadyActiveError).toBe('function')
@@ -43,7 +45,7 @@ describe('@ludd/core harness and configuration exports', () => {
       steps: {},
       step: { id: 's-1', output: null, attempt: 1 },
       matrix: undefined,
-      artifacts: {},
+      artifacts: {} as core.ArtifactClient,
     } satisfies StepContext
     const resolved = await core.resolveDynamicProperty((c: StepContext) => c.runId, ctx)
     expect(resolved).toBe('r-1')

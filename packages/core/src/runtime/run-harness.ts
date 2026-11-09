@@ -1,3 +1,4 @@
+import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
@@ -8,6 +9,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
+import { createArtifactStore } from '../mcp/artifact-store.js'
+import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
@@ -29,14 +32,14 @@ function resolveOption(value: string | undefined, fallback: () => string): strin
   return fallback()
 }
 
-function createInitialContext(runId: string): StepContext<unknown, Record<string, StepResult<unknown>>> {
+function createInitialContext(runId: string, runDir: string): StepContext<unknown, Record<string, StepResult<unknown>>> {
   return {
     runId,
     environments: {},
     steps: {},
     step: { id: '', output: undefined, attempt: 1 },
     matrix: undefined,
-    artifacts: {},
+    artifacts: createArtifactStore(runDir),
   }
 }
 
@@ -46,9 +49,10 @@ async function executeStep(
   snapshot: RunStateSnapshot,
   runDir: string,
   rehydration?: RehydratedAgentState,
+  mcpServer?: EmbeddedMcpServer,
 ): Promise<unknown> {
   if (isAgentRunner(step.run)) {
-    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration)
+    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer)
   }
   const rawOutput: unknown = await step.run(ctx)
   return validateStepOutput(step.id, step.outputSchema, rawOutput)
@@ -167,9 +171,10 @@ function recordStepResult(
   ctx.step = { id: stepId, output, attempt: ctx.step.attempt }
   ctx.steps[stepId] = { status, output }
   clearActiveAndPersist(runDir, snapshot)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, status === 'passed'
+  const payload = status === 'passed'
     ? { output }
-    : {})
+    : {}
+  emitLedgerEvent(runDir, snapshot.runId, stepId, `step.${status}`, payload)
 }
 
 async function runStep(
@@ -178,6 +183,7 @@ async function runStep(
   snapshot: RunStateSnapshot,
   runDir: string,
   rehydration?: RehydrationInfo,
+  mcpServer?: EmbeddedMcpServer,
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
   const attempt = rehydration?.attempt ?? 1
@@ -192,7 +198,7 @@ async function runStep(
     }
 
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
-    const output = await executeStep(step, ctx, snapshot, runDir, rehydration)
+    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
@@ -211,9 +217,11 @@ export async function runHarness(
   const runDir = resolveRunDir(workspaceDir, runId)
 
   acquireRunPidLock(runDir, runId)
+  let mcpServer: EmbeddedMcpServer | undefined
 
   try {
-    const ctx = createInitialContext(runId)
+    mcpServer = await startEmbeddedMcpServer(runDir)
+    const ctx = createInitialContext(runId, runDir)
     const steps = validatedConfig.steps as readonly StepConfig[]
     const { snapshot, rehydration } = initOrRehydrateSnapshot(
       runDir,
@@ -230,7 +238,7 @@ export async function runHarness(
       const stepRehydration = rehydration?.stepId === step.id
         ? rehydration
         : undefined
-      const failure = await runStep(step, ctx, snapshot, runDir, stepRehydration)
+      const failure = await runStep(step, ctx, snapshot, runDir, stepRehydration, mcpServer)
       if (failure !== null) {
         return failure
       }
@@ -243,6 +251,7 @@ export async function runHarness(
     return { runId, status: 'passed', steps: ctx.steps }
   }
   finally {
+    await mcpServer?.close()
     releaseRunPidLock(runDir)
   }
 }

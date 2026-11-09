@@ -1,4 +1,4 @@
-import type { StepContext } from '../types/context.js'
+import type { ArtifactClient, StepContext } from '../types/context.js'
 import { describe, expect, it } from 'vitest'
 import { resolveDynamicProperty } from './resolve-dynamic-property.js'
 
@@ -20,7 +20,7 @@ function createMockContext(): StepContext {
       attempt: 1,
     },
     matrix: undefined,
-    artifacts: {},
+    artifacts: {} as ArtifactClient,
   }
 }
 

@@ -10,6 +10,8 @@ export interface AgentTurnInput<TContext = StepContext> {
   attempt: number
   mode: AgentAccessMode
   runDir: string
+  mcpServerUrl: string
+  mcpAuthToken: string
 }
 
 export interface AgentTurnResult<TOutput = unknown> {

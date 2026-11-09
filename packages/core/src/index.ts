@@ -10,6 +10,9 @@ import type {
 } from './types/agent.js'
 import type {
   ArtifactClient,
+  EmbeddedMcpServer,
+} from './types/artifact.js'
+import type {
   DynamicProperty,
   MatrixCursor,
   ProvisionedEnvironment,
@@ -40,6 +43,8 @@ export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
+export { createArtifactStore } from './mcp/artifact-store.js'
+export { startEmbeddedMcpServer } from './mcp/mcp-server.js'
 export { appendLedgerEvent, readLedgerEvents } from './persistence/ledger-writer.js'
 export {
   acquireRunPidLock,
@@ -79,6 +84,7 @@ export type {
   CleanupPolicy,
   CleanupPolicyAction,
   DynamicProperty,
+  EmbeddedMcpServer,
   HarnessConfig,
   HarnessConfigLoadErrorOptions,
   HarnessRunResult,
