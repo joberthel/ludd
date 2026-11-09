@@ -11,6 +11,20 @@ const stepResultSchema = z.object({
   output: z.unknown().optional(),
 })
 
+const logMetadataSchema = z.object({
+  logKey: z.string(),
+  format: z.enum(['text', 'json']),
+  filePath: z.string().optional(),
+  totalLines: z.number().int().nonnegative().optional(),
+  totalItems: z.number().int().nonnegative().optional(),
+  propertyKey: z.string().optional(),
+  stepId: z.string().optional(),
+  attempt: z.number().int().positive().optional(),
+  phase: z.enum(['beforeStep', 'afterStep']).optional(),
+  guardrailIndex: z.number().int().nonnegative().optional(),
+  createdAt: z.string().optional(),
+})
+
 export const runStateSnapshotSchema = z.object({
   schemaVersion: z.literal(SUPPORTED_SCHEMA_VERSION),
   runId: z.string(),
@@ -23,6 +37,8 @@ export const runStateSnapshotSchema = z.object({
   activeMatrixOutputs: z.array(z.unknown()).optional(),
   activeGuardrailRetries: z.record(z.string(), z.number()).optional(),
   steps: z.record(z.string(), stepResultSchema),
+  artifacts: z.array(z.string()).optional(),
+  logs: z.record(z.string(), logMetadataSchema).optional(),
   updatedAt: z.string(),
 })
 

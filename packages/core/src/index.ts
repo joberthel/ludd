@@ -1,5 +1,9 @@
 import type { HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
 import type { RehydratedAgentState } from './runtime/agent-executor.js'
+import type {
+  BeforeStepExecutionResult,
+  RunBeforeStepGuardrailsParams,
+} from './runtime/before-step-executor.js'
 import type { HarnessRunResult, RunHarnessOptions } from './runtime/run-harness.js'
 import type {
   AgentAccessMode,
@@ -62,6 +66,18 @@ import type {
   TypedStep,
 } from './types/harness.js'
 import type { LedgerEvent, LedgerEventType } from './types/ledger.js'
+import type {
+  LogFormat,
+  LogMetadata,
+  LogStore,
+  OffloadLogOptions,
+  ReadLogLinesResult,
+  ReadLogPageJsonResult,
+  ReadLogPageResult,
+  ReadLogPageTextResult,
+  SearchLogMatch,
+  SearchLogResult,
+} from './types/log.js'
 import type { RunStateSnapshot, RunStatus } from './types/state.js'
 import type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 
@@ -79,7 +95,14 @@ export { StepArtifactValidationError } from './errors/step-artifact-validation-e
 export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
-export { createArtifactStore } from './mcp/artifact-store.js'
+export {
+  createArtifactStore,
+} from './mcp/artifact-store.js'
+export {
+  createLogStore,
+  offloadGuardrailLog,
+  sanitizeLogKey,
+} from './mcp/log-store.js'
 export { startEmbeddedMcpServer } from './mcp/mcp-server.js'
 export { appendLedgerEvent, readLedgerEvents } from './persistence/ledger-writer.js'
 export {
@@ -109,10 +132,19 @@ export {
   validateStepArtifacts,
 } from './runtime/artifact-validator.js'
 export {
+  formatBeforeStepNotification,
+  runBeforeStepGuardrails,
+} from './runtime/before-step-executor.js'
+export {
   createDefaultHostEnvironment,
   resolveGuardrailEnvironment,
   resolveStepEnvironment,
 } from './runtime/environment-manager.js'
+export {
+  formatGuardrailRetryPrompt,
+  GuardrailRetrySignal,
+  runAfterStepGuardrails,
+} from './runtime/guardrail-executor.js'
 export {
   executeMatrixStep,
   resolveMatrixItems,
@@ -137,6 +169,7 @@ export type {
   ArtifactMatrixStepDef,
   ArtifactValidationIssue,
   ArtifactValidationRule,
+  BeforeStepExecutionResult,
   CleanupPolicy,
   CleanupPolicyAction,
   DerivedStepContext,
@@ -161,18 +194,29 @@ export type {
   ItemsMatrixStepDef,
   LedgerEvent,
   LedgerEventType,
+  LogFormat,
+  LogMetadata,
+  LogStore,
   MatrixArtifactConfig,
   MatrixConfig,
   MatrixCursor,
   MatrixItemsConfig,
+  OffloadLogOptions,
   OnMaxRetriesExceededAction,
   PlainStepDef,
   PriorStepContext,
   ProvisionedEnvironment,
+  ReadLogLinesResult,
+  ReadLogPageJsonResult,
+  ReadLogPageResult,
+  ReadLogPageTextResult,
   RehydratedAgentState,
+  RunBeforeStepGuardrailsParams,
   RunHarnessOptions,
   RunStateSnapshot,
   RunStatus,
+  SearchLogMatch,
+  SearchLogResult,
   StepArtifactItemMap,
   StepConfig,
   StepContext,

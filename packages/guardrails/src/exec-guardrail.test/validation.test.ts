@@ -66,7 +66,9 @@ describe('execGuardrail configuration validation: advanced properties', () => {
       formatter: () => ({ status: 'pass' }),
     })).not.toThrow()
   })
+})
 
+describe('execGuardrail configuration validation: retries and pagination', () => {
   it('validates maxRetries and onMaxRetriesExceeded configuration', () => {
     expect(() => execGuardrail({ command: 'echo', maxRetries: -1 })).toThrow(
       'execGuardrail "maxRetries" must be a non-negative integer.',
@@ -76,5 +78,29 @@ describe('execGuardrail configuration validation: advanced properties', () => {
       'execGuardrail "onMaxRetriesExceeded" must be "abort" or "prompt_user".',
     )
     expect(() => execGuardrail({ command: 'echo', maxRetries: 2, onMaxRetriesExceeded: 'abort' })).not.toThrow()
+  })
+
+  it('validates pagination configuration (AC 5.3.3)', () => {
+    expect(() => execGuardrail({ command: 'echo', pagination: 'errors' })).not.toThrow()
+    expect(() => execGuardrail({
+      command: 'echo',
+      pagination: { key: 'errors' },
+    })).not.toThrow()
+    expect(() => execGuardrail({
+      command: 'echo',
+      pagination: (d: any) => d.files,
+    })).not.toThrow()
+
+    expect(() => execGuardrail({ command: 'echo', pagination: '' })).toThrow(
+      'execGuardrail "pagination" must be a non-empty string, an object with a "key" string property, or a selector function.',
+    )
+    expect(() => execGuardrail({ command: 'echo', pagination: '   ' })).toThrow(TypeError)
+    expect(() => execGuardrail({ command: 'echo', pagination: 123 as any })).toThrow(TypeError)
+    expect(() => execGuardrail({
+      command: 'echo',
+      pagination: { key: '' } as any,
+    })).toThrow(TypeError)
+    expect(() => execGuardrail({ command: 'echo', pagination: {} as any })).toThrow(TypeError)
+    expect(() => execGuardrail({ command: 'echo', pagination: [] as any })).toThrow(TypeError)
   })
 })

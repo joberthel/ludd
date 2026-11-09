@@ -83,7 +83,7 @@ describe('embedded MCP server 404 route handling', () => {
         writeHead,
         end: vi.fn(),
       } as unknown as http.ServerResponse
-      await handleIncomingRequest(mockReq, mockRes, server.authToken, {} as any, new Set())
+      await handleIncomingRequest(mockReq, mockRes, server.authToken, {} as any, {} as any, new Set())
       expect(writeHead).toHaveBeenCalledWith(404, { 'Content-Type': 'application/json' })
     }
     finally {

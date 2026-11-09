@@ -128,7 +128,7 @@ describe('artifact-store put and get operations', () => {
   })
 })
 
-describe('artifact-store JSON parsing and error handling', () => {
+describe('artifact-store JSON parsing', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -158,6 +158,18 @@ describe('artifact-store JSON parsing and error handling', () => {
     await store.put('invalid.json', 'not-valid-json{')
     await expect(store.getJson('invalid.json')).rejects.toThrow(SyntaxError)
   })
+})
+
+describe('artifact-store error handling and list callback', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'ludd-artifact-test-'))
+  })
+
+  afterEach(async () => {
+    await fs.promises.rm(tempDir, { recursive: true, force: true })
+  })
 
   it('propagates unexpected filesystem errors on get and has', async () => {
     const store = createArtifactStore(tempDir)
@@ -168,5 +180,30 @@ describe('artifact-store JSON parsing and error handling', () => {
     const mockStat2 = vi.spyOn(fs.promises, 'stat').mockRejectedValueOnce(new Error('EACCES: permission denied'))
     await expect(store.has('error.txt')).rejects.toThrow('EACCES: permission denied')
     mockStat2.mockRestore()
+  })
+
+  it('lists stored artifact keys and invokes onArtifactPut callback', async () => {
+    const putKeys: string[] = []
+    const store = createArtifactStore(tempDir, {
+      onArtifactPut: (key) => {
+        putKeys.push(key)
+      },
+    })
+
+    expect(await store.list?.()).toEqual([])
+
+    await store.put('todos.json', '[]')
+    await store.put('nested/spec.md', '# Spec')
+
+    expect(putKeys).toEqual(['todos.json', 'nested/spec.md'])
+    const listed = await store.list?.()
+    expect(listed).toEqual(['nested/spec.md', 'todos.json'])
+  })
+
+  it('propagates readdir error in list when not ENOENT', async () => {
+    const store = createArtifactStore(tempDir)
+    const mockReaddir = vi.spyOn(fs.promises, 'readdir').mockRejectedValueOnce(new Error('EACCES'))
+    await expect(store.list?.()).rejects.toThrow('EACCES')
+    mockReaddir.mockRestore()
   })
 })

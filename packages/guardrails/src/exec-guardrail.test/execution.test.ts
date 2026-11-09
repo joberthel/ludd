@@ -82,6 +82,7 @@ describe('execGuardrail basic execution', () => {
     expect(capturedOpts?.env?.MCP_AUTH_TOKEN).toBe('token-abc')
     expect(verdict.status).toBe('pass')
     expect(verdict.pagination).toBe('errors')
+    expect(verdict.logFormat).toBe('json')
   })
 })
 

@@ -1,11 +1,13 @@
 import type { ArtifactClient } from '../types/artifact.js'
+import type { LogStore } from '../types/log.js'
+import { executeLogToolCall, MCP_LOG_TOOLS_LIST } from './mcp-log-tools.js'
 
 export interface McpToolResult {
   content: Array<{ type: 'text', text: string }>
   isError?: boolean
 }
 
-export const MCP_TOOLS_LIST = [
+export const MCP_ARTIFACT_TOOLS_LIST = [
   {
     name: 'put_artifact',
     description: 'Store a workflow artifact scoped to the current run.',
@@ -29,6 +31,19 @@ export const MCP_TOOLS_LIST = [
       required: ['key'],
     },
   },
+  {
+    name: 'list_artifacts',
+    description: 'List all workflow artifact keys scoped to the current run.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+]
+
+export const MCP_TOOLS_LIST = [
+  ...MCP_ARTIFACT_TOOLS_LIST,
+  ...MCP_LOG_TOOLS_LIST,
 ]
 
 async function handlePutArtifact(
@@ -101,16 +116,53 @@ async function handleGetArtifact(
   }
 }
 
+async function handleListArtifacts(store: ArtifactClient): Promise<McpToolResult> {
+  try {
+    const list = store.list !== undefined
+      ? await store.list()
+      : []
+    const jsonText = JSON.stringify(list, null, 2)
+    return {
+      content: [
+        { type: 'text', text: jsonText },
+      ],
+    }
+  }
+  catch (error: unknown) {
+    return {
+      content: [
+        { type: 'text', text: (error as Error).message },
+      ],
+      isError: true,
+    }
+  }
+}
+
 export async function executeToolCall(
   toolName: string,
   args: Record<string, unknown> | undefined,
   store: ArtifactClient,
+  logStore?: LogStore,
 ): Promise<McpToolResult> {
   if (toolName === 'put_artifact') {
     return handlePutArtifact(args, store)
   }
   if (toolName === 'get_artifact') {
     return handleGetArtifact(args, store)
+  }
+  if (toolName === 'list_artifacts') {
+    return handleListArtifacts(store)
+  }
+  if (toolName === 'read_log_page' || toolName === 'read_log_lines' || toolName === 'search_log') {
+    if (!logStore) {
+      return {
+        content: [
+          { type: 'text', text: 'Log store is not available.' },
+        ],
+        isError: true,
+      }
+    }
+    return executeLogToolCall(toolName, args, logStore)
   }
   return {
     content: [

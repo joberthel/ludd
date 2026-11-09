@@ -64,7 +64,33 @@ async function checkArtifactFile(targetPath: string): Promise<boolean> {
   }
 }
 
-export function createArtifactStore(runDir: string): ArtifactClient {
+async function listArtifactFiles(artifactsDir: string): Promise<string[]> {
+  try {
+    const entries = await fs.promises.readdir(artifactsDir, { recursive: true, withFileTypes: true })
+    const result: string[] = []
+    for (const entry of entries) {
+      if (entry.isFile()) {
+        const fullPath = path.join(entry.parentPath, entry.name)
+        const rel = path.relative(artifactsDir, fullPath).replace(/\\/g, '/')
+        result.push(rel)
+      }
+    }
+    return result.sort()
+  }
+  catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+export interface ArtifactStoreOptions {
+  readonly onArtifactPut?: (key: string) => void | Promise<void>
+}
+
+export function createArtifactStore(runDir: string, options?: ArtifactStoreOptions): ArtifactClient {
+  const artifactsDir = path.resolve(runDir, 'artifacts')
   const store: ArtifactClient = {
     put: async (key: string, content: string): Promise<void> => {
       if (typeof content !== 'string') {
@@ -76,6 +102,9 @@ export function createArtifactStore(runDir: string): ArtifactClient {
       const tmpPath = `${targetPath}.${randomUUID()}.tmp`
       await fs.promises.writeFile(tmpPath, content, 'utf8')
       await fs.promises.rename(tmpPath, targetPath)
+      if (options?.onArtifactPut) {
+        await options.onArtifactPut(key)
+      }
     },
 
     get: async (key: string): Promise<string | null> => readArtifactFile(sanitizeArtifactPath(runDir, key)),
@@ -89,6 +118,8 @@ export function createArtifactStore(runDir: string): ArtifactClient {
     },
 
     has: async (key: string): Promise<boolean> => checkArtifactFile(sanitizeArtifactPath(runDir, key)),
+
+    list: async (): Promise<string[]> => listArtifactFiles(artifactsDir),
   }
 
   return store

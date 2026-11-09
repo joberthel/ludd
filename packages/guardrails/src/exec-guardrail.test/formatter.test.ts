@@ -80,6 +80,7 @@ describe('execGuardrail asynchronous formatter', () => {
         status: 'pass',
         rawLog: `custom log: ${result.stdout}`,
         pagination: 'custom-page',
+        logFormat: 'json',
       }),
     })
 

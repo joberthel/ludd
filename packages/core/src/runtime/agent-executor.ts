@@ -3,6 +3,7 @@ import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { StepConfig } from '../types/harness.js'
+import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentPromptState } from './agent-prompt.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
@@ -133,6 +134,7 @@ interface AgentTurnExecutionScope {
   maxTotalTurns: number
   environment: ProvisionedEnvironment
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
+  logStore?: LogStore
 }
 
 async function runTurnLoopAttempt(
@@ -168,6 +170,7 @@ async function runTurnLoopAttempt(
       initialPrompt: scope.initialPrompt,
       environment: scope.environment,
       mcpServer: scope.mcpServer,
+      logStore: scope.logStore,
     })
     return { success: true, result }
   }
@@ -194,6 +197,8 @@ export async function executeAgentStep(
   rehydration?: RehydratedAgentState,
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
   environment?: ProvisionedEnvironment,
+  logStore?: LogStore,
+  beforeStepNotification?: string,
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
@@ -204,6 +209,9 @@ export async function executeAgentStep(
     ?? createDefaultHostEnvironment(process.cwd())
   let attempt = rehydration?.attempt ?? 1
   let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index)
+  if (attempt === 1 && typeof beforeStepNotification === 'string' && beforeStepNotification.length > 0) {
+    currentPrompt = `${beforeStepNotification}\n\n${currentPrompt}`
+  }
   const scope: AgentTurnExecutionScope = {
     step,
     agent,
@@ -215,6 +223,7 @@ export async function executeAgentStep(
     maxTotalTurns,
     environment: resolvedEnv,
     mcpServer,
+    logStore,
   }
 
   while (true) {

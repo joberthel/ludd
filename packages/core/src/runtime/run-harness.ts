@@ -1,8 +1,9 @@
-import type { EmbeddedMcpServer } from '../types/artifact.js'
+import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
+import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
@@ -10,6 +11,7 @@ import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { createArtifactStore } from '../mcp/artifact-store.js'
+import { createLogStore } from '../mcp/log-store.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
@@ -27,14 +29,18 @@ function resolveOption(value: string | undefined, fallback: () => string): strin
     : fallback()
 }
 
-function createInitialContext(runId: string, runDir: string): StepContext<unknown, Record<string, StepResult<unknown>>> {
+function createInitialContext(
+  runId: string,
+  runDir: string,
+  artifacts: ArtifactClient = createArtifactStore(runDir),
+): StepContext<unknown, Record<string, StepResult<unknown>>> {
   return {
     runId,
     environments: {},
     steps: {},
     step: { id: '', output: undefined, attempt: 1 },
     matrix: undefined,
-    artifacts: createArtifactStore(runDir),
+    artifacts,
   }
 }
 
@@ -46,10 +52,11 @@ async function executeStep(
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
+  logStore?: LogStore,
 ): Promise<unknown> {
   return step.matrix !== undefined
-    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment)
-    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment)
+    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
+    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
 }
 
 function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
@@ -75,10 +82,9 @@ function emitLedgerEvent(
   payload: Record<string, unknown>,
   matrixIndex?: number,
 ): void {
-  const timestamp = new Date().toISOString()
   appendLedgerEvent(runDir, {
     schemaVersion: 1,
-    timestamp,
+    timestamp: new Date().toISOString(),
     runId,
     stepId,
     matrixIndex,
@@ -134,6 +140,7 @@ async function runStep(
   workspaceDir: string,
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
+  logStore?: LogStore,
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
   const attempt = rehydration?.attempt ?? 1
@@ -149,7 +156,7 @@ async function runStep(
 
     const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir)
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
-    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv)
+    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
@@ -159,6 +166,28 @@ async function runStep(
   finally {
     ctx.matrix = undefined
   }
+}
+
+function setupHarnessStores(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+): { artifactStore: ArtifactClient, logStore: LogStore } {
+  const artifactStore = createArtifactStore(runDir, {
+    onArtifactPut: (key) => {
+      const items = snapshot.artifacts ?? []
+      if (!items.includes(key)) {
+        snapshot.artifacts = [...items, key]
+        persistSnapshot(runDir, snapshot)
+      }
+    },
+  })
+  const logStore = createLogStore(runDir, {
+    onLogPersisted: (key, meta) => {
+      snapshot.logs = { ...snapshot.logs, [key]: meta }
+      persistSnapshot(runDir, snapshot)
+    },
+  })
+  return { artifactStore, logStore }
 }
 
 export async function runHarness(
@@ -174,7 +203,6 @@ export async function runHarness(
   let mcpServer: EmbeddedMcpServer | undefined
 
   try {
-    mcpServer = await startEmbeddedMcpServer(runDir)
     const ctx = createInitialContext(runId, runDir)
     const steps = validatedConfig.steps
     const { snapshot, rehydration } = initOrRehydrateSnapshot(
@@ -184,6 +212,9 @@ export async function runHarness(
       steps,
       ctx,
     )
+    const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
+    ctx.artifacts = artifactStore
+    mcpServer = await startEmbeddedMcpServer(runDir, { artifactStore, logStore })
 
     for (const step of steps) {
       if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
@@ -192,7 +223,7 @@ export async function runHarness(
       const stepRehydration = rehydration?.stepId === step.id
         ? rehydration
         : undefined
-      const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer)
+      const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore)
       if (failure !== null) {
         return failure
       }

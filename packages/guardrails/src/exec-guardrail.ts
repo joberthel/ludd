@@ -57,6 +57,30 @@ function validateExecRetries(
   }
 }
 
+function validatePaginationConfig(pagination?: unknown): void {
+  if (pagination === undefined) {
+    return
+  }
+  if (typeof pagination === 'function') {
+    return
+  }
+  if (typeof pagination === 'string' && pagination.trim() !== '') {
+    return
+  }
+  if (
+    typeof pagination === 'object'
+    && pagination !== null
+    && !Array.isArray(pagination)
+    && typeof (pagination as Record<string, unknown>).key === 'string'
+    && (pagination as { key: string }).key.trim() !== ''
+  ) {
+    return
+  }
+  throw new TypeError(
+    'execGuardrail "pagination" must be a non-empty string, an object with a "key" string property, or a selector function.',
+  )
+}
+
 function validateExecConfig<TBody, TContext extends StepContext<any, any, any, any>>(
   config: ExecGuardrailConfig<TBody, TContext>,
 ): void {
@@ -78,6 +102,7 @@ function validateExecConfig<TBody, TContext extends StepContext<any, any, any, a
     throw new TypeError('execGuardrail "formatter" must be a function when provided.')
   }
   validateExecRetries(config.maxRetries, config.onMaxRetriesExceeded)
+  validatePaginationConfig(config.pagination)
 }
 
 function resolveRawLog(
@@ -94,6 +119,19 @@ function resolveRawLog(
   return undefined
 }
 
+function resolveLogFormat(
+  pagination?: ExecLogPaginationConfig,
+  explicitFormat?: 'text' | 'json',
+): 'text' | 'json' | undefined {
+  if (explicitFormat !== undefined) {
+    return explicitFormat
+  }
+  if (pagination !== undefined) {
+    return 'json'
+  }
+  return undefined
+}
+
 async function resolveExecutionVerdict<TBody>(
   result: EnvironmentExecResult,
   combinedOutput: string,
@@ -105,16 +143,19 @@ async function resolveExecutionVerdict<TBody>(
       body: 'Command timed out' as unknown as TBody,
       rawLog: combinedOutput,
       pagination: config.pagination,
+      logFormat: resolveLogFormat(config.pagination),
     }
   }
 
   if (config.formatter !== undefined) {
     const verdict = await config.formatter(result)
     const rawLog = resolveRawLog(verdict.rawLog, verdict.status, combinedOutput)
+    const pagination = verdict.pagination ?? config.pagination
     return {
       ...verdict,
       rawLog,
-      pagination: verdict.pagination ?? config.pagination,
+      pagination,
+      logFormat: resolveLogFormat(pagination, verdict.logFormat),
     }
   }
 
@@ -122,6 +163,7 @@ async function resolveExecutionVerdict<TBody>(
     return {
       status: 'pass',
       pagination: config.pagination,
+      logFormat: resolveLogFormat(config.pagination),
     }
   }
 
@@ -129,6 +171,7 @@ async function resolveExecutionVerdict<TBody>(
     status: 'fail',
     rawLog: combinedOutput,
     pagination: config.pagination,
+    logFormat: resolveLogFormat(config.pagination),
   }
 }
 

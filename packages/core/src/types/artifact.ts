@@ -5,6 +5,7 @@ export interface ArtifactClient {
   get: (key: string) => Promise<string | null>
   getJson: <T = unknown>(key: string) => Promise<T | null>
   has: (key: string) => Promise<boolean>
+  list?: () => Promise<string[]>
 }
 
 export interface EmbeddedMcpServer {

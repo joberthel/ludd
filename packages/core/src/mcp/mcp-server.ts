@@ -1,11 +1,18 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
+import type { LogStore } from '../types/log.js'
 import { Buffer } from 'node:buffer'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import { createArtifactStore } from './artifact-store.js'
+import { createLogStore } from './log-store.js'
 import { executeToolCall, handleInitialize, handleToolsList } from './mcp-tools.js'
+
+export interface EmbeddedMcpServerOptions {
+  readonly artifactStore?: ArtifactClient
+  readonly logStore?: LogStore
+}
 
 function resolveAuthToken(authToken?: string): string {
   if (typeof authToken === 'string' && authToken.trim() !== '') {
@@ -49,6 +56,7 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
 async function dispatchJsonRpc(
   body: Record<string, unknown>,
   store: ArtifactClient,
+  logStore: LogStore,
 ): Promise<Record<string, unknown>> {
   const { id, method, params } = body
   if (method === 'initialize') {
@@ -67,7 +75,7 @@ async function dispatchJsonRpc(
     const args = typeof p?.arguments === 'object' && p.arguments !== null
       ? (p.arguments as Record<string, unknown>)
       : undefined
-    const toolResult = await executeToolCall(toolName, args, store)
+    const toolResult = await executeToolCall(toolName, args, store, logStore)
     return { jsonrpc: '2.0', id, result: toolResult }
   }
   return {
@@ -91,6 +99,7 @@ async function handleJsonRpcPost(
   req: IncomingMessage,
   res: ServerResponse,
   store: ArtifactClient,
+  logStore: LogStore,
 ): Promise<void> {
   const bodyText = await readRequestBody(req)
 
@@ -120,13 +129,13 @@ async function handleJsonRpcPost(
   }
 
   if (parsed.id === undefined) {
-    await dispatchJsonRpc(parsed, store)
+    await dispatchJsonRpc(parsed, store, logStore)
     res.writeHead(204)
     res.end()
     return
   }
 
-  const response = await dispatchJsonRpc(parsed, store)
+  const response = await dispatchJsonRpc(parsed, store, logStore)
   sendJson(res, 200, response)
 }
 
@@ -135,6 +144,7 @@ export async function handleIncomingRequest(
   res: ServerResponse,
   token: string,
   store: ArtifactClient,
+  logStore: LogStore,
   sseConnections: Set<ServerResponse>,
 ): Promise<void> {
   if (!verifyAuthToken(req.headers.authorization, token)) {
@@ -160,7 +170,7 @@ export async function handleIncomingRequest(
   }
 
   if (req.method === 'POST' && (pathname === '/mcp' || pathname === '/message')) {
-    await handleJsonRpcPost(req, res, store)
+    await handleJsonRpcPost(req, res, store, logStore)
     return
   }
 
@@ -169,14 +179,21 @@ export async function handleIncomingRequest(
 
 export async function startEmbeddedMcpServer(
   runDir: string,
-  authToken?: string,
+  authTokenOrOptions?: string | EmbeddedMcpServerOptions,
+  options?: EmbeddedMcpServerOptions,
 ): Promise<EmbeddedMcpServer> {
-  const token = resolveAuthToken(authToken)
-  const store = createArtifactStore(runDir)
+  const token = typeof authTokenOrOptions === 'string'
+    ? resolveAuthToken(authTokenOrOptions)
+    : resolveAuthToken(undefined)
+  const resolvedOpts = typeof authTokenOrOptions === 'object' && authTokenOrOptions !== null
+    ? authTokenOrOptions
+    : options
+  const store = resolvedOpts?.artifactStore ?? createArtifactStore(runDir)
+  const logStore = resolvedOpts?.logStore ?? createLogStore(runDir)
   const sseConnections = new Set<ServerResponse>()
 
   const server = http.createServer((req, res) => {
-    void handleIncomingRequest(req, res, token, store, sseConnections)
+    void handleIncomingRequest(req, res, token, store, logStore, sseConnections)
   })
 
   await new Promise<void>((resolve, reject) => {

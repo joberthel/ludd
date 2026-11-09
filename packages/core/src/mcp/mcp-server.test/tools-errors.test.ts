@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startEmbeddedMcpServer } from '../mcp-server.js'
 
 async function postJson(url: string, token: string, body: unknown): Promise<any> {
@@ -110,5 +110,25 @@ describe('embedded MCP server tool missing and unknown errors', () => {
     finally {
       await server.close()
     }
+  })
+})
+
+describe('embedded MCP server executeToolCall fallback error handling', () => {
+  it('handles list_artifacts error and missing log store in executeToolCall', async () => {
+    const { executeToolCall } = await import('../mcp-tools.js')
+    const mockStore: any = {
+      list: vi.fn().mockRejectedValue(new Error('disk failed')),
+    }
+    const resList = await executeToolCall('list_artifacts', {}, mockStore)
+    expect(resList.isError).toBe(true)
+    expect(resList.content[0].text).toBe('disk failed')
+
+    const mockStoreWithoutList: any = {}
+    const resEmpty = await executeToolCall('list_artifacts', {}, mockStoreWithoutList)
+    expect(resEmpty.content[0].text).toBe('[]')
+
+    const resNoLogStore = await executeToolCall('read_log_page', {}, mockStore)
+    expect(resNoLogStore.isError).toBe(true)
+    expect(resNoLogStore.content[0].text).toBe('Log store is not available.')
   })
 })

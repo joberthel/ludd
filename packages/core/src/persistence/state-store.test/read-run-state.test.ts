@@ -17,7 +17,7 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-describe('readRunState writeRunStateAtomic round-trip', () => {
+describe('readRunState basic round-trip', () => {
   it('reads and losslessly round-trips RunStateSnapshot written by writeRunStateAtomic', () => {
     const runDir = resolveRunDir(tempDir, 'run-roundtrip')
     const original: RunStateSnapshot = {
@@ -46,6 +46,43 @@ describe('readRunState writeRunStateAtomic round-trip', () => {
         'step-with-null-output': {
           status: 'failed',
           output: null,
+        },
+      },
+      updatedAt: '2026-11-08T20:30:00.000Z',
+    }
+
+    writeRunStateAtomic(runDir, original)
+    const read = readRunState(runDir)
+
+    expect(read).toEqual(original)
+  })
+})
+
+describe('readRunState artifacts and logs round-trip', () => {
+  it('reads and losslessly round-trips RunStateSnapshot with artifacts and logs indexing', () => {
+    const runDir = resolveRunDir(tempDir, 'run-artifacts-logs')
+    const original: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'run-artifacts-logs',
+      harnessName: 'artifacts-logs-harness',
+      status: 'running',
+      activeStepId: 'step-1',
+      steps: {
+        'step-1': { status: 'passed' },
+      },
+      artifacts: ['spec.md', 'todos.json'],
+      logs: {
+        'step-1-1': {
+          logKey: 'step-1-1',
+          format: 'text',
+          totalLines: 100,
+          filePath: 'logs/step-1-1.log',
+        },
+        'step-1-1-json': {
+          logKey: 'step-1-1-json',
+          format: 'json',
+          totalItems: 4,
+          propertyKey: 'errors',
         },
       },
       updatedAt: '2026-11-08T20:30:00.000Z',

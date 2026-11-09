@@ -145,8 +145,15 @@ describe('embedded MCP server initialize and tools/list discovery', () => {
         id: 11,
         method: 'tools/list',
       }))
-      expect(listData.result.tools).toHaveLength(2)
-      expect(listData.result.tools.map((t: any) => t.name)).toEqual(['put_artifact', 'get_artifact'])
+      expect(listData.result.tools).toHaveLength(6)
+      expect(listData.result.tools.map((t: any) => t.name)).toEqual([
+        'put_artifact',
+        'get_artifact',
+        'list_artifacts',
+        'read_log_page',
+        'read_log_lines',
+        'search_log',
+      ])
     }
     finally {
       await server.close()

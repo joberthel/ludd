@@ -2,6 +2,7 @@ import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { MatrixConfig, StepConfig } from '../types/harness.js'
+import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import { StepMatrixResolutionError } from '../errors/step-matrix-resolution-error.js'
@@ -10,6 +11,7 @@ import { isAgentRunner } from '../types/harness.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
 import { validateStepArtifacts } from './artifact-validator.js'
+import { runBeforeStepGuardrails } from './before-step-executor.js'
 import { runAfterStepGuardrails } from './guardrail-executor.js'
 
 export async function resolveMatrixItems(
@@ -52,7 +54,7 @@ export async function resolveMatrixItems(
   return items as readonly unknown[]
 }
 
-export async function executeSingleSlice(
+async function resolveBeforeStepContext(
   step: StepConfig,
   ctx: StepContext,
   snapshot: RunStateSnapshot,
@@ -60,11 +62,34 @@ export async function executeSingleSlice(
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
-): Promise<unknown> {
-  if (isAgentRunner(step.run)) {
-    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer, environment)
+  logStore?: LogStore,
+): Promise<string> {
+  const isInitial = !rehydration || (rehydration.attempt ?? 1) <= 1
+  if (!isInitial || !step.beforeStep || step.beforeStep.length === 0) {
+    return ''
   }
-  const rawOutput: unknown = await step.run(ctx)
+  return runBeforeStepGuardrails({
+    step,
+    ctx,
+    snapshot,
+    runDir,
+    mcpServer,
+    environment,
+    logStore,
+  })
+}
+
+async function executeFunctionStep(
+  step: StepConfig,
+  runner: (ctx: StepContext) => Promise<unknown> | unknown,
+  ctx: StepContext,
+  snapshot: RunStateSnapshot,
+  runDir: string,
+  mcpServer?: EmbeddedMcpServer,
+  environment?: ProvisionedEnvironment,
+  logStore?: LogStore,
+): Promise<unknown> {
+  const rawOutput: unknown = await runner(ctx)
   const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
   await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
   ctx.step = { id: step.id, output: validated, attempt: ctx.step.attempt }
@@ -79,8 +104,56 @@ export async function executeSingleSlice(
     initialPrompt: '',
     mcpServer,
     environment,
+    logStore,
   })
   return validated
+}
+
+export async function executeSingleSlice(
+  step: StepConfig,
+  ctx: StepContext,
+  snapshot: RunStateSnapshot,
+  runDir: string,
+  rehydration?: RehydratedAgentState,
+  mcpServer?: EmbeddedMcpServer,
+  environment?: ProvisionedEnvironment,
+  logStore?: LogStore,
+): Promise<unknown> {
+  const beforeStepNotification = await resolveBeforeStepContext(
+    step,
+    ctx,
+    snapshot,
+    runDir,
+    rehydration,
+    mcpServer,
+    environment,
+    logStore,
+  )
+
+  if (isAgentRunner(step.run)) {
+    return executeAgentStep(
+      step,
+      step.run,
+      ctx,
+      snapshot,
+      runDir,
+      rehydration,
+      mcpServer,
+      environment,
+      logStore,
+      beforeStepNotification,
+    )
+  }
+  return executeFunctionStep(
+    step,
+    step.run,
+    ctx,
+    snapshot,
+    runDir,
+    mcpServer,
+    environment,
+    logStore,
+  )
 }
 
 function persistSliceState(
@@ -107,6 +180,7 @@ export async function executeMatrixStep(
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
+  logStore?: LogStore,
 ): Promise<unknown[]> {
   const config = matrixConfig ?? step.matrix
   if (config === undefined) {
@@ -139,6 +213,7 @@ export async function executeMatrixStep(
       sliceRehydration,
       mcpServer,
       environment,
+      logStore,
     )
     outputs.push(sliceOutput)
 
