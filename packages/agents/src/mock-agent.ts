@@ -20,7 +20,7 @@ export interface MockAgentTurnResultWithEvents<TOutput> {
   events?: readonly MockAgentTelemetryEvent[]
 }
 
-export type MockAgentResponse<TOutput, TContext = StepContext>
+export type MockAgentResponse<TOutput, TContext extends StepContext<any, any, any, any> = StepContext>
   = | TOutput
     | MockAgentTurnResultWithEvents<TOutput>
     | ((
@@ -32,13 +32,20 @@ export type MockAgentResponse<TOutput, TContext = StepContext>
 
 export interface MockAgentConfig<
   TOutput = unknown,
-  TContext extends StepContext = StepContext,
+  TContext extends StepContext<any, any, any, any> = StepContext<any, any, any, any>,
 > {
   mode?: AgentAccessMode
   prompt: DynamicProperty<string, TContext>
   sessionId?: DynamicProperty<string | undefined, TContext>
   events?: readonly MockAgentTelemetryEvent[]
   responses: readonly MockAgentResponse<TOutput, TContext>[]
+}
+
+export interface MockAgentRunner<
+  TOutput = unknown,
+  TContext extends StepContext<any, any, any, any> = StepContext,
+> extends AgentRunner<TOutput, TContext> {
+  (): void
 }
 
 function isTurnResultWithEvents<TOutput>(
@@ -53,7 +60,7 @@ function isTurnResultWithEvents<TOutput>(
   )
 }
 
-function emitTelemetryEvents<TContext extends StepContext>(
+function emitTelemetryEvents<TContext extends StepContext<any, any, any, any>>(
   input: AgentTurnInput<TContext>,
   events: readonly MockAgentTelemetryEvent[],
 ): void {
@@ -71,7 +78,7 @@ function emitTelemetryEvents<TContext extends StepContext>(
   }
 }
 
-async function resolveResponseOutput<TOutput, TContext extends StepContext>(
+async function resolveResponseOutput<TOutput, TContext extends StepContext<any, any, any, any>>(
   nextResponse: MockAgentResponse<TOutput, TContext>,
   input: AgentTurnInput<TContext>,
   defaultEvents?: readonly MockAgentTelemetryEvent[],
@@ -88,8 +95,8 @@ async function resolveResponseOutput<TOutput, TContext extends StepContext>(
 
 export function mockAgent<
   TOutput = unknown,
-  TContext extends StepContext = StepContext,
->(config: MockAgentConfig<TOutput, TContext>): AgentRunner<TOutput, TContext> {
+  TContext extends StepContext<any, any, any, any> = StepContext,
+>(config: MockAgentConfig<TOutput, TContext>): MockAgentRunner<TOutput, TContext> {
   const responses = config?.responses
   if (!Array.isArray(responses) || responses.length === 0) {
     throw new Error('mockAgent requires a non-empty "responses" array.')
@@ -128,5 +135,5 @@ export function mockAgent<
         sessionId: input.sessionId,
       }
     },
-  }
+  } as unknown as MockAgentRunner<TOutput, TContext>
 }

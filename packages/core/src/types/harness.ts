@@ -17,6 +17,24 @@ export type {
   AgentTurnResult,
 }
 
+export type {
+  AccumulateArtifactItemMap,
+  AccumulatePriorSteps,
+  ArtifactMatrixStepDef,
+  DerivedStepContext,
+  InferArrayItem,
+  InferMatrixItem,
+  InferSingleStepOutput,
+  InferStepOutput,
+  ItemsMatrixStepDef,
+  PlainStepDef,
+  PriorStepContext,
+  StepArtifactItemMap,
+  StepHasMatrix,
+  StepTupleEntry,
+  TypedStep,
+} from './inference.js'
+
 export type CleanupPolicyAction = 'keep' | 'destroy'
 
 export interface CleanupPolicy {
@@ -24,10 +42,13 @@ export interface CleanupPolicy {
   onFailure?: CleanupPolicyAction
 }
 
-export type StepRunFn<
+export interface StepRunFn<
   TOutput = unknown,
-  TContext extends StepContext = StepContext,
-> = (ctx: TContext) => TOutput | Promise<TOutput>
+  TContext extends StepContext<any, any, any, any> = StepContext,
+> {
+  (ctx: TContext): TOutput | Promise<TOutput>
+  readonly __context?: TContext
+}
 
 export function isAgentRunner(value: unknown): value is AgentRunner {
   if (typeof value !== 'object' || value === null) {
@@ -57,41 +78,30 @@ export type MatrixConfig<
   TArtifactKey extends string = string,
 > = MatrixItemsConfig<TItem, TContext> | MatrixArtifactConfig<TArtifactKey>
 
-export interface StepConfig<TId extends string = string, TOutput = unknown> {
+export interface StepConfig<
+  TId extends string = string,
+  TOutput = unknown,
+  TContext extends StepContext = StepContext,
+  TMatrixContext extends StepContext = StepContext,
+  TArtifacts extends Record<string, ArtifactValidationRule<any>> = Record<string, ArtifactValidationRule<any>>,
+  TMatrixItem = unknown,
+  TArtifactKey extends string = string,
+> {
   id: TId
   name?: string
-  if?: (ctx: StepContext) => boolean | Promise<boolean>
-  matrix?: MatrixConfig<any, any>
+  if?: (ctx: TMatrixContext) => boolean | Promise<boolean>
+  matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
-  artifacts?: Record<string, ArtifactValidationRule>
-  run: StepRunFn<TOutput> | AgentRunner<TOutput>
+  artifacts?: TArtifacts
+  run: StepRunFn<TOutput, TContext> | AgentRunner<TOutput, TContext>
 }
 
-export type InferSingleStepOutput<TStep>
-  = TStep extends { run: { readonly __kind: 'agent' } | AgentRunner<any>, outputSchema: z.ZodType<infer TSchemaOutput> }
-    ? AgentStepOutput<TSchemaOutput>
-    : TStep extends { run: AgentRunner<infer TRunnerOutput> }
-      ? AgentStepOutput<TRunnerOutput>
-      : TStep extends { run: { readonly __kind: 'agent' } }
-        ? AgentStepOutput<unknown>
-        : TStep extends { outputSchema: z.ZodType<infer TSchemaOutput> }
-          ? TSchemaOutput
-          : TStep extends { run: (...args: any[]) => infer TReturn }
-            ? Awaited<TReturn>
-            : TStep extends StepConfig<string, infer TOutput>
-              ? TOutput
-              : unknown
-
-export type InferStepOutput<TStep>
-  = TStep extends { matrix: MatrixConfig<any, any> }
-    ? InferSingleStepOutput<TStep>[]
-    : InferSingleStepOutput<TStep>
-
 export interface HarnessConfig<
-  TSteps extends readonly StepConfig<any, any>[] = readonly StepConfig<any, any>[],
+  TSteps extends readonly StepConfig<any, any, any, any, any, any, any>[] = readonly StepConfig[],
+  TName extends string = string,
 > {
-  name: string
+  name: TName
   cleanupPolicy?: CleanupPolicy
   steps: TSteps
 }

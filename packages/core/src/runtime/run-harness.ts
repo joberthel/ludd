@@ -226,7 +226,7 @@ export async function runHarness(
   try {
     mcpServer = await startEmbeddedMcpServer(runDir)
     const ctx = createInitialContext(runId, runDir)
-    const steps = validatedConfig.steps as readonly StepConfig[]
+    const steps = validatedConfig.steps
     const { snapshot, rehydration } = initOrRehydrateSnapshot(
       runDir,
       runId,

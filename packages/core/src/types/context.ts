@@ -24,6 +24,7 @@ export interface StepContext<
   TCurrentOutput = unknown,
   TSteps extends Record<string, StepResult<any>> = Record<string, StepResult<any>>,
   TMatrixItem = unknown,
+  THasMatrix extends boolean = false,
 > {
   runId: string
   environments: Record<string, ProvisionedEnvironment>
@@ -33,7 +34,7 @@ export interface StepContext<
     output: TCurrentOutput
     attempt: number
   }
-  matrix: MatrixCursor<TMatrixItem> | undefined
+  matrix: THasMatrix extends true ? MatrixCursor<TMatrixItem> : MatrixCursor<TMatrixItem> | undefined
   artifacts: ArtifactClient
 }
 

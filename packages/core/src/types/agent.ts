@@ -2,7 +2,7 @@ import type { DynamicProperty, StepContext } from './context.js'
 
 export type AgentAccessMode = 'read-only' | 'workspace-write'
 
-export interface AgentTurnInput<TContext = StepContext> {
+export interface AgentTurnInput<TContext extends StepContext<any, any, any, any> = StepContext> {
   ctx: TContext
   stepId: string
   prompt: string
@@ -26,11 +26,12 @@ export type AgentStepOutput<TOutput>
 
 export interface AgentRunner<
   TOutput = unknown,
-  TContext extends StepContext = StepContext,
+  TContext extends StepContext<any, any, any, any> = StepContext,
 > {
   readonly __kind: 'agent'
   readonly mode: AgentAccessMode
-  readonly prompt: DynamicProperty<string, TContext>
-  readonly sessionId?: DynamicProperty<string | undefined, TContext>
-  executeTurn: (input: AgentTurnInput<TContext>) => Promise<AgentTurnResult<TOutput>>
+  readonly prompt: DynamicProperty<string, any>
+  readonly sessionId?: DynamicProperty<string | undefined, any>
+  readonly __context?: TContext
+  executeTurn: (input: AgentTurnInput<any>) => Promise<AgentTurnResult<TOutput>>
 }

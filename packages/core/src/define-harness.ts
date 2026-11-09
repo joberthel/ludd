@@ -1,154 +1,14 @@
-import type { HarnessConfig } from './types/harness.js'
+import type { z } from 'zod'
+import type { CleanupPolicy, HarnessConfig } from './types/harness.js'
+import type {
+  ArtifactMatrixStepDef,
+  ItemsMatrixStepDef,
+  PlainStepDef,
+} from './types/inference.js'
+import { validateCleanupPolicy, validateStep } from './define-harness-validators.js'
 import { HarnessConfigError } from './errors/harness-config-error.js'
-import { isAgentRunner } from './types/harness.js'
 
-function validateCleanupPolicy(policy: unknown): void {
-  if (policy === undefined) {
-    return
-  }
-  if (typeof policy !== 'object' || policy === null || Array.isArray(policy)) {
-    throw new HarnessConfigError('Harness config "cleanupPolicy" must be an object.')
-  }
-  const raw = policy as Record<string, unknown>
-  if (raw.onSuccess !== undefined && raw.onSuccess !== 'keep' && raw.onSuccess !== 'destroy') {
-    throw new HarnessConfigError(
-      'Harness config "cleanupPolicy.onSuccess" must be "keep" or "destroy".',
-    )
-  }
-  if (raw.onFailure !== undefined && raw.onFailure !== 'keep' && raw.onFailure !== 'destroy') {
-    throw new HarnessConfigError(
-      'Harness config "cleanupPolicy.onFailure" must be "keep" or "destroy".',
-    )
-  }
-}
-
-function validateArtifactRule(id: string, key: string, rule: unknown): void {
-  if (typeof rule !== 'object' || rule === null || Array.isArray(rule)) {
-    throw new HarnessConfigError(
-      `Step "${id}" artifact "${key}" validation rule must be a non-null object.`,
-    )
-  }
-  const rawRule = rule as Record<string, unknown>
-  if (rawRule.nonEmpty !== undefined && typeof rawRule.nonEmpty !== 'boolean') {
-    throw new HarnessConfigError(
-      `Step "${id}" artifact "${key}" "nonEmpty" must be a boolean when provided.`,
-    )
-  }
-  if (
-    rawRule.schema !== undefined
-    && (typeof rawRule.schema !== 'object'
-      || rawRule.schema === null
-      || typeof (rawRule.schema as Record<string, unknown>).safeParseAsync !== 'function')
-  ) {
-    throw new HarnessConfigError(
-      `Step "${id}" artifact "${key}" "schema" must be a valid Zod schema when provided.`,
-    )
-  }
-  if (rawRule.validate !== undefined && typeof rawRule.validate !== 'function') {
-    throw new HarnessConfigError(
-      `Step "${id}" artifact "${key}" "validate" must be a function when provided.`,
-    )
-  }
-}
-
-function validateStepArtifactsConfig(id: string, artifacts: unknown): void {
-  if (artifacts === undefined) {
-    return
-  }
-  if (typeof artifacts !== 'object' || artifacts === null || Array.isArray(artifacts)) {
-    throw new HarnessConfigError(
-      `Step "${id}" "artifacts" property must be a non-null object when provided.`,
-    )
-  }
-  for (const [key, rule] of Object.entries(artifacts)) {
-    if (key.trim() === '') {
-      throw new HarnessConfigError(
-        `Step "${id}" artifact key must be a non-empty trimmed string.`,
-      )
-    }
-    validateArtifactRule(id, key, rule)
-  }
-}
-
-function validateStepMatrixConfig(id: string, matrix: unknown): void {
-  if (matrix === undefined) {
-    return
-  }
-  if (typeof matrix !== 'object' || matrix === null || Array.isArray(matrix)) {
-    throw new HarnessConfigError(
-      `Step "${id}" "matrix" property must be a non-null object when provided.`,
-    )
-  }
-  const raw = matrix as Record<string, unknown>
-  const hasItems = raw.items !== undefined
-  const hasArtifact = raw.itemsFromArtifact !== undefined
-  if ((!hasItems && !hasArtifact) || (hasItems && hasArtifact)) {
-    throw new HarnessConfigError(
-      `Step "${id}" matrix must specify either "items" or "itemsFromArtifact", not both or neither.`,
-    )
-  }
-  if (hasItems) {
-    const isValidItems = (Array.isArray(raw.items) && raw.items.length > 0) || typeof raw.items === 'function'
-    if (!isValidItems) {
-      throw new HarnessConfigError(
-        `Step "${id}" matrix "items" must be a non-empty array or a function.`,
-      )
-    }
-  }
-  if (hasArtifact) {
-    const isValidArtifact = typeof raw.itemsFromArtifact === 'string' && raw.itemsFromArtifact.trim() !== ''
-    if (!isValidArtifact) {
-      throw new HarnessConfigError(
-        `Step "${id}" matrix "itemsFromArtifact" must be a non-empty trimmed string.`,
-      )
-    }
-  }
-}
-
-function validateStep(step: unknown, index: number, seenIds: Set<string>): void {
-  if (typeof step !== 'object' || step === null || Array.isArray(step)) {
-    throw new HarnessConfigError(`Step at index ${index} must be a non-null object.`)
-  }
-
-  const rawStep = step as Record<string, unknown>
-  if (typeof rawStep.id !== 'string' || rawStep.id.trim() === '') {
-    throw new HarnessConfigError(
-      `Step at index ${index} must have a non-empty trimmed string "id".`,
-    )
-  }
-
-  const id = rawStep.id.trim()
-  if (seenIds.has(id)) {
-    throw new HarnessConfigError(`Duplicate step id "${id}" found in harness steps.`)
-  }
-  seenIds.add(id)
-
-  if (rawStep.if !== undefined && typeof rawStep.if !== 'function') {
-    throw new HarnessConfigError(
-      `Step "${id}" "if" property must be a function when provided.`,
-    )
-  }
-
-  if (
-    rawStep.maxTotalTurns !== undefined
-    && (typeof rawStep.maxTotalTurns !== 'number'
-      || !Number.isInteger(rawStep.maxTotalTurns)
-      || rawStep.maxTotalTurns < 1)
-  ) {
-    throw new HarnessConfigError(
-      `Step "${id}" maxTotalTurns must be a positive integer, received ${String(rawStep.maxTotalTurns)}.`,
-    )
-  }
-
-  validateStepArtifactsConfig(id, rawStep.artifacts)
-  validateStepMatrixConfig(id, rawStep.matrix)
-
-  if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
-    throw new HarnessConfigError(
-      `Step "${id}" must have a valid "run" property (function or AgentRunner).`,
-    )
-  }
-}
+export { isAgentRunner } from './types/harness.js'
 
 export function validateHarnessConfig(config: unknown): HarnessConfig {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
@@ -178,9 +38,209 @@ export function validateHarnessConfig(config: unknown): HarnessConfig {
   return config as HarnessConfig
 }
 
-export function defineHarness<const TConfig extends HarnessConfig>(
+// 1. 4-step workflow: Plain -> Plain -> ArtifactMatrix -> Plain (TDD Section 9.2)
+export function defineHarness<
+  S0Id extends string = string,
+  S0Out = any,
+  S0Art = any,
+  S1Id extends string = string,
+  S1Out = any,
+  S1Art = any,
+  S2Id extends string = string,
+  S2Out = any,
+  S2Art = any,
+  const S2Key extends string = string,
+  S3Id extends string = string,
+  S3Out = any,
+  S3Art = any,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    PlainStepDef<[], S0Id, S0Out, S0Art>,
+    PlainStepDef<
+      [{ id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } }],
+      S1Id,
+      S1Out,
+      S1Art
+    >,
+    ArtifactMatrixStepDef<
+      [
+        { id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } },
+        { id: S1Id, outputSchema?: z.ZodType<S1Out>, artifacts?: S1Art, run?: (...args: any[]) => any },
+      ],
+      S2Id,
+      S2Out,
+      S2Art,
+      S2Key
+    >,
+    PlainStepDef<
+      [
+        { id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } },
+        { id: S1Id, outputSchema?: z.ZodType<S1Out>, artifacts?: S1Art, run?: (...args: any[]) => any },
+        { id: S2Id, matrix: { itemsFromArtifact: S2Key }, outputSchema?: z.ZodType<S2Out>, run?: { readonly __kind: 'agent' } },
+      ],
+      S3Id,
+      S3Out,
+      S3Art
+    >,
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    PlainStepDef<[], S0Id, S0Out, S0Art>,
+    PlainStepDef<
+      [{ id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } }],
+      S1Id,
+      S1Out,
+      S1Art
+    >,
+    ArtifactMatrixStepDef<
+      [
+        { id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } },
+        { id: S1Id, outputSchema?: z.ZodType<S1Out>, artifacts?: S1Art, run?: (...args: any[]) => any },
+      ],
+      S2Id,
+      S2Out,
+      S2Art,
+      S2Key
+    >,
+    PlainStepDef<
+      [
+        { id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } },
+        { id: S1Id, outputSchema?: z.ZodType<S1Out>, artifacts?: S1Art, run?: (...args: any[]) => any },
+        { id: S2Id, matrix: { itemsFromArtifact: S2Key }, outputSchema?: z.ZodType<S2Out>, run?: { readonly __kind: 'agent' } },
+      ],
+      S3Id,
+      S3Out,
+      S3Art
+    >,
+  ]
+}
+
+// 2. 3-step pipeline: Plain -> ArtifactMatrix -> Plain (AC 4.4.1 & AC 4.4.4)
+export function defineHarness<
+  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  S1Id extends string = string,
+  S1Out = any,
+  S1Art = any,
+  const S1Key extends string = string,
+  S2Id extends string = string,
+  S2Out = any,
+  S2Art = any,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
+    PlainStepDef<
+      [
+        TStep0,
+        { id: S1Id, matrix: { itemsFromArtifact: S1Key }, outputSchema?: z.ZodType<S1Out>, run?: { readonly __kind: 'agent' } },
+      ],
+      S2Id,
+      S2Out,
+      S2Art
+    >,
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
+    PlainStepDef<
+      [
+        TStep0,
+        { id: S1Id, matrix: { itemsFromArtifact: S1Key }, outputSchema?: z.ZodType<S1Out>, run?: { readonly __kind: 'agent' } },
+      ],
+      S2Id,
+      S2Out,
+      S2Art
+    >,
+  ]
+}
+
+// 3. 2-step pipeline: Plain -> ArtifactMatrix
+export function defineHarness<
+  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  S1Id extends string = string,
+  S1Out = any,
+  S1Art = any,
+  const S1Key extends string = string,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
+  ]
+}
+
+// 4. 2-step pipeline: Plain -> ItemsMatrix
+export function defineHarness<
+  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  S1Id extends string = string,
+  S1Out = any,
+  S1Art = any,
+  S1Item = any,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ItemsMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Item>,
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    ItemsMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Item>,
+  ]
+}
+
+// 5. 1-step pipeline: ItemsMatrix (AC 4.4.2 static matrix)
+export function defineHarness<
+  S0Id extends string = string,
+  S0Out = any,
+  S0Art = any,
+  S0Item = any,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    ItemsMatrixStepDef<[], S0Id, S0Out, S0Art, S0Item>,
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    ItemsMatrixStepDef<[], S0Id, S0Out, S0Art, S0Item>,
+  ]
+}
+
+// 6. Fallback overload preserving step configuration
+export function defineHarness<const TConfig extends HarnessConfig = HarnessConfig>(
   config: TConfig,
-): TConfig {
+): TConfig
+
+// Implementation
+export function defineHarness(config: any): any {
   validateHarnessConfig(config)
-  return config
+  return config as HarnessConfig
 }

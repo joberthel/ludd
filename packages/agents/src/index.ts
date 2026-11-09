@@ -11,6 +11,7 @@ import type {
   AgentMidTurnEventType,
   MockAgentConfig,
   MockAgentResponse,
+  MockAgentRunner,
   MockAgentTelemetryEvent,
   MockAgentTurnResultWithEvents,
 } from './mock-agent.js'
@@ -33,6 +34,7 @@ export type {
   AgentTurnResult,
   MockAgentConfig,
   MockAgentResponse,
+  MockAgentRunner,
   MockAgentTelemetryEvent,
   MockAgentTurnResultWithEvents,
 }
