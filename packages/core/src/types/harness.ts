@@ -6,6 +6,7 @@ import type {
   AgentTurnInput,
   AgentTurnResult,
 } from './agent.js'
+import type { ArtifactValidationRule } from './artifact.js'
 import type { StepContext, StepResult } from './context.js'
 
 export type {
@@ -46,6 +47,7 @@ export interface StepConfig<TId extends string = string, TOutput = unknown> {
   if?: (ctx: StepContext) => boolean | Promise<boolean>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
+  artifacts?: Record<string, ArtifactValidationRule>
   run: StepRunFn<TOutput> | AgentRunner<TOutput>
 }
 

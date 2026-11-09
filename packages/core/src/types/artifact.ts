@@ -1,3 +1,5 @@
+import type { z } from 'zod'
+
 export interface ArtifactClient {
   put: (key: string, content: string) => Promise<void>
   get: (key: string) => Promise<string | null>
@@ -10,4 +12,16 @@ export interface EmbeddedMcpServer {
   readonly port: number
   readonly authToken: string
   close: () => Promise<void>
+}
+
+export interface ArtifactValidationRule<TSchema extends z.ZodType = z.ZodType> {
+  nonEmpty?: boolean
+  schema?: TSchema
+  validate?: (content: string) => boolean | Promise<boolean>
+}
+
+export interface ArtifactValidationIssue {
+  artifactKey: string
+  message: string
+  path?: readonly (string | number | symbol)[]
 }

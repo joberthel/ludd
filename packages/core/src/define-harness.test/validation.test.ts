@@ -219,3 +219,32 @@ describe('validateHarnessConfig valid maxTotalTurns', () => {
     expect(valid.steps[0].maxTotalTurns).toBe(5)
   })
 })
+
+describe('validateHarnessConfig step artifacts configuration', () => {
+  it('validates step artifacts configuration', () => {
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          artifacts: 'invalid' as any,
+          run: () => {},
+        },
+      ],
+    })).toThrow('must be a non-null object')
+
+    const valid = validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          artifacts: {
+            'spec.md': { nonEmpty: true },
+          },
+          run: () => {},
+        },
+      ],
+    })
+    expect(valid.steps[0].artifacts).toBeDefined()
+  })
+})

@@ -22,6 +22,54 @@ function validateCleanupPolicy(policy: unknown): void {
   }
 }
 
+function validateArtifactRule(id: string, key: string, rule: unknown): void {
+  if (typeof rule !== 'object' || rule === null || Array.isArray(rule)) {
+    throw new HarnessConfigError(
+      `Step "${id}" artifact "${key}" validation rule must be a non-null object.`,
+    )
+  }
+  const rawRule = rule as Record<string, unknown>
+  if (rawRule.nonEmpty !== undefined && typeof rawRule.nonEmpty !== 'boolean') {
+    throw new HarnessConfigError(
+      `Step "${id}" artifact "${key}" "nonEmpty" must be a boolean when provided.`,
+    )
+  }
+  if (
+    rawRule.schema !== undefined
+    && (typeof rawRule.schema !== 'object'
+      || rawRule.schema === null
+      || typeof (rawRule.schema as Record<string, unknown>).safeParseAsync !== 'function')
+  ) {
+    throw new HarnessConfigError(
+      `Step "${id}" artifact "${key}" "schema" must be a valid Zod schema when provided.`,
+    )
+  }
+  if (rawRule.validate !== undefined && typeof rawRule.validate !== 'function') {
+    throw new HarnessConfigError(
+      `Step "${id}" artifact "${key}" "validate" must be a function when provided.`,
+    )
+  }
+}
+
+function validateStepArtifactsConfig(id: string, artifacts: unknown): void {
+  if (artifacts === undefined) {
+    return
+  }
+  if (typeof artifacts !== 'object' || artifacts === null || Array.isArray(artifacts)) {
+    throw new HarnessConfigError(
+      `Step "${id}" "artifacts" property must be a non-null object when provided.`,
+    )
+  }
+  for (const [key, rule] of Object.entries(artifacts)) {
+    if (key.trim() === '') {
+      throw new HarnessConfigError(
+        `Step "${id}" artifact key must be a non-empty trimmed string.`,
+      )
+    }
+    validateArtifactRule(id, key, rule)
+  }
+}
+
 function validateStep(step: unknown, index: number, seenIds: Set<string>): void {
   if (typeof step !== 'object' || step === null || Array.isArray(step)) {
     throw new HarnessConfigError(`Step at index ${index} must be a non-null object.`)
@@ -56,6 +104,8 @@ function validateStep(step: unknown, index: number, seenIds: Set<string>): void 
       `Step "${id}" maxTotalTurns must be a positive integer, received ${String(rawStep.maxTotalTurns)}.`,
     )
   }
+
+  validateStepArtifactsConfig(id, rawStep.artifacts)
 
   if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
     throw new HarnessConfigError(

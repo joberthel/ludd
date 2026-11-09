@@ -1,5 +1,5 @@
 import type { AgentAccessMode, AgentRunner } from '../types/agent.js'
-import type { EmbeddedMcpServer } from '../types/artifact.js'
+import type { ArtifactValidationIssue, EmbeddedMcpServer } from '../types/artifact.js'
 import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
 import type { RunStateSnapshot } from '../types/state.js'
@@ -10,11 +10,13 @@ import {
   DEFAULT_MAX_TOTAL_TURNS,
   MaxTotalTurnsExceededError,
 } from '../errors/max-total-turns-exceeded-error.js'
+import { StepArtifactValidationError } from '../errors/step-artifact-validation-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { appendStreamEvent } from '../persistence/stream-writer.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
+import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
 
 export interface RehydratedAgentState {
   sessionId?: string | null
@@ -59,13 +61,12 @@ async function resolveSessionId(
   sessionIdProp: DynamicProperty<string | undefined> | undefined,
   ctx: StepContext,
 ): Promise<string> {
-  if (sessionIdProp === undefined) {
-    return `session-${randomUUID()}`
-  }
-  const resolved = await resolveDynamicProperty(sessionIdProp, ctx)
-  const trimmed = resolved?.trim()
-  if (trimmed !== undefined && trimmed !== '') {
-    return trimmed
+  if (sessionIdProp !== undefined) {
+    const raw = await resolveDynamicProperty(sessionIdProp, ctx)
+    const trimmed = raw?.trim()
+    if (trimmed !== undefined && trimmed.length > 0) {
+      return trimmed
+    }
   }
   return `session-${randomUUID()}`
 }
@@ -125,6 +126,7 @@ function emitStepRetry(
   stepId: string,
   sessionId: string,
   attempt: number,
+  reason: 'output_schema_validation_failed' | 'artifact_validation_failed',
   issues: unknown,
 ): void {
   appendLedgerEvent(runDir, {
@@ -136,7 +138,7 @@ function emitStepRetry(
     payload: {
       attempt,
       sessionId,
-      reason: 'output_schema_validation_failed',
+      reason,
       issues,
     },
   })
@@ -156,21 +158,56 @@ function resolveInitialPrompt(
     const events = readLedgerEvents(runDir)
     const lastRetry = events.reverse().find(e => e.eventType === 'step.retry' && e.stepId === stepId)
     if (lastRetry) {
-      const payload = lastRetry.payload as { issues: RetryIssueList }
-      return formatRetryPrompt(initialPrompt, payload.issues)
+      const payload = lastRetry.payload as {
+        reason?: string
+        issues: unknown
+      }
+      if (payload.reason === 'artifact_validation_failed') {
+        return formatArtifactRetryPrompt(initialPrompt, payload.issues as readonly ArtifactValidationIssue[])
+      }
+      return formatRetryPrompt(initialPrompt, payload.issues as RetryIssueList)
     }
   }
   return initialPrompt
 }
 
-function checkTurnBreaker(err: unknown, stepId: string, maxTotalTurns: number, attempt: number): StepOutputValidationError {
-  if (!(err instanceof StepOutputValidationError)) {
+interface TurnRetryParams {
+  stepId: string
+  maxTotalTurns: number
+  attempt: number
+  runDir: string
+  ctx: StepContext
+  sessionId: string
+  initialPrompt: string
+}
+
+function handleTurnRetry(err: unknown, params: TurnRetryParams): string {
+  if (
+    !(err instanceof StepOutputValidationError)
+    && !(err instanceof StepArtifactValidationError)
+  ) {
     throw err
   }
-  if (attempt >= maxTotalTurns) {
-    throw new MaxTotalTurnsExceededError(stepId, maxTotalTurns, err)
+  if (params.attempt >= params.maxTotalTurns) {
+    throw new MaxTotalTurnsExceededError(params.stepId, params.maxTotalTurns, err)
   }
-  return err
+
+  const nextAttempt = params.attempt + 1
+  params.ctx.step.attempt = nextAttempt
+
+  const isArtifact = err instanceof StepArtifactValidationError
+  const reason = isArtifact ? 'artifact_validation_failed' : 'output_schema_validation_failed'
+  emitStepRetry(params.runDir, params.ctx, params.stepId, params.sessionId, nextAttempt, reason, err.issues)
+  return isArtifact
+    ? formatArtifactRetryPrompt(params.initialPrompt, err.issues)
+    : formatRetryPrompt(params.initialPrompt, err.issues)
+}
+
+function persistActiveTurn(runDir: string, snapshot: RunStateSnapshot, sessionId: string, attempt: number): void {
+  snapshot.activeSessionId = sessionId
+  snapshot.activeStepAttempt = attempt
+  snapshot.updatedAt = new Date().toISOString()
+  writeRunStateAtomic(runDir, snapshot)
 }
 
 export async function executeAgentStep(
@@ -191,12 +228,9 @@ export async function executeAgentStep(
 
   while (true) {
     ctx.step.attempt = attempt
-    snapshot.activeSessionId = sessionId
-    snapshot.activeStepAttempt = attempt
-    snapshot.updatedAt = new Date().toISOString()
-    writeRunStateAtomic(runDir, snapshot)
-
+    persistActiveTurn(runDir, snapshot, sessionId, attempt)
     emitPreTurnEvents(runDir, ctx, step.id, sessionId, currentPrompt, agent.mode, attempt)
+
     const turnResult = await agent.executeTurn({
       ctx,
       stepId: step.id,
@@ -212,14 +246,20 @@ export async function executeAgentStep(
 
     try {
       const validatedOutput = await validateStepOutput(step.id, step.outputSchema, turnResult.output)
+      await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
       return createAgentStepOutput(validatedOutput, turnResult.sessionId)
     }
     catch (err: unknown) {
-      const validationError = checkTurnBreaker(err, step.id, maxTotalTurns, attempt)
+      currentPrompt = handleTurnRetry(err, {
+        stepId: step.id,
+        maxTotalTurns,
+        attempt,
+        runDir,
+        ctx,
+        sessionId,
+        initialPrompt,
+      })
       attempt += 1
-      ctx.step.attempt = attempt
-      emitStepRetry(runDir, ctx, step.id, sessionId, attempt, validationError.issues)
-      currentPrompt = formatRetryPrompt(initialPrompt, validationError.issues)
     }
   }
 }

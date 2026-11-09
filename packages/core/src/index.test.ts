@@ -28,9 +28,12 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.HarnessConfigLoadError).toBe('function')
     expect(typeof core.RunAlreadyActiveError).toBe('function')
     expect(typeof core.StepOutputValidationError).toBe('function')
+    expect(typeof core.StepArtifactValidationError).toBe('function')
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
     expect(typeof core.formatRetryPrompt).toBe('function')
+    expect(typeof core.formatArtifactRetryPrompt).toBe('function')
+    expect(typeof core.validateStepArtifacts).toBe('function')
   })
 
   it('does not export deprecated placeholder foo or bar', () => {

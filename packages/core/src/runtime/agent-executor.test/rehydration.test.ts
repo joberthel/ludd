@@ -75,6 +75,59 @@ describe('executeAgentStep rehydration without matching ledger events', () => {
   })
 })
 
+describe('executeAgentStep rehydration with artifact validation retry event', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-rehydrate-art-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('reconstructs prompt using formatArtifactRetryPrompt on artifact_validation_failed', async () => {
+    appendLedgerEvent(tempDir, {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-exec-test',
+      stepId: 's-art-rehydrate',
+      eventType: 'step.retry',
+      payload: {
+        attempt: 2,
+        sessionId: 'sess-art',
+        reason: 'artifact_validation_failed',
+        issues: [
+          {
+            artifactKey: 'spec.md',
+            message: 'Artifact "spec.md" must be non-empty.',
+          },
+        ],
+      },
+    })
+
+    let capturedPrompt: string | undefined
+    const agent: AgentRunner<string> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'initial prompt text',
+      executeTurn: async (input) => {
+        capturedPrompt = input.prompt
+        return { output: 'resumed-output', sessionId: input.sessionId }
+      },
+    }
+    const step: StepConfig = { id: 's-art-rehydrate', run: agent }
+
+    await executeAgentStep(step, agent, createDummyContext(), createDummySnapshot('s-art-rehydrate'), tempDir, {
+      sessionId: 'sess-art',
+      attempt: 2,
+    })
+
+    expect(capturedPrompt).toContain('The step artifacts failed validation:')
+    expect(capturedPrompt).toContain('Artifact "spec.md" must be non-empty.')
+    expect(capturedPrompt).toContain('initial prompt text')
+  })
+})
+
 describe('executeAgentStep rehydration without ledger file', () => {
   let tempDir: string
 

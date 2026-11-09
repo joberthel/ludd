@@ -16,6 +16,7 @@ import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
+import { validateStepArtifacts } from './artifact-validator.js'
 
 export type { HarnessRunResult, RunHarnessOptions }
 
@@ -55,7 +56,9 @@ async function executeStep(
     return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer)
   }
   const rawOutput: unknown = await step.run(ctx)
-  return validateStepOutput(step.id, step.outputSchema, rawOutput)
+  const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
+  await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
+  return validated
 }
 
 function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
