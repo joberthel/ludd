@@ -8,9 +8,10 @@ import type {
 } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
 import type { DynamicProperty, ProvisionedEnvironment, StepContext, StepResult } from './context.js'
-import type { Guardrail } from './guardrail.js'
+import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
 
 export { isGuardrail } from './guardrail.js'
+export type { OnMaxRetriesExceededAction } from './guardrail.js'
 
 export type {
   AgentAccessMode,
@@ -97,6 +98,7 @@ export interface StepConfig<
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
+  onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, any>[]
   afterStep?: readonly Guardrail<any, any>[]

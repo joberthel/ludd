@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
 import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
-import type { Guardrail } from './guardrail.js'
+import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
 import type { StepRunFn } from './harness.js'
 import type {
   AccumulateArtifactItemMap,
@@ -24,6 +24,7 @@ export interface PlainStepDef<
   matrix?: never
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
+  onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>[]
   afterStep?: readonly Guardrail<
@@ -58,6 +59,7 @@ export interface ItemsMatrixStepDef<
   }
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
+  onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>[]
   afterStep?: readonly Guardrail<
@@ -100,6 +102,7 @@ export interface ArtifactMatrixStepDef<
   }
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
+  onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<
     any,
@@ -161,6 +164,7 @@ export interface StepTupleEntry<
 > {
   id: TId
   environment?: DynamicProperty<ProvisionedEnvironment, any>
+  onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   outputSchema?: z.ZodType<TOutput>
   beforeStep?: readonly Guardrail<any, any>[]

@@ -7,14 +7,13 @@ import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { GateWaiter } from './gate-waiter.js'
 import process from 'node:process'
-import { GuardrailMaxRetriesExceededError } from '../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { offloadGuardrailLog } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
+import { handleGuardrailEscalation } from './escalation-manager.js'
 import { formatGuardrailRetryPrompt } from './guardrail-retry-prompt.js'
 
 export type StepRetryReason
@@ -130,13 +129,11 @@ function clearActiveGuardrailRetries(runDir: string, snapshot: RunStateSnapshot)
   }
 }
 
-function handleGuardrailFailure(
+function checkGuardrailRetries(
+  snapshot: RunStateSnapshot,
   k: number,
-  guardrail: Guardrail<any, any>,
-  verdict: GuardrailVerdict,
-  params: RunAfterStepGuardrailsParams,
-): never {
-  const { step, snapshot, runDir, attempt, sessionId, maxTotalTurns, initialPrompt, ctx, mcpServer } = params
+  runDir: string,
+): number {
   if (!snapshot.activeGuardrailRetries) {
     snapshot.activeGuardrailRetries = {}
   }
@@ -145,21 +142,15 @@ function handleGuardrailFailure(
   snapshot.activeGuardrailRetries[key] = count
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
+  return count
+}
 
-  const isAgent = isAgentRunner(step.run)
-  const isHumanReview = guardrail.type === 'human_review'
-  const maxRetries = isHumanReview && guardrail.maxRetries === undefined
-    ? Number.POSITIVE_INFINITY
-    : (guardrail.maxRetries ?? 0)
-
-  if (!isAgent || count > maxRetries) {
-    throw new GuardrailMaxRetriesExceededError(step.id, k, guardrail.maxRetries ?? 0, verdict)
-  }
-
-  if (attempt >= maxTotalTurns) {
-    throw new MaxTotalTurnsExceededError(step.id, maxTotalTurns)
-  }
-
+function triggerGuardrailRetry(
+  params: RunAfterStepGuardrailsParams,
+  k: number,
+  verdict: GuardrailVerdict,
+): never {
+  const { runDir, ctx, step, sessionId, attempt, initialPrompt, mcpServer } = params
   const nextAttempt = attempt + 1
   ctx.step.attempt = nextAttempt
 
@@ -170,6 +161,31 @@ function handleGuardrailFailure(
 
   const retryPrompt = formatGuardrailRetryPrompt(initialPrompt, k, verdict, mcpServer?.url)
   throw new GuardrailRetrySignal(retryPrompt)
+}
+
+async function handleGuardrailFailure(
+  k: number,
+  guardrail: Guardrail<any, any>,
+  verdict: GuardrailVerdict,
+  params: RunAfterStepGuardrailsParams,
+): Promise<GuardrailVerdict> {
+  const { step, snapshot, runDir, attempt, maxTotalTurns } = params
+  const count = checkGuardrailRetries(snapshot, k, runDir)
+  const isAgent = isAgentRunner(step.run)
+  const isHumanReview = guardrail.type === 'human_review'
+  const maxRetries = isHumanReview && guardrail.maxRetries === undefined
+    ? Number.POSITIVE_INFINITY
+    : (guardrail.maxRetries ?? 0)
+
+  const isGuardrailRetriesExceeded = !isAgent || count > maxRetries
+  const isMaxTotalTurnsExceeded = attempt >= maxTotalTurns
+
+  if (isGuardrailRetriesExceeded || isMaxTotalTurnsExceeded) {
+    const reason = isGuardrailRetriesExceeded ? 'guardrail_max_retries' : 'max_total_turns'
+    return handleGuardrailEscalation(params, k, guardrail, verdict, reason)
+  }
+
+  triggerGuardrailRetry(params, k, verdict)
 }
 
 async function processGuardrailResult(
@@ -203,7 +219,7 @@ async function processGuardrailResult(
     attempt,
     verdict,
   })
-  handleGuardrailFailure(k, guardrail, verdict, params)
+  await handleGuardrailFailure(k, guardrail, verdict, params)
 }
 
 export async function runAfterStepGuardrails(

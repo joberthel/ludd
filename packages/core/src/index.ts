@@ -76,6 +76,12 @@ export {
   resolveStepEnvironment,
 } from './runtime/environment-manager.js'
 export {
+  determineEscalationPolicy,
+  type EscalationReason,
+  formatEscalationPrompt,
+  handleGuardrailEscalation,
+} from './runtime/escalation-manager.js'
+export {
   createGateWaiter,
   type GateWaiter,
 } from './runtime/gate-waiter.js'

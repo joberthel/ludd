@@ -128,6 +128,29 @@ export function validateStepGuardrailsConfig(
   }
 }
 
+export function validateStepRetriesConfig(id: string, step: Record<string, unknown>): void {
+  if (
+    step.maxTotalTurns !== undefined
+    && (typeof step.maxTotalTurns !== 'number'
+      || !Number.isInteger(step.maxTotalTurns)
+      || step.maxTotalTurns < 1)
+  ) {
+    throw new HarnessConfigError(
+      `Step "${id}" maxTotalTurns must be a positive integer, received ${String(step.maxTotalTurns)}.`,
+    )
+  }
+
+  if (
+    step.onMaxRetriesExceeded !== undefined
+    && step.onMaxRetriesExceeded !== 'abort'
+    && step.onMaxRetriesExceeded !== 'prompt_user'
+  ) {
+    throw new HarnessConfigError(
+      `Step "${id}" "onMaxRetriesExceeded" must be "abort" or "prompt_user", received ${String(step.onMaxRetriesExceeded)}.`,
+    )
+  }
+}
+
 export function validateStep(step: unknown, index: number, seenIds: Set<string>): void {
   if (typeof step !== 'object' || step === null || Array.isArray(step)) {
     throw new HarnessConfigError(`Step at index ${index} must be a non-null object.`)
@@ -162,17 +185,7 @@ export function validateStep(step: unknown, index: number, seenIds: Set<string>)
     )
   }
 
-  if (
-    rawStep.maxTotalTurns !== undefined
-    && (typeof rawStep.maxTotalTurns !== 'number'
-      || !Number.isInteger(rawStep.maxTotalTurns)
-      || rawStep.maxTotalTurns < 1)
-  ) {
-    throw new HarnessConfigError(
-      `Step "${id}" maxTotalTurns must be a positive integer, received ${String(rawStep.maxTotalTurns)}.`,
-    )
-  }
-
+  validateStepRetriesConfig(id, rawStep)
   validateStepArtifactsConfig(id, rawStep.artifacts)
   validateStepMatrixConfig(id, rawStep.matrix)
   validateStepGuardrailsConfig(id, 'beforeStep', rawStep.beforeStep)

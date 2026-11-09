@@ -4,6 +4,7 @@ import type { ArtifactValidationRule } from './artifact.js'
 import type { StepContext, StepResult } from './context.js'
 import type { StepConfig } from './harness.js'
 
+export type { OnMaxRetriesExceededAction } from './guardrail.js'
 export type {
   ArtifactMatrixStepDef,
   ItemsMatrixStepDef,
