@@ -1,11 +1,22 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dockerWorktreeEnv, translateMcpServerUrl } from '../docker-worktree-env.js'
 import * as hostEnvModule from '../host-env.js'
+import { buildIsolatedEnvironmentVars } from '../security/env-sanitizer.js'
 
 let tmpDir: string
+
+function getExpectedBaselineFlags(): string[] {
+  const isolated = buildIsolatedEnvironmentVars({ hostProcessEnv: process.env })
+  const flags: string[] = []
+  for (const [key, value] of Object.entries(isolated)) {
+    flags.push('-e', `${key}=${value}`)
+  }
+  return flags
+}
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-dock-exec-test-'))
@@ -62,12 +73,14 @@ describe('dockerWorktreeEnv exec command formatting & validation', () => {
       timedOut: false,
     })
 
+    const baselineFlags = getExpectedBaselineFlags()
     await env.exec(['npm', 'test'])
     expect(execSpy).toHaveBeenLastCalledWith(
       env.workingDir,
       [
         'docker',
         'exec',
+        ...baselineFlags,
         'c-test-id',
         'npm',
         'test',
@@ -81,6 +94,7 @@ describe('dockerWorktreeEnv exec command formatting & validation', () => {
       [
         'docker',
         'exec',
+        ...baselineFlags,
         'c-test-id',
         'sh',
         '-c',
@@ -110,6 +124,7 @@ describe('dockerWorktreeEnv exec env flags, bridge routing & tokens', () => {
       timedOut: false,
     })
 
+    const baselineFlags = getExpectedBaselineFlags()
     await env.exec(['node', 'app.js'], {
       env: {
         MCP_SERVER_URL: 'http://127.0.0.1:54321/sse',
@@ -123,6 +138,7 @@ describe('dockerWorktreeEnv exec env flags, bridge routing & tokens', () => {
       [
         'docker',
         'exec',
+        ...baselineFlags,
         '-e',
         'MCP_SERVER_URL=http://host.docker.internal:54321/sse',
         '-e',
@@ -148,6 +164,7 @@ describe('dockerWorktreeEnv exec custom bridgeHost', () => {
       timedOut: false,
     })
 
+    const baselineFlags = getExpectedBaselineFlags()
     await env.exec(['node', 'worker.js'], {
       env: {
         MCP_SERVER_URL: 'http://localhost:3000',
@@ -159,6 +176,7 @@ describe('dockerWorktreeEnv exec custom bridgeHost', () => {
       [
         'docker',
         'exec',
+        ...baselineFlags,
         '-e',
         'MCP_SERVER_URL=http://172.17.0.1:3000',
         'c-test-id',

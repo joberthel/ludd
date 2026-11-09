@@ -6,7 +6,9 @@ import type {
 } from '@ludd/core'
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
+import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
 import { addGitWorktree, removeGitWorktree } from './worktree-helpers.js'
 
 export interface DockerWorktreeEnvOptions {
@@ -16,6 +18,8 @@ export interface DockerWorktreeEnvOptions {
   bridgeHost?: string
   baseBranch?: string
   branchPrefix?: string
+  whitelistEnv?: readonly string[]
+  env?: Record<string, string>
 }
 
 function validateOptions(options: DockerWorktreeEnvOptions): string {
@@ -49,10 +53,7 @@ function parseContainerCommand(command: string | readonly string[]): string[] {
   throw new TypeError('Command must be a non-empty string or array of strings.')
 }
 
-function buildDockerEnvFlags(env: Record<string, string> | undefined, bridgeHost: string): string[] {
-  if (!env) {
-    return []
-  }
+function buildDockerEnvFlags(env: Record<string, string>, bridgeHost: string): string[] {
   const flags: string[] = []
   for (const [key, value] of Object.entries(env)) {
     const finalValue = key === 'MCP_SERVER_URL'
@@ -155,7 +156,13 @@ function createProvisionedDockerEnv(
     branchName,
     exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> => {
       const cmdArgs = parseContainerCommand(command)
-      const envFlags = buildDockerEnvFlags(execOptions?.env, bridgeHost)
+      const isolatedEnv = buildIsolatedEnvironmentVars({
+        hostProcessEnv: process.env,
+        whitelistEnv: options.whitelistEnv,
+        staticEnv: options.env,
+        injectedEnv: execOptions?.env,
+      })
+      const envFlags = buildDockerEnvFlags(isolatedEnv, bridgeHost)
       return execHostEnvCommand(
         worktreePath,
         [

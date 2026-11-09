@@ -29,6 +29,7 @@
     "@ludd/core": "workspace:*"
   },
   "devDependencies": {
+    "@ludd/guardrails": "workspace:*",
     "@types/node": "^26.6.6",
     "typescript": "^6.0.3"
   }

@@ -6,12 +6,16 @@ import type {
 } from '@ludd/core'
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
+import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
 
 export interface GitWorktreeEnvOptions {
   id: string
   baseBranch?: string
   branchPrefix?: string
+  whitelistEnv?: readonly string[]
+  env?: Record<string, string>
 }
 
 function validateOptions(options: GitWorktreeEnvOptions): string {
@@ -104,7 +108,7 @@ async function pingGitWorktree(
 }
 
 function createProvisionedWorktree(
-  id: string,
+  options: GitWorktreeEnvOptions,
   branchName: string,
   worktreePath: string,
   workspaceDir: string,
@@ -112,15 +116,24 @@ function createProvisionedWorktree(
 ): ProvisionedEnvironment {
   const env: ProvisionedEnvironment = {
     __kind: 'environment',
-    id,
+    id: options.id,
     type: 'git-worktree',
     workingDir: worktreePath,
     branchName,
-    exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> =>
-      execHostEnvCommand(env.workingDir, command, {
-        signal: execOptions?.signal ?? defaultSignal,
+    exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> => {
+      const isolatedEnv = buildIsolatedEnvironmentVars({
+        hostProcessEnv: process.env,
+        whitelistEnv: options.whitelistEnv,
+        staticEnv: options.env,
+        injectedEnv: execOptions?.env,
+      })
+      return execHostEnvCommand(env.workingDir, command, {
         ...execOptions,
-      }),
+        signal: execOptions?.signal ?? defaultSignal,
+        env: isolatedEnv,
+        inheritEnv: false,
+      })
+    },
     ping: async (): Promise<boolean> => pingGitWorktree(env.workingDir, defaultSignal),
     teardown: async (): Promise<void> => removeGitWorktree(workspaceDir, env.workingDir, defaultSignal),
   }
@@ -141,7 +154,7 @@ export function gitWorktreeEnv(options: GitWorktreeEnvOptions): EnvironmentAdapt
 
       await addGitWorktree(workspace, worktreePath, branchName, options.baseBranch, defaultSignal)
 
-      return createProvisionedWorktree(id, branchName, worktreePath, workspace, defaultSignal)
+      return createProvisionedWorktree({ ...options, id }, branchName, worktreePath, workspace, defaultSignal)
     },
   }
 }

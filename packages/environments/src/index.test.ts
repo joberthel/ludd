@@ -8,5 +8,7 @@ describe('@ludd/environments package index', () => {
     expect(typeof environments.dockerWorktreeEnv).toBe('function')
     expect(typeof environments.killProcessTree).toBe('function')
     expect(typeof environments.translateMcpServerUrl).toBe('function')
+    expect(typeof environments.buildIsolatedEnvironmentVars).toBe('function')
+    expect(Array.isArray(environments.SAFE_BASELINE_KEYS)).toBe(true)
   })
 })

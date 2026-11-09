@@ -182,10 +182,14 @@ export async function execHostEnvCommand(
 ): Promise<EnvironmentExecResult> {
   const { file, args, shell } = parseCommand(command)
   const cwd = resolveExecCwd(workingDir, options?.cwd)
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...(options?.env ?? {}),
-  }
+  const env: NodeJS.ProcessEnv = options?.inheritEnv === false
+    ? {
+        ...options?.env,
+      }
+    : {
+        ...process.env,
+        ...options?.env,
+      }
 
   return new Promise((resolve, reject) => {
     if (options?.signal?.aborted) {

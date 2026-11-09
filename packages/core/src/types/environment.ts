@@ -3,6 +3,7 @@ export interface EnvironmentExecOptions {
   env?: Record<string, string>
   timeoutMs?: number
   signal?: AbortSignal
+  inheritEnv?: boolean
 }
 
 export interface EnvironmentExecResult {

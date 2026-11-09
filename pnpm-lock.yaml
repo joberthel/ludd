@@ -235,6 +235,9 @@ importers:
         specifier: workspace:*
         version: link:../core
     devDependencies:
+      '@ludd/guardrails':
+        specifier: workspace:*
+        version: link:../guardrails
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
