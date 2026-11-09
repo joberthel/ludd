@@ -5,17 +5,20 @@ import type { StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import type { GateWaiter } from './gate-waiter.js'
 import path from 'node:path'
 import process from 'node:process'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
+import { executeHumanReviewBeforeStepGuardrail } from './before-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
 
 export interface BeforeStepExecutionResult {
   readonly guardrailIndex: number
   readonly verdict: GuardrailVerdict
   readonly logKey: string
+  readonly feedback?: string
 }
 
 export interface RunBeforeStepGuardrailsParams {
@@ -26,6 +29,7 @@ export interface RunBeforeStepGuardrailsParams {
   readonly mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
   readonly environment?: ProvisionedEnvironment
   readonly logStore?: LogStore
+  readonly gateWaiter?: GateWaiter
 }
 
 export function formatBeforeStepNotification(
@@ -37,10 +41,16 @@ export function formatBeforeStepNotification(
   const lines = results.map(r =>
     `- Guardrail #${r.guardrailIndex}: logKey="${r.logKey}" (status: ${r.verdict.status})`,
   )
-  return `Context from beforeStep guardrails is available via MCP tools:\n${lines.join('\n')}\n\nYou can inspect these logs using MCP tools: read_log_page, read_log_lines, or search_log.`
+  const feedbackItems = results
+    .filter(r => typeof r.feedback === 'string' && r.feedback.trim().length > 0)
+    .map(r => `User feedback (Guardrail #${r.guardrailIndex}):\n${r.feedback}`)
+  const feedbackSection = feedbackItems.length > 0
+    ? `\n\n${feedbackItems.join('\n\n')}`
+    : ''
+  return `Context from beforeStep guardrails is available via MCP tools:\n${lines.join('\n')}\n\nYou can inspect these logs using MCP tools: read_log_page, read_log_lines, or search_log.${feedbackSection}`
 }
 
-function emitBeforeStepEvent(
+export function emitBeforeStepEvent(
   runDir: string,
   ctx: StepContext,
   stepId: string,
@@ -86,7 +96,7 @@ function resolveBeforeStepContent(guardrailIndex: number, verdict: GuardrailVerd
   return `Guardrail #${guardrailIndex} returned status: ${verdict.status}`
 }
 
-async function offloadBeforeStepLog(
+export async function offloadBeforeStepLog(
   runDir: string,
   snapshot: RunStateSnapshot,
   stepId: string,
@@ -118,19 +128,13 @@ async function offloadBeforeStepLog(
   return meta.logKey
 }
 
-async function executeSingleBeforeStepGuardrail(
+async function executeStandardBeforeStepGuardrail(
   params: RunBeforeStepGuardrailsParams,
   guardrail: Guardrail<any, any>,
   k: number,
   logStore: LogStore,
 ): Promise<BeforeStepExecutionResult> {
   const { step, ctx, runDir, mcpServer, environment, snapshot } = params
-  emitBeforeStepEvent(runDir, ctx, step.id, 'guardrail.started', {
-    phase: 'beforeStep',
-    guardrailIndex: k,
-    attempt: 1,
-  })
-
   const env = await resolveGuardrailEnv(guardrail, ctx, step.id, environment, snapshot, runDir)
   const verdict = await guardrail.execute({
     ctx,
@@ -159,6 +163,24 @@ async function executeSingleBeforeStepGuardrail(
 
   const logKey = await offloadBeforeStepLog(runDir, snapshot, step.id, k, verdict, logStore)
   return { guardrailIndex: k, verdict, logKey }
+}
+
+async function executeSingleBeforeStepGuardrail(
+  params: RunBeforeStepGuardrailsParams,
+  guardrail: Guardrail<any, any>,
+  k: number,
+  logStore: LogStore,
+): Promise<BeforeStepExecutionResult> {
+  const { step, ctx, runDir } = params
+  emitBeforeStepEvent(runDir, ctx, step.id, 'guardrail.started', {
+    phase: 'beforeStep',
+    guardrailIndex: k,
+    attempt: 1,
+  })
+
+  return guardrail.type === 'human_review'
+    ? executeHumanReviewBeforeStepGuardrail(params, guardrail, k, logStore)
+    : executeStandardBeforeStepGuardrail(params, guardrail, k, logStore)
 }
 
 export async function runBeforeStepGuardrails(

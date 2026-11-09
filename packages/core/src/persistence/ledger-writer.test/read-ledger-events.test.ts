@@ -18,7 +18,7 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-describe('readLedgerEvents appendLedgerEvent round-trip', () => {
+describe('readLedgerEvents standard events round-trip', () => {
   it('reads and losslessly round-trips events appended by appendLedgerEvent (AC 2.3.2)', () => {
     const runDir = path.join(tempDir, 'run-ledger-roundtrip')
     const events: LedgerEvent[] = [
@@ -30,7 +30,6 @@ describe('readLedgerEvents appendLedgerEvent round-trip', () => {
         eventType: 'run.started',
         payload: { harnessName: 'test-harness' },
       },
-
       {
         schemaVersion: 1,
         timestamp: '2026-11-08T20:10:01.000Z',
@@ -39,7 +38,6 @@ describe('readLedgerEvents appendLedgerEvent round-trip', () => {
         eventType: 'step.started',
         payload: { attempt: 1 },
       },
-
       {
         schemaVersion: 1,
         timestamp: '2026-11-08T20:10:02.000Z',
@@ -47,12 +45,9 @@ describe('readLedgerEvents appendLedgerEvent round-trip', () => {
         stepId: 'step-init',
         eventType: 'step.passed',
         payload: {
-          output: {
-            ready: true,
-          },
+          output: { ready: true },
         },
       },
-
       {
         schemaVersion: 1,
         timestamp: '2026-11-08T20:10:03.000Z',
@@ -65,6 +60,47 @@ describe('readLedgerEvents appendLedgerEvent round-trip', () => {
 
     for (const event of events) {
       appendLedgerEvent(runDir, event)
+    }
+
+    const read = readLedgerEvents(runDir)
+    expect(read).toEqual(events)
+  })
+})
+
+describe('readLedgerEvents gate events round-trip', () => {
+  it('reads gate.waiting and gate.resolved events', () => {
+    const runDir = path.join(tempDir, 'run-gate-events')
+    const events: LedgerEvent[] = [
+      {
+        schemaVersion: 1,
+        timestamp: '2026-11-09T20:00:00.000Z',
+        runId: 'run-gate-events',
+        stepId: 'step-1',
+        eventType: 'gate.waiting',
+        payload: {
+          phase: 'beforeStep',
+          guardrailIndex: 0,
+          gateType: 'human_review',
+          prompt: 'Confirm feature prompt',
+        },
+      },
+      {
+        schemaVersion: 1,
+        timestamp: '2026-11-09T20:00:05.000Z',
+        runId: 'run-gate-events',
+        stepId: 'step-1',
+        eventType: 'gate.resolved',
+        payload: {
+          stepId: 'step-1',
+          guardrailIndex: 0,
+          action: 'pass',
+          feedback: 'Go ahead',
+        },
+      },
+    ]
+
+    for (const e of events) {
+      appendLedgerEvent(runDir, e)
     }
 
     const read = readLedgerEvents(runDir)

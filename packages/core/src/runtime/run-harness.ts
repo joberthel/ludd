@@ -6,12 +6,14 @@ import type { ControlServer } from '../types/ipc.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
+import type { GateWaiter } from './gate-waiter.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
 import { startControlServer } from '../ipc/control-server.js'
+import { createGateResolveHandler } from '../ipc/gate-resolve-handler.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import { acquireRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir } from '../persistence/state-store.js'
@@ -19,6 +21,7 @@ import {
   rehydrateEnvironmentsAndCheckHealth,
   resolveStepEnvironment,
 } from './environment-manager.js'
+import { createGateWaiter } from './gate-waiter.js'
 import { initOrRehydrateSnapshot } from './harness-rehydration.js'
 import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
 import {
@@ -44,10 +47,11 @@ async function executeStep(
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<unknown> {
   return step.matrix !== undefined
-    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
-    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore)
+    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter)
+    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter)
 }
 
 async function runStep(
@@ -59,6 +63,7 @@ async function runStep(
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
   const attempt = rehydration?.attempt ?? 1
@@ -74,7 +79,7 @@ async function runStep(
 
     const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir)
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
-    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore)
+    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore, gateWaiter)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
@@ -95,6 +100,7 @@ async function executeStepPipeline(
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<HarnessRunResult | null> {
   for (const step of steps) {
     if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
@@ -103,7 +109,7 @@ async function executeStepPipeline(
     const stepRehydration = rehydration?.stepId === step.id
       ? rehydration
       : undefined
-    const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore)
+    const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore, gateWaiter)
     if (failure !== null) {
       return failure
     }
@@ -179,6 +185,7 @@ export async function runHarness(
 ): Promise<HarnessRunResult> {
   const validatedConfig = validateHarnessConfig(config)
   const { runId, workspaceDir, runDir } = resolveAndLockRunDir(options)
+  const gateWaiter = createGateWaiter()
   let mcpServer: EmbeddedMcpServer | undefined
   let controlServer: ControlServer | undefined
   let snapshot: RunStateSnapshot | undefined
@@ -189,6 +196,11 @@ export async function runHarness(
     snapshot = prepared.snapshot
     controlServer = await startControlServer(runDir, {
       getStatus: () => snapshot!,
+      resolveGate: createGateResolveHandler({
+        runDir,
+        getSnapshot: () => snapshot!,
+        gateWaiter,
+      }),
     })
 
     const failure = await executeStepPipeline(
@@ -200,6 +212,7 @@ export async function runHarness(
       prepared.rehydration,
       mcpServer,
       prepared.logStore,
+      gateWaiter,
     )
     if (failure !== null) {
       return failure
@@ -211,6 +224,6 @@ export async function runHarness(
     throw error
   }
   finally {
-    await cleanupRunResources(runDir, controlServer, mcpServer)
+    await cleanupRunResources(runDir, controlServer, mcpServer, gateWaiter)
   }
 }

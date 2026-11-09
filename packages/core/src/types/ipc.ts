@@ -45,8 +45,23 @@ export interface JsonRpcErrorResponse {
 
 export type JsonRpcResponse<T = unknown> = JsonRpcSuccessResponse<T> | JsonRpcErrorResponse
 
+export type GateAction = 'pass' | 'fail' | 'retry' | 'skip' | 'abort'
+
+export interface GateResolveParams {
+  stepId: string
+  guardrailIndex?: number
+  action: GateAction
+  feedback?: string
+  addRetries?: number
+}
+
+export interface GateResolveResult {
+  ok: boolean
+}
+
 export interface ControlRpcHandlers {
   getStatus: () => RunStateSnapshot | Promise<RunStateSnapshot>
+  resolveGate?: (params: unknown) => GateResolveResult | Promise<GateResolveResult>
   [method: string]: ((params: unknown) => unknown | Promise<unknown>) | undefined
 }
 
@@ -58,6 +73,7 @@ export interface ControlServer {
 export interface ControlClient {
   readonly socketPath: string
   readonly status: () => Promise<RunStateSnapshot>
+  readonly resolveGate: (params: GateResolveParams) => Promise<GateResolveResult>
   readonly request: <T = unknown>(method: string, params?: unknown) => Promise<T>
   readonly close: () => Promise<void>
 }

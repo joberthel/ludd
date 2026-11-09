@@ -20,6 +20,8 @@ export const ledgerEventTypeSchema = z.enum([
   'guardrail.passed',
   'guardrail.skipped',
   'guardrail.failed',
+  'gate.waiting',
+  'gate.resolved',
 ])
 
 export const ledgerEventSchema = z.object({

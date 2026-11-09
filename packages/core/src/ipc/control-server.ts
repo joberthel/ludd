@@ -10,6 +10,7 @@ import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
+import { JsonRpcResponseError } from '../errors/json-rpc-response-error.js'
 import {
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -81,6 +82,10 @@ async function invokeRpcMethod(
     const result = await handlers.getStatus()
     return { ok: true, result }
   }
+  if (request.method === 'gate.resolve' && typeof handlers.resolveGate === 'function') {
+    const result = await handlers.resolveGate(request.params)
+    return { ok: true, result }
+  }
   const customHandler = handlers[request.method]
   if (typeof customHandler !== 'function') {
     return { ok: false, notFound: true }
@@ -110,6 +115,9 @@ export async function dispatchRpcRequest(
   catch (error: unknown) {
     if (isNotification) {
       return null
+    }
+    if (error instanceof JsonRpcResponseError) {
+      return makeErrorResponse(id, error.code, error.message)
     }
     const message = error instanceof Error
       ? error.message

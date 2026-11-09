@@ -15,6 +15,11 @@ export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { createControlClient } from './ipc/control-client.js'
 export { startControlServer } from './ipc/control-server.js'
+export {
+  createGateResolveHandler,
+  type GateResolveHandlerContext,
+  validateGateResolveParams,
+} from './ipc/gate-resolve-handler.js'
 export { CONTROL_SOCKET_NAME, getControlSocketPath } from './ipc/socket-path.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
 export {
@@ -70,6 +75,10 @@ export {
   resolveGuardrailEnvironment,
   resolveStepEnvironment,
 } from './runtime/environment-manager.js'
+export {
+  createGateWaiter,
+  type GateWaiter,
+} from './runtime/gate-waiter.js'
 export {
   formatGuardrailRetryPrompt,
   GuardrailRetrySignal,
@@ -148,6 +157,9 @@ export {
   type ControlClient,
   type ControlRpcHandlers,
   type ControlServer,
+  type GateAction,
+  type GateResolveParams,
+  type GateResolveResult,
   JSON_RPC_ERRORS,
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -174,6 +186,6 @@ export type {
   SearchLogMatch,
   SearchLogResult,
 } from './types/log.js'
-export type { EnvironmentDescriptor, RunStateSnapshot, RunStatus } from './types/state.js'
+export type { ActiveGateState, EnvironmentDescriptor, RunStateSnapshot, RunStatus } from './types/state.js'
 export type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'

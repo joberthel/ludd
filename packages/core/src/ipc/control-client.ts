@@ -1,5 +1,7 @@
 import type {
   ControlClient,
+  GateResolveParams,
+  GateResolveResult,
   JsonRpcRequest,
   JsonRpcResponse,
 } from '../types/ipc.js'
@@ -95,6 +97,17 @@ function attachClientFraming(
   })
 }
 
+function buildRpcPayload(id: number, method: string, params?: unknown): JsonRpcRequest {
+  return {
+    jsonrpc: '2.0',
+    id,
+    method,
+    ...(params !== undefined
+      ? { params }
+      : {}),
+  }
+}
+
 export async function createControlClient(runDir: string): Promise<ControlClient> {
   const socketPath = getControlSocketPath(runDir)
   const socket = net.createConnection(socketPath)
@@ -118,14 +131,7 @@ export async function createControlClient(runDir: string): Promise<ControlClient
     const id = nextId++
     return new Promise<T>((resolve, reject) => {
       pendingRequests.set(id, { resolve: resolve as (v: unknown) => void, reject })
-      const payload: JsonRpcRequest = {
-        jsonrpc: '2.0',
-        id,
-        method,
-        ...(params !== undefined
-          ? { params }
-          : {}),
-      }
+      const payload = buildRpcPayload(id, method, params)
       socket.write(`${JSON.stringify(payload)}\n`, (err) => {
         if (err) {
           pendingRequests.delete(id)
@@ -146,6 +152,7 @@ export async function createControlClient(runDir: string): Promise<ControlClient
   return {
     socketPath,
     status: async () => request<RunStateSnapshot>('run.status'),
+    resolveGate: async (params: GateResolveParams) => request<GateResolveResult>('gate.resolve', params),
     request,
     close,
   }

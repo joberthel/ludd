@@ -13,6 +13,8 @@ export type LedgerEventType
     | 'guardrail.passed'
     | 'guardrail.skipped'
     | 'guardrail.failed'
+    | 'gate.waiting'
+    | 'gate.resolved'
 
 export interface LedgerEvent<TPayload = Record<string, unknown>> {
   schemaVersion: 1

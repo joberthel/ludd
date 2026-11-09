@@ -98,6 +98,9 @@ describe('@ludd/core IPC exports', () => {
   it('exports control client, server, and socket path helpers', () => {
     expect(typeof core.createControlClient).toBe('function')
     expect(typeof core.startControlServer).toBe('function')
+    expect(typeof core.createGateResolveHandler).toBe('function')
+    expect(typeof core.validateGateResolveParams).toBe('function')
+    expect(typeof core.createGateWaiter).toBe('function')
     expect(typeof core.getControlSocketPath).toBe('function')
     expect(core.CONTROL_SOCKET_NAME).toBe('control.sock')
     expect(typeof core.JsonRpcResponseError).toBe('function')

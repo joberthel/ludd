@@ -31,12 +31,28 @@ const environmentDescriptorSchema = z.object({
   workingDir: z.string(),
 })
 
+const activeGateStateSchema = z.object({
+  stepId: z.string(),
+  matrixIndex: z.number().int().nonnegative().optional(),
+  phase: z.enum(['beforeStep', 'afterStep']),
+  guardrailIndex: z.number().int().nonnegative(),
+  gateType: z.enum(['human_review', 'max_retries_exceeded']),
+  prompt: z.string(),
+  createdAt: z.string(),
+})
+
 export const runStateSnapshotSchema = z.object({
   schemaVersion: z.literal(SUPPORTED_SCHEMA_VERSION),
   runId: z.string(),
   harnessName: z.string(),
-  status: z.enum(['running', 'passed', 'failed']),
+  status: z.enum([
+    'running',
+    'waiting_for_gate',
+    'passed',
+    'failed',
+  ]),
   activeStepId: z.string().nullable(),
+  activeGate: activeGateStateSchema.nullable().optional(),
   activeSessionId: z.string().nullable().optional(),
   activeStepAttempt: z.number().optional(),
   activeMatrixIndex: z.number().int().nonnegative().nullable().optional(),

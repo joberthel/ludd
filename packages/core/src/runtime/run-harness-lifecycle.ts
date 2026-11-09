@@ -5,6 +5,7 @@ import type { ControlServer } from '../types/ipc.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import type { GateWaiter } from './gate-waiter.js'
 import { createArtifactStore } from '../mcp/artifact-store.js'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
@@ -45,6 +46,7 @@ export function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot
   snapshot.activeMatrixIndex = null
   snapshot.activeMatrixOutputs = []
   snapshot.activeGuardrailRetries = undefined
+  snapshot.activeGate = null
   persistSnapshot(runDir, snapshot)
 }
 
@@ -143,8 +145,10 @@ export async function cleanupRunResources(
   runDir: string,
   controlServer?: ControlServer,
   mcpServer?: EmbeddedMcpServer,
+  gateWaiter?: GateWaiter,
 ): Promise<void> {
   try {
+    gateWaiter?.abort('Run execution terminated')
     await controlServer?.close()
   }
   finally {

@@ -21,23 +21,23 @@ function createFakeSnapshot(status: 'running' | 'passed' = 'running'): RunStateS
   }
 }
 
-describe('control client standard queries and custom requests', () => {
-  let tempDir: string
-  let server: ControlServer | undefined
+let tempDir: string
+let server: ControlServer | undefined
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-client-test-'))
-  })
+beforeEach(async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-client-test-'))
+})
 
-  afterEach(async () => {
-    vi.restoreAllMocks()
-    if (server) {
-      await server.close()
-      server = undefined
-    }
-    await rm(tempDir, { recursive: true, force: true })
-  })
+afterEach(async () => {
+  vi.restoreAllMocks()
+  if (server) {
+    await server.close()
+    server = undefined
+  }
+  await rm(tempDir, { recursive: true, force: true })
+})
 
+describe('control client status and queries', () => {
   it('connects to server and queries status', async () => {
     const snapshot = createFakeSnapshot('passed')
     server = await startControlServer(tempDir, {
@@ -72,23 +72,39 @@ describe('control client standard queries and custom requests', () => {
   })
 })
 
-describe('control client RPC errors and schema payloads', () => {
-  let tempDir: string
-  let server: ControlServer | undefined
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-client-test-'))
-  })
-
-  afterEach(async () => {
-    vi.restoreAllMocks()
-    if (server) {
-      await server.close()
-      server = undefined
+describe('control client gate resolution', () => {
+  it('invokes resolveGate RPC method via typed helper', async () => {
+    let capturedParams: unknown
+    const handlers: ControlRpcHandlers = {
+      getStatus: () => createFakeSnapshot(),
+      resolveGate: (params: unknown) => {
+        capturedParams = params
+        return { ok: true }
+      },
     }
-    await rm(tempDir, { recursive: true, force: true })
-  })
+    server = await startControlServer(tempDir, handlers)
 
+    const client = await createControlClient(tempDir)
+    const result = await client.resolveGate({
+      stepId: 'step-clarify',
+      guardrailIndex: 0,
+      action: 'pass',
+      feedback: 'Approved by lead',
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(capturedParams).toEqual({
+      stepId: 'step-clarify',
+      guardrailIndex: 0,
+      action: 'pass',
+      feedback: 'Approved by lead',
+    })
+
+    await client.close()
+  })
+})
+
+describe('control client RPC errors and schema payloads', () => {
   it('rejects with JsonRpcResponseError on RPC error response', async () => {
     server = await startControlServer(tempDir, {
       getStatus: () => createFakeSnapshot(),
@@ -127,17 +143,6 @@ describe('control client RPC errors and schema payloads', () => {
 })
 
 describe('control client stream fragmentation and line filtering', () => {
-  let tempDir: string
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-client-test-'))
-  })
-
-  afterEach(async () => {
-    vi.restoreAllMocks()
-    await rm(tempDir, { recursive: true, force: true })
-  })
-
   it('handles fragmented responses and ignores unparseable lines', async () => {
     const fakeServer = net.createServer((sock) => {
       sock.on('data', () => {

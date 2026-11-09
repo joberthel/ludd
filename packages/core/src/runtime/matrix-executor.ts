@@ -5,6 +5,7 @@ import type { MatrixConfig, StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
+import type { GateWaiter } from './gate-waiter.js'
 import { StepMatrixResolutionError } from '../errors/step-matrix-resolution-error.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
@@ -63,6 +64,7 @@ async function resolveBeforeStepContext(
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<string> {
   const isInitial = !rehydration || (rehydration.attempt ?? 1) <= 1
   if (!isInitial || !step.beforeStep || step.beforeStep.length === 0) {
@@ -76,6 +78,7 @@ async function resolveBeforeStepContext(
     mcpServer,
     environment,
     logStore,
+    gateWaiter,
   })
 }
 
@@ -118,6 +121,7 @@ export async function executeSingleSlice(
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<unknown> {
   const beforeStepNotification = await resolveBeforeStepContext(
     step,
@@ -128,6 +132,7 @@ export async function executeSingleSlice(
     mcpServer,
     environment,
     logStore,
+    gateWaiter,
   )
 
   if (isAgentRunner(step.run)) {
@@ -171,6 +176,13 @@ function persistSliceState(
   writeRunStateAtomic(runDir, snapshot)
 }
 
+function assertMatrixConfig(config: MatrixConfig | undefined, stepId: string): MatrixConfig {
+  if (config === undefined) {
+    throw new StepMatrixResolutionError(stepId, 'Matrix configuration is required.')
+  }
+  return config
+}
+
 export async function executeMatrixStep(
   step: StepConfig,
   matrixConfig: MatrixConfig | undefined,
@@ -181,11 +193,9 @@ export async function executeMatrixStep(
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<unknown[]> {
-  const config = matrixConfig ?? step.matrix
-  if (config === undefined) {
-    throw new StepMatrixResolutionError(step.id, 'Matrix configuration is required.')
-  }
+  const config = assertMatrixConfig(matrixConfig ?? step.matrix, step.id)
   const items = await resolveMatrixItems(step.id, config, ctx)
   const total = items.length
   const outputs: unknown[] = rehydration?.matrixOutputs
@@ -214,6 +224,7 @@ export async function executeMatrixStep(
       mcpServer,
       environment,
       logStore,
+      gateWaiter,
     )
     outputs.push(sliceOutput)
 

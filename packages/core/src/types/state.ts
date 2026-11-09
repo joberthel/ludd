@@ -1,7 +1,17 @@
 import type { StepResult } from './context.js'
 import type { LogMetadata } from './log.js'
 
-export type RunStatus = 'running' | 'passed' | 'failed'
+export type RunStatus = 'running' | 'waiting_for_gate' | 'passed' | 'failed'
+
+export interface ActiveGateState {
+  stepId: string
+  matrixIndex?: number
+  phase: 'beforeStep' | 'afterStep'
+  guardrailIndex: number
+  gateType: 'human_review' | 'max_retries_exceeded'
+  prompt: string
+  createdAt: string
+}
 
 export interface EnvironmentDescriptor {
   id: string
@@ -15,6 +25,7 @@ export interface RunStateSnapshot {
   harnessName: string
   status: RunStatus
   activeStepId: string | null
+  activeGate?: ActiveGateState | null
   activeSessionId?: string | null
   activeStepAttempt?: number
   activeMatrixIndex?: number | null

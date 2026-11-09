@@ -6,6 +6,7 @@ describe('@ludd/guardrails package index', () => {
     expect(typeof guardrails.agentGuardrail).toBe('function')
     expect(typeof guardrails.fnGuardrail).toBe('function')
     expect(typeof guardrails.execGuardrail).toBe('function')
+    expect(typeof guardrails.humanReviewGuardrail).toBe('function')
     expect(typeof guardrails.sh).toBe('function')
   })
 })

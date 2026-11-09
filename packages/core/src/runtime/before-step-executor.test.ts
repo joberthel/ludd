@@ -62,6 +62,18 @@ describe('before-step-executor notification formatting', () => {
     expect(notification).toContain('- Guardrail #1: logKey="step-1-1-beforeStep-1" (status: fail)')
     expect(notification).toContain('read_log_page, read_log_lines, or search_log')
   })
+
+  it('formats user feedback section when feedback is present in results', () => {
+    const notification = formatBeforeStepNotification([
+      {
+        guardrailIndex: 0,
+        verdict: { status: 'pass' },
+        logKey: 'step-1-1-beforeStep-0',
+        feedback: 'Please implement SSO login with Google OAuth.',
+      },
+    ])
+    expect(notification).toContain('User feedback (Guardrail #0):\nPlease implement SSO login with Google OAuth.')
+  })
 })
 
 describe('runBeforeStepGuardrails empty guards', () => {
