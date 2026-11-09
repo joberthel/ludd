@@ -1,5 +1,6 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext } from '../types/context.js'
+import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { MatrixConfig, StepConfig } from '../types/harness.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
@@ -58,9 +59,10 @@ export async function executeSingleSlice(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
+  environment?: ProvisionedEnvironment,
 ): Promise<unknown> {
   if (isAgentRunner(step.run)) {
-    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer)
+    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer, environment)
   }
   const rawOutput: unknown = await step.run(ctx)
   const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
@@ -76,6 +78,7 @@ export async function executeSingleSlice(
     maxTotalTurns: 1,
     initialPrompt: '',
     mcpServer,
+    environment,
   })
   return validated
 }
@@ -103,6 +106,7 @@ export async function executeMatrixStep(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
+  environment?: ProvisionedEnvironment,
 ): Promise<unknown[]> {
   const config = matrixConfig ?? step.matrix
   if (config === undefined) {
@@ -134,6 +138,7 @@ export async function executeMatrixStep(
       runDir,
       sliceRehydration,
       mcpServer,
+      environment,
     )
     outputs.push(sliceOutput)
 

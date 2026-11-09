@@ -1,7 +1,22 @@
-import type { GuardrailExecutionInput, StepContext } from '@ludd/core'
+import type { GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@ludd/core'
 import { isGuardrail } from '@ludd/core'
 import { describe, expect, it } from 'vitest'
 import { fnGuardrail } from './fn-guardrail.js'
+
+const mockEnv: ProvisionedEnvironment = {
+  __kind: 'environment',
+  id: 'env-1',
+  type: 'host',
+  workingDir: '/workspace',
+  exec: async () => ({
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+  }),
+  ping: async () => true,
+  teardown: async () => {},
+}
 
 function createFakeExecutionInput(ctx: StepContext): GuardrailExecutionInput {
   return {
@@ -11,7 +26,7 @@ function createFakeExecutionInput(ctx: StepContext): GuardrailExecutionInput {
     guardrailIndex: 0,
     attempt: 1,
     runDir: '/tmp/run',
-    environment: { id: 'env-1' },
+    environment: mockEnv,
     mcpServerUrl: '',
     mcpAuthToken: '',
   }
@@ -81,7 +96,7 @@ describe('fnGuardrail shorthand and options', () => {
   })
 
   it('preserves environment config when supplied', () => {
-    const envProp = { id: 'custom-env' }
+    const envProp = mockEnv
     const rail = fnGuardrail({
       environment: envProp,
       run: () => ({ status: 'skip' }),

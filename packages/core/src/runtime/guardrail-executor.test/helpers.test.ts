@@ -1,3 +1,4 @@
+import type { ProvisionedEnvironment } from '../../types/environment.js'
 import type { Guardrail } from '../../types/guardrail.js'
 import type { StepConfig } from '../../types/harness.js'
 import type { RunStateSnapshot } from '../../types/state.js'
@@ -77,16 +78,34 @@ describe('guardrail executor prompt and ledger helpers', () => {
   })
 })
 
+function makeMockEnv(id: string): ProvisionedEnvironment {
+  return {
+    __kind: 'environment',
+    id,
+    type: 'mock',
+    workingDir: '/workspace',
+    exec: async () => ({
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+      timedOut: false,
+    }),
+    ping: async () => true,
+    teardown: async () => {},
+  }
+}
+
 describe('guardrail executor dynamic environment resolution', () => {
   it('resolves guardrail environment property dynamically', async () => {
     const runDir = makeTempDir()
     try {
       const snapshot = makeInitialSnapshot(runDir)
       let receivedEnv: any
+      const mockEnv = makeMockEnv('custom-container')
       const customRail: Guardrail = {
         __kind: 'guardrail',
         type: 'fn',
-        environment: () => ({ id: 'custom-container' }),
+        environment: () => mockEnv,
         execute: async (input) => {
           receivedEnv = input.environment
           return { status: 'pass' }
@@ -116,7 +135,7 @@ describe('guardrail executor dynamic environment resolution', () => {
         initialPrompt: '',
       })
 
-      expect(receivedEnv).toEqual({ id: 'custom-container' })
+      expect(receivedEnv).toEqual(mockEnv)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })
@@ -130,6 +149,7 @@ describe('guardrail executor inherited environment resolution', () => {
     try {
       const snapshot = makeInitialSnapshot(runDir)
       let receivedEnv: any
+      const inheritedEnv = makeMockEnv('inherited-step-env')
       const defaultRail: Guardrail = {
         __kind: 'guardrail',
         type: 'fn',
@@ -146,7 +166,7 @@ describe('guardrail executor inherited environment resolution', () => {
       const ctx = {
         runId: 'r-1',
         environments: {
-          's-step-env': { id: 'inherited-step-env' },
+          's-step-env': inheritedEnv,
         },
         steps: {},
         step: { id: 's-step-env', output: {}, attempt: 1 },
@@ -164,7 +184,7 @@ describe('guardrail executor inherited environment resolution', () => {
         initialPrompt: '',
       })
 
-      expect(receivedEnv).toEqual({ id: 'inherited-step-env' })
+      expect(receivedEnv).toEqual(inheritedEnv)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })

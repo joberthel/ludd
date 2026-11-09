@@ -27,6 +27,9 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.validateStepOutput).toBe('function')
     expect(typeof core.createArtifactStore).toBe('function')
     expect(typeof core.startEmbeddedMcpServer).toBe('function')
+    expect(typeof core.createDefaultHostEnvironment).toBe('function')
+    expect(typeof core.resolveStepEnvironment).toBe('function')
+    expect(typeof core.resolveGuardrailEnvironment).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
     expect(typeof core.HarnessConfigLoadError).toBe('function')
     expect(typeof core.RunAlreadyActiveError).toBe('function')
@@ -34,6 +37,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.StepArtifactValidationError).toBe('function')
     expect(typeof core.StepMatrixResolutionError).toBe('function')
     expect(typeof core.GuardrailMaxRetriesExceededError).toBe('function')
+    expect(typeof core.isProvisionedEnvironment).toBe('function')
     expect(typeof core.isGuardrail).toBe('function')
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
@@ -43,7 +47,9 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.resolveMatrixItems).toBe('function')
     expect(typeof core.executeMatrixStep).toBe('function')
   })
+})
 
+describe('@ludd/core dynamic property and legacy exports', () => {
   it('does not export deprecated placeholder foo or bar', () => {
     expect((core as Record<string, unknown>).foo).toBeUndefined()
     expect((core as Record<string, unknown>).bar).toBeUndefined()

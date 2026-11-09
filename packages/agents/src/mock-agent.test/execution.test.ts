@@ -1,27 +1,43 @@
-import type { AgentTurnInput, ArtifactClient } from '@ludd/core'
+import type { AgentTurnInput, ArtifactClient, ProvisionedEnvironment } from '@ludd/core'
 import { describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 
-describe('mockAgent turn execution and response exhaustion', () => {
-  const dummyInput: AgentTurnInput = {
-    ctx: {
-      runId: 'r-1',
-      environments: {},
-      steps: {},
-      step: { id: 's-1', output: undefined, attempt: 1 },
-      matrix: undefined,
-      artifacts: {} as ArtifactClient,
-    },
-    stepId: 's-1',
-    prompt: 'hello',
-    sessionId: 'sess-1',
-    attempt: 1,
-    mode: 'read-only',
-    runDir: '/tmp/run',
-    mcpServerUrl: 'http://127.0.0.1:0/mcp',
-    mcpAuthToken: 'dummy-token',
-  }
+const dummyEnv: ProvisionedEnvironment = {
+  __kind: 'environment',
+  id: 'mock-env',
+  type: 'host',
+  workingDir: '/tmp',
+  exec: async () => ({
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+  }),
+  ping: async () => true,
+  teardown: async () => {},
+}
 
+const dummyInput: AgentTurnInput = {
+  ctx: {
+    runId: 'r-1',
+    environments: {},
+    steps: {},
+    step: { id: 's-1', output: undefined, attempt: 1 },
+    matrix: undefined,
+    artifacts: {} as ArtifactClient,
+  },
+  stepId: 's-1',
+  prompt: 'hello',
+  sessionId: 'sess-1',
+  attempt: 1,
+  mode: 'read-only',
+  runDir: '/tmp/run',
+  environment: dummyEnv,
+  mcpServerUrl: 'http://127.0.0.1:0/mcp',
+  mcpAuthToken: 'dummy-token',
+}
+
+describe('mockAgent turn execution and response exhaustion', () => {
   it('sequentially consumes static values and function responses', async () => {
     const agent = mockAgent<string>({
       prompt: 'hello',

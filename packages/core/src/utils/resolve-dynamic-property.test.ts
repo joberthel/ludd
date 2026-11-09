@@ -6,7 +6,20 @@ function createMockContext(): StepContext {
   return {
     runId: 'run-123',
     environments: {
-      default: { id: 'default', ready: true },
+      default: {
+        __kind: 'environment',
+        id: 'default',
+        type: 'host',
+        workingDir: '/workspace',
+        exec: async () => ({
+          exitCode: 0,
+          stdout: '',
+          stderr: '',
+          timedOut: false,
+        }),
+        ping: async () => true,
+        teardown: async () => {},
+      },
     },
     steps: {
       build: {

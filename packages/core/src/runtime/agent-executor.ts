@@ -1,20 +1,22 @@
-import type { AgentAccessMode, AgentRunner } from '../types/agent.js'
+import type { AgentRunner } from '../types/agent.js'
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { DynamicProperty, StepContext } from '../types/context.js'
+import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { StepConfig } from '../types/harness.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentPromptState } from './agent-prompt.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
 import { randomUUID } from 'node:crypto'
+import process from 'node:process'
 import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { StepArtifactValidationError } from '../errors/step-artifact-validation-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
-import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
-import { appendStreamEvent } from '../persistence/stream-writer.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { formatRetryPrompt, resolveInitialPrompt } from './agent-prompt.js'
+import { emitPreTurnEvents, emitTurnCompleted } from './agent-telemetry.js'
 import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
+import { createDefaultHostEnvironment } from './environment-manager.js'
 import {
   emitStepRetry,
   GuardrailRetrySignal,
@@ -58,56 +60,6 @@ async function resolveSessionId(
     }
   }
   return `session-${randomUUID()}`
-}
-
-function emitPreTurnEvents(
-  runDir: string,
-  ctx: StepContext,
-  stepId: string,
-  sessionId: string,
-  prompt: string,
-  mode: AgentAccessMode,
-  attempt: number,
-): void {
-  appendLedgerEvent(runDir, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: ctx.runId,
-    stepId,
-    matrixIndex: ctx.matrix?.index,
-    eventType: 'agent.stream.linked',
-    payload: { sessionId, streamPath: `streams/${sessionId}.jsonl`, attempt },
-  })
-  appendStreamEvent(runDir, sessionId, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: ctx.runId,
-    stepId,
-    sessionId,
-    attempt,
-    eventType: 'turn.started',
-    payload: { prompt, mode },
-  })
-}
-
-function emitTurnCompleted(
-  runDir: string,
-  ctx: StepContext,
-  stepId: string,
-  sessionId: string,
-  output: unknown,
-  attempt: number,
-): void {
-  appendStreamEvent(runDir, sessionId, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: ctx.runId,
-    stepId,
-    sessionId,
-    attempt,
-    eventType: 'turn.completed',
-    payload: { output },
-  })
 }
 
 interface TurnRetryParams {
@@ -161,7 +113,12 @@ async function finalizeAgentTurn(
   await validateStepArtifacts(step.id, step.artifacts, params.ctx.artifacts)
   const stepOutput = createAgentStepOutput(validated, turnResult.sessionId)
   params.ctx.step = { id: step.id, output: stepOutput, attempt: params.attempt }
-  await runAfterStepGuardrails({ ...params, step, sessionId: turnResult.sessionId })
+  await runAfterStepGuardrails({
+    ...params,
+    step,
+    sessionId: turnResult.sessionId,
+    environment: params.environment,
+  })
   return stepOutput
 }
 
@@ -174,6 +131,7 @@ interface AgentTurnExecutionScope {
   sessionId: string
   initialPrompt: string
   maxTotalTurns: number
+  environment: ProvisionedEnvironment
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
 }
 
@@ -194,6 +152,7 @@ async function runTurnLoopAttempt(
     attempt,
     mode: scope.agent.mode,
     runDir: scope.runDir,
+    environment: scope.environment,
     mcpServerUrl: scope.mcpServer?.url ?? '',
     mcpAuthToken: scope.mcpServer?.authToken ?? '',
   })
@@ -207,6 +166,7 @@ async function runTurnLoopAttempt(
       attempt,
       maxTotalTurns: scope.maxTotalTurns,
       initialPrompt: scope.initialPrompt,
+      environment: scope.environment,
       mcpServer: scope.mcpServer,
     })
     return { success: true, result }
@@ -233,10 +193,15 @@ export async function executeAgentStep(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
+  environment?: ProvisionedEnvironment,
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
   const maxTotalTurns = step.maxTotalTurns ?? DEFAULT_MAX_TOTAL_TURNS
+  const resolvedEnv = environment
+    ?? ctx.environments[step.id]
+    ?? ctx.environments.host
+    ?? createDefaultHostEnvironment(process.cwd())
   let attempt = rehydration?.attempt ?? 1
   let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index)
   const scope: AgentTurnExecutionScope = {
@@ -248,6 +213,7 @@ export async function executeAgentStep(
     sessionId,
     initialPrompt,
     maxTotalTurns,
+    environment: resolvedEnv,
     mcpServer,
   }
 

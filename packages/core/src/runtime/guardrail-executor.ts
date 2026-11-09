@@ -4,12 +4,13 @@ import type { Guardrail, GuardrailVerdict } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import process from 'node:process'
 import { GuardrailMaxRetriesExceededError } from '../errors/guardrail-max-retries-exceeded-error.js'
 import { MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
-import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
+import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
 
 export type StepRetryReason
   = | 'output_schema_validation_failed'
@@ -34,6 +35,7 @@ export interface RunAfterStepGuardrailsParams {
   maxTotalTurns: number
   initialPrompt: string
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
+  environment?: ProvisionedEnvironment
 }
 
 export function emitStepRetry(
@@ -95,11 +97,13 @@ async function resolveGuardrailEnv(
   guardrail: Guardrail<any, any>,
   ctx: StepContext,
   stepId: string,
+  stepEnvironment?: ProvisionedEnvironment,
 ): Promise<ProvisionedEnvironment> {
-  if (guardrail.environment !== undefined) {
-    return resolveDynamicProperty(guardrail.environment, ctx)
-  }
-  return ctx.environments[stepId] ?? { id: 'default' }
+  const fallback = stepEnvironment
+    ?? ctx.environments[stepId]
+    ?? ctx.environments.host
+    ?? createDefaultHostEnvironment(process.cwd())
+  return resolveGuardrailEnvironment(guardrail, ctx, fallback)
 }
 
 async function executeGuardrail(
@@ -110,8 +114,9 @@ async function executeGuardrail(
   attempt: number,
   runDir: string,
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
+  stepEnvironment?: ProvisionedEnvironment,
 ): Promise<GuardrailVerdict> {
-  const env = await resolveGuardrailEnv(guardrail, ctx, stepId)
+  const env = await resolveGuardrailEnv(guardrail, ctx, stepId, stepEnvironment)
   return guardrail.execute({
     ctx,
     stepId,
@@ -189,7 +194,16 @@ export async function runAfterStepGuardrails(
       attempt,
     })
 
-    const verdict = await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer)
+    const verdict = await executeGuardrail(
+      guardrail,
+      ctx,
+      step.id,
+      k,
+      attempt,
+      runDir,
+      mcpServer,
+      params.environment,
+    )
 
     if (verdict.status === 'pass' || verdict.status === 'skip') {
       const eventType = verdict.status === 'pass'

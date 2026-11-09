@@ -1,17 +1,13 @@
 import type { ArtifactClient } from './artifact.js'
+import type { ProvisionedEnvironment } from './environment.js'
 
-export type { ArtifactClient }
+export type { ArtifactClient, ProvisionedEnvironment }
 
 export type StepStatus = 'passed' | 'failed' | 'skipped'
 
 export interface StepResult<TOutput = unknown> {
   status: StepStatus
   output?: TOutput
-}
-
-export interface ProvisionedEnvironment {
-  id: string
-  [key: string]: unknown
 }
 
 export interface MatrixCursor<TMatrixItem = unknown> {

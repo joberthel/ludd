@@ -1,4 +1,4 @@
-import type { DynamicProperty, StepContext } from './context.js'
+import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
 
 export type AgentAccessMode = 'read-only' | 'workspace-write'
 
@@ -10,6 +10,7 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   attempt: number
   mode: AgentAccessMode
   runDir: string
+  environment: ProvisionedEnvironment
   mcpServerUrl: string
   mcpAuthToken: string
 }

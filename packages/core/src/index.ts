@@ -17,11 +17,15 @@ import type {
 import type {
   DynamicProperty,
   MatrixCursor,
-  ProvisionedEnvironment,
   StepContext,
   StepResult,
   StepStatus,
 } from './types/context.js'
+import type {
+  EnvironmentExecOptions,
+  EnvironmentExecResult,
+  ProvisionedEnvironment,
+} from './types/environment.js'
 import type {
   ExecLogPaginationConfig,
   ExecLogPaginationSelector,
@@ -105,10 +109,16 @@ export {
   validateStepArtifacts,
 } from './runtime/artifact-validator.js'
 export {
+  createDefaultHostEnvironment,
+  resolveGuardrailEnvironment,
+  resolveStepEnvironment,
+} from './runtime/environment-manager.js'
+export {
   executeMatrixStep,
   resolveMatrixItems,
 } from './runtime/matrix-executor.js'
 export { runHarness } from './runtime/run-harness.js'
+export { isProvisionedEnvironment } from './types/environment.js'
 export { isGuardrail } from './types/guardrail.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
@@ -132,6 +142,8 @@ export type {
   DerivedStepContext,
   DynamicProperty,
   EmbeddedMcpServer,
+  EnvironmentExecOptions,
+  EnvironmentExecResult,
   ExecLogPaginationConfig,
   ExecLogPaginationSelector,
   Guardrail,

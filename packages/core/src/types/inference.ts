@@ -1,9 +1,16 @@
 import type { z } from 'zod'
 import type { AgentRunner, AgentStepOutput } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
-import type { DynamicProperty, StepContext, StepResult } from './context.js'
-import type { Guardrail } from './guardrail.js'
-import type { StepConfig, StepRunFn } from './harness.js'
+import type { StepContext, StepResult } from './context.js'
+import type { StepConfig } from './harness.js'
+
+export type {
+  ArtifactMatrixStepDef,
+  ItemsMatrixStepDef,
+  PlainStepDef,
+  StepTupleEntry,
+  TypedStep,
+} from './step-definition.js'
 
 export type InferArrayItem<T>
   = T extends z.ZodType<readonly (infer TItem)[]>
@@ -111,153 +118,3 @@ export type DerivedStepContext<
   InferMatrixItem<TStep, AccumulateArtifactItemMap<TPriorSteps>>,
   StepHasMatrix<TStep>
 >
-
-export interface PlainStepDef<
-  TPriorSteps extends readonly unknown[],
-  TId extends string = string,
-  TOutput = any,
-  TArtifacts = any,
-> {
-  id: TId
-  name?: string
-  if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  matrix?: never
-  outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
-  artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>[]
-  afterStep?: readonly Guardrail<
-    any,
-    StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      unknown,
-      false
-    >
-  >[]
-  run:
-    | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
-    | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
-}
-
-export interface ItemsMatrixStepDef<
-  TPriorSteps extends readonly unknown[],
-  TId extends string = string,
-  TOutput = any,
-  TArtifacts = any,
-  TItem = any,
-> {
-  id: TId
-  name?: string
-  if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  matrix: {
-    items: DynamicProperty<readonly TItem[], PriorStepContext<TPriorSteps>>
-    itemsFromArtifact?: never
-    concurrency?: number
-  }
-  outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
-  artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>[]
-  afterStep?: readonly Guardrail<
-    any,
-    StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      TItem,
-      true
-    >
-  >[]
-  run:
-    | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
-    | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
-}
-
-export interface ArtifactMatrixStepDef<
-  TPriorSteps extends readonly unknown[],
-  TId extends string = string,
-  TOutput = any,
-  TArtifacts = any,
-  TKey extends string = string,
-> {
-  id: TId
-  name?: string
-  if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  matrix: {
-    itemsFromArtifact: TKey
-    items?: never
-    concurrency?: number
-  }
-  outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
-  artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<
-    any,
-    StepContext<
-      unknown,
-      AccumulatePriorSteps<TPriorSteps>,
-      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-      true
-    >
-  >[]
-  afterStep?: readonly Guardrail<
-    any,
-    StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-      true
-    >
-  >[]
-  run:
-    | StepRunFn<
-      any,
-      StepContext<
-        unknown,
-        AccumulatePriorSteps<TPriorSteps>,
-        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-        true
-      >
-    >
-    | AgentRunner<
-      any,
-      StepContext<
-        unknown,
-        AccumulatePriorSteps<TPriorSteps>,
-        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-        true
-      >
-    >
-}
-
-export type TypedStep<
-  TPriorSteps extends readonly unknown[],
-  TId extends string = string,
-  TOutput = any,
-  TArtifacts = any,
-  TItem = any,
-  TKey extends string = string,
->
-  = | PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>
-    | ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>
-    | ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>
-
-export interface StepTupleEntry<
-  TId extends string,
-  TOutput,
-  TArtifacts,
-  TItem = never,
-  TKey extends string = never,
-> {
-  id: TId
-  artifacts?: TArtifacts
-  outputSchema?: z.ZodType<TOutput>
-  beforeStep?: readonly Guardrail<any, any>[]
-  afterStep?: readonly Guardrail<any, any>[]
-  matrix?: [TKey] extends [never]
-    ? [TItem] extends [never]
-        ? never
-        : { items: readonly TItem[] }
-    : { itemsFromArtifact: TKey }
-  run?: { readonly __kind: 'agent' } | ((...args: any[]) => any)
-}

@@ -1,30 +1,24 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
+import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
+import type { RehydrationInfo } from './harness-rehydration.js'
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { createArtifactStore } from '../mcp/artifact-store.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
-import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
+import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
+import { resolveStepEnvironment } from './environment-manager.js'
+import { initOrRehydrateSnapshot } from './harness-rehydration.js'
 import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
 
 export type { HarnessRunResult, RunHarnessOptions }
-
-interface RehydrationInfo {
-  stepId: string
-  sessionId?: string
-  attempt?: number
-  matrixIndex?: number | null
-  matrixOutputs?: readonly unknown[]
-}
 
 function resolveOption(value: string | undefined, fallback: () => string): string {
   const trimmed = value?.trim()
@@ -51,10 +45,11 @@ async function executeStep(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
+  environment?: ProvisionedEnvironment,
 ): Promise<unknown> {
   return step.matrix !== undefined
-    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer)
-    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer)
+    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer, environment)
+    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer, environment)
 }
 
 function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
@@ -90,65 +85,6 @@ function emitLedgerEvent(
     eventType,
     payload,
   })
-}
-
-function resolvePreviousRehydration(
-  previous: RunStateSnapshot,
-  activeStepId: string | null,
-): RehydrationInfo | undefined {
-  const prevSession = previous.activeSessionId
-  const hasValidSession = typeof prevSession === 'string' && prevSession.trim() !== ''
-  if (activeStepId !== null && (previous.activeStepId ?? activeStepId) === activeStepId && (hasValidSession || typeof previous.activeMatrixIndex === 'number')) {
-    return {
-      stepId: activeStepId,
-      sessionId: hasValidSession ? prevSession : undefined,
-      attempt: previous.activeStepAttempt ?? 1,
-      matrixIndex: previous.activeMatrixIndex ?? null,
-      matrixOutputs: previous.activeMatrixOutputs ?? [],
-    }
-  }
-}
-
-function initOrRehydrateSnapshot(
-  runDir: string,
-  runId: string,
-  harnessName: string,
-  steps: readonly StepConfig[],
-  ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
-): { snapshot: RunStateSnapshot, rehydration?: RehydrationInfo } {
-  const isRehydrating = fs.existsSync(path.join(runDir, 'state.json'))
-  let activeStepId: string | null = steps[0].id
-  let rehydration: RehydrationInfo | undefined
-  let previous: RunStateSnapshot | undefined
-
-  if (isRehydrating) {
-    previous = readRunState(runDir)
-    for (const [id, result] of Object.entries(previous.steps)) {
-      if (result.status === 'passed' || result.status === 'skipped') {
-        ctx.steps[id] = result
-      }
-    }
-    activeStepId = steps.find(s => !['passed', 'skipped'].includes(ctx.steps[s.id]?.status ?? ''))?.id ?? null
-    rehydration = resolvePreviousRehydration(previous, activeStepId)
-  }
-
-  const snapshot: RunStateSnapshot = {
-    schemaVersion: 1,
-    runId,
-    harnessName,
-    status: 'running',
-    activeStepId,
-    activeSessionId: null,
-    activeStepAttempt: 1,
-    activeMatrixIndex: null,
-    activeMatrixOutputs: [],
-    activeGuardrailRetries: isRehydrating ? previous?.activeGuardrailRetries : undefined,
-    steps: ctx.steps,
-    updatedAt: new Date().toISOString(),
-  }
-  writeRunStateAtomic(runDir, snapshot)
-  emitLedgerEvent(runDir, runId, null, isRehydrating ? 'run.resumed' : 'run.started', { harnessName })
-  return { snapshot, rehydration }
 }
 
 function handleStepFailure(
@@ -195,6 +131,7 @@ async function runStep(
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
   snapshot: RunStateSnapshot,
   runDir: string,
+  workspaceDir: string,
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
 ): Promise<HarnessRunResult | null> {
@@ -210,8 +147,9 @@ async function runStep(
       return null
     }
 
+    const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir)
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
-    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer)
+    const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
     return null
   }
@@ -254,7 +192,7 @@ export async function runHarness(
       const stepRehydration = rehydration?.stepId === step.id
         ? rehydration
         : undefined
-      const failure = await runStep(step, ctx, snapshot, runDir, stepRehydration, mcpServer)
+      const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer)
       if (failure !== null) {
         return failure
       }

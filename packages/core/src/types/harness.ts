@@ -7,7 +7,7 @@ import type {
   AgentTurnResult,
 } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
-import type { DynamicProperty, StepContext, StepResult } from './context.js'
+import type { DynamicProperty, ProvisionedEnvironment, StepContext, StepResult } from './context.js'
 import type { Guardrail } from './guardrail.js'
 
 export { isGuardrail } from './guardrail.js'
@@ -93,6 +93,7 @@ export interface StepConfig<
   id: TId
   name?: string
   if?: (ctx: TMatrixContext) => boolean | Promise<boolean>
+  environment?: DynamicProperty<ProvisionedEnvironment, TContext>
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
