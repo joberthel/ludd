@@ -31,6 +31,8 @@ export interface RunStateSnapshot {
   activeMatrixIndex?: number | null
   activeMatrixOutputs?: unknown[]
   activeGuardrailRetries?: Record<string, number>
+  grantedExtraRetries?: Record<string, number>
+  grantedExtraTurns?: Record<string, number>
   environments?: Record<string, EnvironmentDescriptor>
   steps: Record<string, StepResult<unknown>>
   artifacts?: string[]

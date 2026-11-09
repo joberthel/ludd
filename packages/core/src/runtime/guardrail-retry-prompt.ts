@@ -1,11 +1,24 @@
 import type { GuardrailVerdict } from '../types/guardrail.js'
 
+function formatHint(feedback?: string): string | undefined {
+  if (typeof feedback !== 'string') {
+    return undefined
+  }
+  const trimmed = feedback.trim()
+  return trimmed.length > 0
+    ? `User hint:\n${trimmed}`
+    : undefined
+}
+
 export function formatGuardrailRetryPrompt(
   initialPrompt: string,
   guardrailIndex: number,
   verdict: GuardrailVerdict<unknown>,
   mcpServerUrl?: string,
+  feedback?: string,
 ): string {
+  const hint = formatHint(feedback)
+
   if (verdict.logKey !== undefined) {
     const summary = typeof verdict.body === 'string' && verdict.body.length > 0
       ? `\nSummary: ${verdict.body}`
@@ -15,6 +28,9 @@ export function formatGuardrailRetryPrompt(
       : ''
     return [
       `The step failed afterStep guardrail #${guardrailIndex}.${summary}`,
+      ...(hint !== undefined
+        ? [hint]
+        : []),
       `Detailed failure log has been offloaded to MCP logKey "${verdict.logKey}"${serverNotice}.`,
       `Use the MCP log tools (read_log_page, read_log_lines, search_log) to inspect the logs without loading the full output into context.`,
       `Please fix the issues and try again.`,
@@ -31,5 +47,8 @@ export function formatGuardrailRetryPrompt(
         ? verdict.body
         : JSON.stringify(verdict.body)}`
       : ''
-  return `The step failed afterStep guardrail #${guardrailIndex}.${details}\n\nPlease fix the issues and try again.\n\nOriginal instruction:\n${initialPrompt}`
+  const hintSection = hint !== undefined
+    ? `\n\n${hint}`
+    : ''
+  return `The step failed afterStep guardrail #${guardrailIndex}.${details}${hintSection}\n\nPlease fix the issues and try again.\n\nOriginal instruction:\n${initialPrompt}`
 }

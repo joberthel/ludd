@@ -55,8 +55,18 @@ export function resolveInitialPrompt(
     return formatArtifactRetryPrompt(initialPrompt, payload.issues as readonly ArtifactValidationIssue[])
   }
   if (payload.reason === 'guardrail_failed') {
-    const issues = payload.issues as { guardrailIndex: number, verdict: GuardrailVerdict<unknown> }
-    return formatGuardrailRetryPrompt(initialPrompt, issues.guardrailIndex, issues.verdict, mcpServerUrl)
+    const issues = payload.issues as {
+      guardrailIndex: number
+      verdict: GuardrailVerdict<unknown>
+      feedback?: string
+    }
+    return formatGuardrailRetryPrompt(
+      initialPrompt,
+      issues.guardrailIndex,
+      issues.verdict,
+      mcpServerUrl,
+      issues.feedback,
+    )
   }
   return formatRetryPrompt(initialPrompt, payload.issues as RetryIssueList)
 }

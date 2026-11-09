@@ -13,21 +13,20 @@ import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
-import { handleGuardrailEscalation } from './escalation-manager.js'
+import {
+  getEffectiveMaxRetries,
+  getEffectiveMaxTotalTurns,
+  handleGuardrailEscalation,
+} from './escalation-manager.js'
 import { formatGuardrailRetryPrompt } from './guardrail-retry-prompt.js'
+import { GuardrailRetrySignal } from './guardrail-retry-signal.js'
 
 export type StepRetryReason
   = | 'output_schema_validation_failed'
     | 'artifact_validation_failed'
     | 'guardrail_failed'
 
-export class GuardrailRetrySignal {
-  readonly prompt: string
-
-  constructor(prompt: string) {
-    this.prompt = prompt
-  }
-}
+export { GuardrailRetrySignal }
 
 export interface RunAfterStepGuardrailsParams {
   step: StepConfig
@@ -172,13 +171,11 @@ async function handleGuardrailFailure(
   const { step, snapshot, runDir, attempt, maxTotalTurns } = params
   const count = checkGuardrailRetries(snapshot, k, runDir)
   const isAgent = isAgentRunner(step.run)
-  const isHumanReview = guardrail.type === 'human_review'
-  const maxRetries = isHumanReview && guardrail.maxRetries === undefined
-    ? Number.POSITIVE_INFINITY
-    : (guardrail.maxRetries ?? 0)
+  const maxRetries = getEffectiveMaxRetries(guardrail, step.id, k, snapshot)
+  const effectiveMaxTotalTurns = getEffectiveMaxTotalTurns(maxTotalTurns, step.id, snapshot)
 
   const isGuardrailRetriesExceeded = !isAgent || count > maxRetries
-  const isMaxTotalTurnsExceeded = attempt >= maxTotalTurns
+  const isMaxTotalTurnsExceeded = attempt >= effectiveMaxTotalTurns
 
   if (isGuardrailRetriesExceeded || isMaxTotalTurnsExceeded) {
     const reason = isGuardrailRetriesExceeded ? 'guardrail_max_retries' : 'max_total_turns'
