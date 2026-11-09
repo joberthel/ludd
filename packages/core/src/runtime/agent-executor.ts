@@ -6,6 +6,7 @@ import type { StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentPromptState } from './agent-prompt.js'
+import type { GateWaiter } from './gate-waiter.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
@@ -135,6 +136,7 @@ interface AgentTurnExecutionScope {
   environment: ProvisionedEnvironment
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
   logStore?: LogStore
+  gateWaiter?: GateWaiter
 }
 
 async function runTurnLoopAttempt(
@@ -162,27 +164,16 @@ async function runTurnLoopAttempt(
 
   try {
     const result = await finalizeAgentTurn(scope.step, turnResult, {
-      ctx: scope.ctx,
-      snapshot: scope.snapshot,
-      runDir: scope.runDir,
+      ...scope,
       attempt,
-      maxTotalTurns: scope.maxTotalTurns,
-      initialPrompt: scope.initialPrompt,
-      environment: scope.environment,
-      mcpServer: scope.mcpServer,
-      logStore: scope.logStore,
     })
     return { success: true, result }
   }
   catch (err: unknown) {
     const nextPrompt = handleTurnRetry(err, {
+      ...scope,
       stepId: scope.step.id,
-      maxTotalTurns: scope.maxTotalTurns,
       attempt,
-      runDir: scope.runDir,
-      ctx: scope.ctx,
-      sessionId: scope.sessionId,
-      initialPrompt: scope.initialPrompt,
     })
     return { success: false, nextPrompt }
   }
@@ -199,6 +190,7 @@ export async function executeAgentStep(
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
   beforeStepNotification?: string,
+  gateWaiter?: GateWaiter,
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
@@ -224,6 +216,7 @@ export async function executeAgentStep(
     environment: resolvedEnv,
     mcpServer,
     logStore,
+    gateWaiter,
   }
 
   while (true) {

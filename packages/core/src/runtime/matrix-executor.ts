@@ -91,6 +91,7 @@ async function executeFunctionStep(
   mcpServer?: EmbeddedMcpServer,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
+  gateWaiter?: GateWaiter,
 ): Promise<unknown> {
   const rawOutput: unknown = await runner(ctx)
   const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
@@ -108,6 +109,7 @@ async function executeFunctionStep(
     mcpServer,
     environment,
     logStore,
+    gateWaiter,
   })
   return validated
 }
@@ -147,6 +149,7 @@ export async function executeSingleSlice(
       environment,
       logStore,
       beforeStepNotification,
+      gateWaiter,
     )
   }
   return executeFunctionStep(
@@ -158,6 +161,7 @@ export async function executeSingleSlice(
     mcpServer,
     environment,
     logStore,
+    gateWaiter,
   )
 }
 

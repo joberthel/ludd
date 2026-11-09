@@ -11,12 +11,14 @@ export interface HumanReviewGuardrailConfig<
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
   prompt: DynamicProperty<string, TContext>
+  maxRetries?: number
 }
 
 export interface HumanReviewGuardrail<
   TContext extends StepContext<any, any, any, any> = StepContext,
 > extends Guardrail<string, TContext> {
   readonly prompt: DynamicProperty<string, TContext>
+  readonly maxRetries?: number
 }
 
 function validateHumanReviewConfig<TContext extends StepContext<any, any, any, any>>(
@@ -28,6 +30,14 @@ function validateHumanReviewConfig<TContext extends StepContext<any, any, any, a
   const candidate = config as Record<string, unknown>
   if (typeof candidate.prompt !== 'string' && typeof candidate.prompt !== 'function') {
     throw new TypeError('humanReviewGuardrail "prompt" must be a string or a function.')
+  }
+  if (
+    candidate.maxRetries !== undefined
+    && (typeof candidate.maxRetries !== 'number'
+      || !Number.isInteger(candidate.maxRetries)
+      || candidate.maxRetries < 0)
+  ) {
+    throw new TypeError('humanReviewGuardrail "maxRetries" must be a non-negative integer.')
   }
 }
 
@@ -42,6 +52,7 @@ export function humanReviewGuardrail<
     __kind: 'guardrail',
     type: 'human_review',
     prompt: config.prompt,
+    maxRetries: config.maxRetries,
     execute: async (
       execInput: GuardrailExecutionInput<TContext>,
     ): Promise<GuardrailVerdict<string>> => {

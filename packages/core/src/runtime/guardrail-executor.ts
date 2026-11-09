@@ -5,6 +5,7 @@ import type { StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import type { GateWaiter } from './gate-waiter.js'
 import process from 'node:process'
 import { GuardrailMaxRetriesExceededError } from '../errors/guardrail-max-retries-exceeded-error.js'
 import { MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
@@ -12,7 +13,9 @@ import { offloadGuardrailLog } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
+import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
+import { formatGuardrailRetryPrompt } from './guardrail-retry-prompt.js'
 
 export type StepRetryReason
   = | 'output_schema_validation_failed'
@@ -39,9 +42,10 @@ export interface RunAfterStepGuardrailsParams {
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
   environment?: ProvisionedEnvironment
   logStore?: LogStore
+  gateWaiter?: GateWaiter
 }
 
-function emitGuardrailEvent(
+export function emitGuardrailEvent(
   runDir: string,
   ctx: StepContext,
   stepId: string,
@@ -76,39 +80,7 @@ export function emitStepRetry(
   })
 }
 
-export function formatGuardrailRetryPrompt(
-  initialPrompt: string,
-  guardrailIndex: number,
-  verdict: GuardrailVerdict<unknown>,
-  mcpServerUrl?: string,
-): string {
-  if (verdict.logKey !== undefined) {
-    const summary = typeof verdict.body === 'string' && verdict.body.length > 0
-      ? `\nSummary: ${verdict.body}`
-      : ''
-    const serverNotice = typeof mcpServerUrl === 'string' && mcpServerUrl.length > 0
-      ? ` at ${mcpServerUrl}`
-      : ''
-    return [
-      `The step failed afterStep guardrail #${guardrailIndex}.${summary}`,
-      `Detailed failure log has been offloaded to MCP logKey "${verdict.logKey}"${serverNotice}.`,
-      `Use the MCP log tools (read_log_page, read_log_lines, search_log) to inspect the logs without loading the full output into context.`,
-      `Please fix the issues and try again.`,
-      `Original instruction:\n${initialPrompt}`,
-    ].join('\n\n')
-  }
-
-  const rawLog = verdict.rawLog
-  const hasLog = typeof rawLog === 'string' && rawLog.length > 0
-  const details = hasLog
-    ? `\nLog output:\n${rawLog}`
-    : verdict.body !== undefined
-      ? `\nDetails: ${typeof verdict.body === 'string'
-        ? verdict.body
-        : JSON.stringify(verdict.body)}`
-      : ''
-  return `The step failed afterStep guardrail #${guardrailIndex}.${details}\n\nPlease fix the issues and try again.\n\nOriginal instruction:\n${initialPrompt}`
-}
+export { formatGuardrailRetryPrompt }
 
 async function resolveGuardrailEnv(
   guardrail: Guardrail<any, any>,
@@ -175,10 +147,13 @@ function handleGuardrailFailure(
   writeRunStateAtomic(runDir, snapshot)
 
   const isAgent = isAgentRunner(step.run)
-  const maxRetries = guardrail.maxRetries ?? 0
+  const isHumanReview = guardrail.type === 'human_review'
+  const maxRetries = isHumanReview && guardrail.maxRetries === undefined
+    ? Number.POSITIVE_INFINITY
+    : (guardrail.maxRetries ?? 0)
 
   if (!isAgent || count > maxRetries) {
-    throw new GuardrailMaxRetriesExceededError(step.id, k, maxRetries, verdict)
+    throw new GuardrailMaxRetriesExceededError(step.id, k, guardrail.maxRetries ?? 0, verdict)
   }
 
   if (attempt >= maxTotalTurns) {
@@ -204,7 +179,9 @@ async function processGuardrailResult(
 ): Promise<void> {
   const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
   emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', { phase: 'afterStep', guardrailIndex: k, attempt })
-  const verdict = await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment, snapshot)
+  const verdict = guardrail.type === 'human_review'
+    ? await executeHumanReviewAfterStepGuardrail(params, guardrail, k)
+    : await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment, snapshot)
 
   if (verdict.status === 'pass' || verdict.status === 'skip') {
     const eventType = verdict.status === 'pass'
