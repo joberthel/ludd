@@ -23,6 +23,7 @@ export const ledgerEventSchema = z.object({
   timestamp: z.string(),
   runId: z.string(),
   stepId: z.string().nullable(),
+  matrixIndex: z.number().int().nonnegative().optional(),
   eventType: ledgerEventTypeSchema,
   payload: z.record(z.string(), z.unknown()),
 })

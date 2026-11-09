@@ -3,6 +3,9 @@ import type {
   AgentStreamEventType,
   LedgerEvent,
   LedgerEventType,
+  MatrixArtifactConfig,
+  MatrixConfig,
+  MatrixItemsConfig,
   StepContext,
 } from './index.js'
 import { describe, expect, it } from 'vitest'
@@ -29,11 +32,14 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.RunAlreadyActiveError).toBe('function')
     expect(typeof core.StepOutputValidationError).toBe('function')
     expect(typeof core.StepArtifactValidationError).toBe('function')
+    expect(typeof core.StepMatrixResolutionError).toBe('function')
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
     expect(typeof core.formatRetryPrompt).toBe('function')
     expect(typeof core.formatArtifactRetryPrompt).toBe('function')
     expect(typeof core.validateStepArtifacts).toBe('function')
+    expect(typeof core.resolveMatrixItems).toBe('function')
+    expect(typeof core.executeMatrixStep).toBe('function')
   })
 
   it('does not export deprecated placeholder foo or bar', () => {
@@ -71,7 +77,9 @@ describe('@ludd/core persistence and execution exports', () => {
     expect(core.SUPPORTED_SCHEMA_VERSION).toBe(1)
     expect(typeof core.SchemaVersionMismatchError).toBe('function')
   })
+})
 
+describe('@ludd/core typed structures and matrix exports', () => {
   it('exports typed stream structures', () => {
     const eventType: AgentStreamEventType = 'turn.started'
     const event: AgentStreamEvent<{ prompt: string }> = {
@@ -102,5 +110,16 @@ describe('@ludd/core persistence and execution exports', () => {
     expect(event.schemaVersion).toBe(1)
     expect(event.eventType).toBe('run.started')
     expect(event.payload.test).toBe(true)
+  })
+
+  it('exports typed matrix configuration structures', () => {
+    const itemsConfig: MatrixItemsConfig<number> = {
+      items: [1, 2, 3],
+    }
+    const artifactConfig: MatrixArtifactConfig = { itemsFromArtifact: 'todos.json' }
+    const unionConfig1: MatrixConfig<number> = itemsConfig
+    const unionConfig2: MatrixConfig = artifactConfig
+    expect(unionConfig1.items).toEqual([1, 2, 3])
+    expect(unionConfig2.itemsFromArtifact).toBe('todos.json')
   })
 })

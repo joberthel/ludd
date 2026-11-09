@@ -14,9 +14,7 @@ import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
-import { isAgentRunner } from '../types/harness.js'
-import { executeAgentStep, validateStepOutput } from './agent-executor.js'
-import { validateStepArtifacts } from './artifact-validator.js'
+import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
 
 export type { HarnessRunResult, RunHarnessOptions }
 
@@ -52,13 +50,10 @@ async function executeStep(
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
 ): Promise<unknown> {
-  if (isAgentRunner(step.run)) {
-    return executeAgentStep(step, step.run, ctx, snapshot, runDir, rehydration, mcpServer)
+  if (step.matrix !== undefined) {
+    return executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer)
   }
-  const rawOutput: unknown = await step.run(ctx)
-  const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
-  await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
-  return validated
+  return executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer)
 }
 
 function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
@@ -79,12 +74,14 @@ function emitLedgerEvent(
   stepId: string | null,
   eventType: LedgerEventType,
   payload: Record<string, unknown>,
+  matrixIndex?: number,
 ): void {
   appendLedgerEvent(runDir, {
     schemaVersion: 1,
     timestamp: new Date().toISOString(),
     runId,
     stepId,
+    matrixIndex,
     eventType,
     payload,
   })
@@ -144,11 +141,12 @@ function handleStepFailure(
   snapshot: RunStateSnapshot,
   stepId: string,
   error: unknown,
+  matrixIndex?: number,
 ): HarnessRunResult {
   const errorMessage = error instanceof Error
     ? error.message
     : String(error)
-  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage })
+  emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage }, matrixIndex)
   emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
   snapshot.steps[stepId] = { status: 'failed', output: undefined }
   snapshot.status = 'failed'
@@ -206,7 +204,10 @@ async function runStep(
     return null
   }
   catch (error: unknown) {
-    return handleStepFailure(runDir, snapshot, stepId, error)
+    return handleStepFailure(runDir, snapshot, stepId, error, ctx.matrix?.index)
+  }
+  finally {
+    ctx.matrix = undefined
   }
 }
 

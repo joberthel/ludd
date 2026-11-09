@@ -7,7 +7,7 @@ import type {
   AgentTurnResult,
 } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
-import type { StepContext, StepResult } from './context.js'
+import type { DynamicProperty, StepContext, StepResult } from './context.js'
 
 export type {
   AgentAccessMode,
@@ -41,17 +41,34 @@ export function isAgentRunner(value: unknown): value is AgentRunner {
   return hasValidKind && hasValidMode && hasValidPrompt && hasValidExecuteTurn
 }
 
+export interface MatrixItemsConfig<TItem = unknown, TContext extends StepContext = StepContext> {
+  items: DynamicProperty<readonly TItem[], TContext>
+  itemsFromArtifact?: never
+}
+
+export interface MatrixArtifactConfig<TArtifactKey extends string = string> {
+  items?: never
+  itemsFromArtifact: TArtifactKey
+}
+
+export type MatrixConfig<
+  TItem = unknown,
+  TContext extends StepContext = StepContext,
+  TArtifactKey extends string = string,
+> = MatrixItemsConfig<TItem, TContext> | MatrixArtifactConfig<TArtifactKey>
+
 export interface StepConfig<TId extends string = string, TOutput = unknown> {
   id: TId
   name?: string
   if?: (ctx: StepContext) => boolean | Promise<boolean>
+  matrix?: MatrixConfig<any, any>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
   artifacts?: Record<string, ArtifactValidationRule>
   run: StepRunFn<TOutput> | AgentRunner<TOutput>
 }
 
-export type InferStepOutput<TStep>
+export type InferSingleStepOutput<TStep>
   = TStep extends { run: { readonly __kind: 'agent' } | AgentRunner<any>, outputSchema: z.ZodType<infer TSchemaOutput> }
     ? AgentStepOutput<TSchemaOutput>
     : TStep extends { run: AgentRunner<infer TRunnerOutput> }
@@ -65,6 +82,11 @@ export type InferStepOutput<TStep>
             : TStep extends StepConfig<string, infer TOutput>
               ? TOutput
               : unknown
+
+export type InferStepOutput<TStep>
+  = TStep extends { matrix: MatrixConfig<any, any> }
+    ? InferSingleStepOutput<TStep>[]
+    : InferSingleStepOutput<TStep>
 
 export interface HarnessConfig<
   TSteps extends readonly StepConfig<any, any>[] = readonly StepConfig<any, any>[],

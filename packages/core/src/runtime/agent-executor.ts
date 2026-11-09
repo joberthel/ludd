@@ -85,6 +85,7 @@ function emitPreTurnEvents(
     timestamp: new Date().toISOString(),
     runId: ctx.runId,
     stepId,
+    matrixIndex: ctx.matrix?.index,
     eventType: 'agent.stream.linked',
     payload: { sessionId, streamPath: `streams/${sessionId}.jsonl`, attempt },
   })
@@ -134,13 +135,9 @@ function emitStepRetry(
     timestamp: new Date().toISOString(),
     runId: ctx.runId,
     stepId,
+    matrixIndex: ctx.matrix?.index,
     eventType: 'step.retry',
-    payload: {
-      attempt,
-      sessionId,
-      reason,
-      issues,
-    },
+    payload: { attempt, sessionId, reason, issues },
   })
 }
 
@@ -149,26 +146,27 @@ function resolveInitialPrompt(
   runDir: string,
   stepId: string,
   rehydration?: RehydratedAgentState,
+  matrixIndex?: number,
 ): string {
   if (rehydration?.attempt === undefined || rehydration.attempt <= 1) {
     return initialPrompt
   }
   const ledgerPath = path.join(runDir, 'ledger.jsonl')
-  if (fs.existsSync(ledgerPath)) {
-    const events = readLedgerEvents(runDir)
-    const lastRetry = events.reverse().find(e => e.eventType === 'step.retry' && e.stepId === stepId)
-    if (lastRetry) {
-      const payload = lastRetry.payload as {
-        reason?: string
-        issues: unknown
-      }
-      if (payload.reason === 'artifact_validation_failed') {
-        return formatArtifactRetryPrompt(initialPrompt, payload.issues as readonly ArtifactValidationIssue[])
-      }
-      return formatRetryPrompt(initialPrompt, payload.issues as RetryIssueList)
-    }
+  if (!fs.existsSync(ledgerPath)) {
+    return initialPrompt
   }
-  return initialPrompt
+  const events = readLedgerEvents(runDir)
+  const lastRetry = events.reverse().find(e =>
+    e.eventType === 'step.retry' && e.stepId === stepId && e.matrixIndex === matrixIndex,
+  )
+  if (!lastRetry) {
+    return initialPrompt
+  }
+  const payload = lastRetry.payload as { reason?: string, issues: unknown }
+  if (payload.reason === 'artifact_validation_failed') {
+    return formatArtifactRetryPrompt(initialPrompt, payload.issues as readonly ArtifactValidationIssue[])
+  }
+  return formatRetryPrompt(initialPrompt, payload.issues as RetryIssueList)
 }
 
 interface TurnRetryParams {
@@ -224,7 +222,7 @@ export async function executeAgentStep(
   const maxTotalTurns = step.maxTotalTurns ?? DEFAULT_MAX_TOTAL_TURNS
 
   let attempt = rehydration?.attempt ?? 1
-  let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration)
+  let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index)
 
   while (true) {
     ctx.step.attempt = attempt

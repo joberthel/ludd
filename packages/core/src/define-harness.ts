@@ -70,6 +70,41 @@ function validateStepArtifactsConfig(id: string, artifacts: unknown): void {
   }
 }
 
+function validateStepMatrixConfig(id: string, matrix: unknown): void {
+  if (matrix === undefined) {
+    return
+  }
+  if (typeof matrix !== 'object' || matrix === null || Array.isArray(matrix)) {
+    throw new HarnessConfigError(
+      `Step "${id}" "matrix" property must be a non-null object when provided.`,
+    )
+  }
+  const raw = matrix as Record<string, unknown>
+  const hasItems = raw.items !== undefined
+  const hasArtifact = raw.itemsFromArtifact !== undefined
+  if ((!hasItems && !hasArtifact) || (hasItems && hasArtifact)) {
+    throw new HarnessConfigError(
+      `Step "${id}" matrix must specify either "items" or "itemsFromArtifact", not both or neither.`,
+    )
+  }
+  if (hasItems) {
+    const isValidItems = (Array.isArray(raw.items) && raw.items.length > 0) || typeof raw.items === 'function'
+    if (!isValidItems) {
+      throw new HarnessConfigError(
+        `Step "${id}" matrix "items" must be a non-empty array or a function.`,
+      )
+    }
+  }
+  if (hasArtifact) {
+    const isValidArtifact = typeof raw.itemsFromArtifact === 'string' && raw.itemsFromArtifact.trim() !== ''
+    if (!isValidArtifact) {
+      throw new HarnessConfigError(
+        `Step "${id}" matrix "itemsFromArtifact" must be a non-empty trimmed string.`,
+      )
+    }
+  }
+}
+
 function validateStep(step: unknown, index: number, seenIds: Set<string>): void {
   if (typeof step !== 'object' || step === null || Array.isArray(step)) {
     throw new HarnessConfigError(`Step at index ${index} must be a non-null object.`)
@@ -106,6 +141,7 @@ function validateStep(step: unknown, index: number, seenIds: Set<string>): void 
   }
 
   validateStepArtifactsConfig(id, rawStep.artifacts)
+  validateStepMatrixConfig(id, rawStep.matrix)
 
   if (typeof rawStep.run !== 'function' && !isAgentRunner(rawStep.run)) {
     throw new HarnessConfigError(

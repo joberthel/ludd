@@ -15,6 +15,7 @@ export interface LedgerEvent<TPayload = Record<string, unknown>> {
   timestamp: string
   runId: string
   stepId: string | null
+  matrixIndex?: number
   eventType: LedgerEventType
   payload: TPayload
 }

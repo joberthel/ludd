@@ -27,6 +27,9 @@ import type {
   CleanupPolicyAction,
   HarnessConfig,
   InferStepOutput,
+  MatrixArtifactConfig,
+  MatrixConfig,
+  MatrixItemsConfig,
   StepConfig,
   StepRunFn,
 } from './types/harness.js'
@@ -44,6 +47,7 @@ export {
 export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepArtifactValidationError } from './errors/step-artifact-validation-error.js'
+export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
 export { createArtifactStore } from './mcp/artifact-store.js'
@@ -75,6 +79,10 @@ export {
   formatArtifactRetryPrompt,
   validateStepArtifacts,
 } from './runtime/artifact-validator.js'
+export {
+  executeMatrixStep,
+  resolveMatrixItems,
+} from './runtime/matrix-executor.js'
 export { runHarness } from './runtime/run-harness.js'
 export { isAgentRunner } from './types/harness.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'
@@ -100,7 +108,10 @@ export type {
   InferStepOutput,
   LedgerEvent,
   LedgerEventType,
+  MatrixArtifactConfig,
+  MatrixConfig,
   MatrixCursor,
+  MatrixItemsConfig,
   ProvisionedEnvironment,
   RehydratedAgentState,
   RunHarnessOptions,

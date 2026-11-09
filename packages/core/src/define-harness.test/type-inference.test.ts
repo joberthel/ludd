@@ -101,3 +101,43 @@ describe('inferStepOutput raw agent step and callback step types', () => {
     expectTypeOf<CallbackOut>().toEqualTypeOf<{ count: number }>()
   })
 })
+
+describe('inferStepOutput matrix step types', () => {
+  it('infers array output when matrix is configured on step', () => {
+    const _matrixCallbackStep = {
+      id: 'step-matrix-callback',
+      matrix: {
+        items: ['a', 'b', 'c'],
+      },
+      outputSchema: z.object({
+        count: z.number(),
+      }),
+      run: () => ({ count: 10 }),
+    }
+
+    const _matrixAgentStep = {
+      id: 'step-matrix-agent',
+      matrix: {
+        itemsFromArtifact: 'todos.json',
+      },
+      outputSchema: z.object({
+        task: z.string(),
+      }),
+      run: {
+        __kind: 'agent' as const,
+        mode: 'read-only' as const,
+        prompt: 'test',
+        executeTurn: async () => ({
+          output: { task: 'item' },
+          sessionId: 's-1',
+        }),
+      },
+    }
+
+    type MatrixCallbackOut = InferStepOutput<typeof _matrixCallbackStep>
+    type MatrixAgentOut = InferStepOutput<typeof _matrixAgentStep>
+
+    expectTypeOf<MatrixCallbackOut>().toEqualTypeOf<{ count: number }[]>()
+    expectTypeOf<MatrixAgentOut>().toEqualTypeOf<({ task: string } & { sessionId: string })[]>()
+  })
+})
