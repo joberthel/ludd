@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
+import { CONTROL_SOCKET_NAME, getControlSocketPath } from '../ipc/socket-path.js'
 
 export const RUNNER_PID_FILE = 'runner.pid'
 
@@ -26,6 +27,15 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+function removeStaleSockets(runDir: string): void {
+  const primarySock = getControlSocketPath(runDir)
+  const localSock = path.join(runDir, CONTROL_SOCKET_NAME)
+  fs.rmSync(primarySock, { force: true })
+  if (primarySock !== localSock) {
+    fs.rmSync(localSock, { force: true })
+  }
+}
+
 export function acquireRunPidLock(
   runDir: string,
   runId: string,
@@ -41,6 +51,10 @@ export function acquireRunPidLock(
       throw new RunAlreadyActiveError(runId, existingPid)
     }
     fs.rmSync(pidPath, { force: true })
+    removeStaleSockets(runDir)
+  }
+  else {
+    removeStaleSockets(runDir)
   }
 
   fs.writeFileSync(pidPath, `${currentPid}\n`, 'utf-8')

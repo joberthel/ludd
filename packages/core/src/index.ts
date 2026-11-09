@@ -3,6 +3,7 @@ export { EnvironmentUnreachableError } from './errors/environment-unreachable-er
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError, type HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
+export { JsonRpcResponseError } from './errors/json-rpc-response-error.js'
 export {
   DEFAULT_MAX_TOTAL_TURNS,
   MaxTotalTurnsExceededError,
@@ -12,6 +13,9 @@ export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-err
 export { StepArtifactValidationError } from './errors/step-artifact-validation-error.js'
 export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
+export { createControlClient } from './ipc/control-client.js'
+export { startControlServer } from './ipc/control-server.js'
+export { CONTROL_SOCKET_NAME, getControlSocketPath } from './ipc/socket-path.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
 export {
   createArtifactStore,
@@ -27,6 +31,7 @@ export {
   acquireRunPidLock,
   isProcessAlive,
   releaseRunPidLock,
+  RUNNER_PID_FILE,
 } from './persistence/pid-lock.js'
 export {
   readRunState,
@@ -139,6 +144,23 @@ export {
   type StepTupleEntry,
   type TypedStep,
 } from './types/harness.js'
+export {
+  type ControlClient,
+  type ControlRpcHandlers,
+  type ControlServer,
+  JSON_RPC_ERRORS,
+  JSON_RPC_INTERNAL_ERROR,
+  JSON_RPC_INVALID_PARAMS,
+  JSON_RPC_INVALID_REQUEST,
+  JSON_RPC_METHOD_NOT_FOUND,
+  JSON_RPC_PARSE_ERROR,
+  type JsonRpcError,
+  type JsonRpcErrorResponse,
+  type JsonRpcId,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+  type JsonRpcSuccessResponse,
+} from './types/ipc.js'
 export type { LedgerEvent, LedgerEventType } from './types/ledger.js'
 export type {
   LogFormat,

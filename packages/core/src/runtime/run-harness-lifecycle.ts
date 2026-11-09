@@ -1,12 +1,14 @@
-import type { ArtifactClient } from '../types/artifact.js'
+import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { HarnessRunResult } from '../types/harness.js'
+import type { ControlServer } from '../types/ipc.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import { createArtifactStore } from '../mcp/artifact-store.js'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
+import { releaseRunPidLock } from '../persistence/pid-lock.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 
 export function resolveOption(value: string | undefined, fallback: () => string): string {
@@ -124,4 +126,33 @@ export function setupHarnessStores(
     },
   })
   return { artifactStore, logStore }
+}
+
+export function completeSuccessfulRun(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  steps: Record<string, StepResult<unknown>>,
+): HarnessRunResult {
+  snapshot.status = 'passed'
+  clearActiveAndPersist(runDir, snapshot)
+  emitLedgerEvent(runDir, snapshot.runId, null, 'run.passed', {})
+  return { runId: snapshot.runId, status: 'passed', steps }
+}
+
+export async function cleanupRunResources(
+  runDir: string,
+  controlServer?: ControlServer,
+  mcpServer?: EmbeddedMcpServer,
+): Promise<void> {
+  try {
+    await controlServer?.close()
+  }
+  finally {
+    try {
+      await mcpServer?.close()
+    }
+    finally {
+      releaseRunPidLock(runDir)
+    }
+  }
 }

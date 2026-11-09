@@ -2,6 +2,7 @@ import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
+import type { ControlServer } from '../types/ipc.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
@@ -10,8 +11,9 @@ import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
 import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
+import { startControlServer } from '../ipc/control-server.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
-import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
+import { acquireRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir } from '../persistence/state-store.js'
 import {
   rehydrateEnvironmentsAndCheckHealth,
@@ -20,7 +22,8 @@ import {
 import { initOrRehydrateSnapshot } from './harness-rehydration.js'
 import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
 import {
-  clearActiveAndPersist,
+  cleanupRunResources,
+  completeSuccessfulRun,
   createInitialContext,
   emitLedgerEvent,
   handleStepFailure,
@@ -162,22 +165,31 @@ function handleRunError(error: unknown, runDir: string, runId: string, snapshot?
   }
 }
 
+function resolveAndLockRunDir(options?: RunHarnessOptions): { runId: string, workspaceDir: string, runDir: string } {
+  const runId = resolveOption(options?.runId, randomUUID)
+  const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
+  const runDir = resolveRunDir(workspaceDir, runId)
+  acquireRunPidLock(runDir, runId)
+  return { runId, workspaceDir, runDir }
+}
+
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
 ): Promise<HarnessRunResult> {
   const validatedConfig = validateHarnessConfig(config)
-  const runId = resolveOption(options?.runId, randomUUID)
-  const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
-  const runDir = resolveRunDir(workspaceDir, runId)
-  acquireRunPidLock(runDir, runId)
+  const { runId, workspaceDir, runDir } = resolveAndLockRunDir(options)
   let mcpServer: EmbeddedMcpServer | undefined
+  let controlServer: ControlServer | undefined
   let snapshot: RunStateSnapshot | undefined
 
   try {
     const prepared = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir)
     mcpServer = prepared.mcpServer
     snapshot = prepared.snapshot
+    controlServer = await startControlServer(runDir, {
+      getStatus: () => snapshot!,
+    })
 
     const failure = await executeStepPipeline(
       validatedConfig.steps,
@@ -192,17 +204,13 @@ export async function runHarness(
     if (failure !== null) {
       return failure
     }
-    snapshot.status = 'passed'
-    clearActiveAndPersist(runDir, snapshot)
-    emitLedgerEvent(runDir, runId, null, 'run.passed', {})
-    return { runId, status: 'passed', steps: prepared.ctx.steps }
+    return completeSuccessfulRun(runDir, snapshot, prepared.ctx.steps)
   }
   catch (error: unknown) {
     handleRunError(error, runDir, runId, snapshot)
     throw error
   }
   finally {
-    await mcpServer?.close()
-    releaseRunPidLock(runDir)
+    await cleanupRunResources(runDir, controlServer, mcpServer)
   }
 }

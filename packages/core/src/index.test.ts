@@ -1,6 +1,8 @@
 import type {
   AgentStreamEvent,
   AgentStreamEventType,
+  JsonRpcRequest,
+  JsonRpcResponse,
   LedgerEvent,
   LedgerEventType,
   MatrixArtifactConfig,
@@ -43,8 +45,8 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.GuardrailMaxRetriesExceededError).toBe('function')
     expect(typeof core.isProvisionedEnvironment).toBe('function')
     expect(typeof core.isGuardrail).toBe('function')
-    expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
+    expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(typeof core.formatRetryPrompt).toBe('function')
     expect(typeof core.formatArtifactRetryPrompt).toBe('function')
     expect(typeof core.validateStepArtifacts).toBe('function')
@@ -86,8 +88,35 @@ describe('@ludd/core persistence and execution exports', () => {
     expect(typeof core.acquireRunPidLock).toBe('function')
     expect(typeof core.releaseRunPidLock).toBe('function')
     expect(typeof core.isProcessAlive).toBe('function')
+    expect(core.RUNNER_PID_FILE).toBe('runner.pid')
     expect(core.SUPPORTED_SCHEMA_VERSION).toBe(1)
     expect(typeof core.SchemaVersionMismatchError).toBe('function')
+  })
+})
+
+describe('@ludd/core IPC exports', () => {
+  it('exports control client, server, and socket path helpers', () => {
+    expect(typeof core.createControlClient).toBe('function')
+    expect(typeof core.startControlServer).toBe('function')
+    expect(typeof core.getControlSocketPath).toBe('function')
+    expect(core.CONTROL_SOCKET_NAME).toBe('control.sock')
+    expect(typeof core.JsonRpcResponseError).toBe('function')
+  })
+
+  it('exports JSON-RPC 2.0 error codes and constants', () => {
+    expect(core.JSON_RPC_PARSE_ERROR).toBe(-32700)
+    expect(core.JSON_RPC_INVALID_REQUEST).toBe(-32600)
+    expect(core.JSON_RPC_METHOD_NOT_FOUND).toBe(-32601)
+    expect(core.JSON_RPC_INVALID_PARAMS).toBe(-32602)
+    expect(core.JSON_RPC_INTERNAL_ERROR).toBe(-32603)
+    expect(core.JSON_RPC_ERRORS.PARSE_ERROR).toBe(-32700)
+  })
+
+  it('exports typed JSON-RPC request and response types', () => {
+    const req: JsonRpcRequest = { jsonrpc: '2.0', id: 1, method: 'run.status' }
+    const res: JsonRpcResponse<string> = { jsonrpc: '2.0', id: 1, result: 'ok' }
+    expect(req.method).toBe('run.status')
+    expect(res.id).toBe(1)
   })
 })
 

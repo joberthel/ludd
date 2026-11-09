@@ -5,6 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
+import { CONTROL_SOCKET_NAME } from '../ipc/socket-path.js'
 import {
   acquireRunPidLock,
   isProcessAlive,
@@ -57,7 +58,7 @@ describe('isProcessAlive', () => {
   })
 })
 
-describe('acquireRunPidLock', () => {
+describe('acquireRunPidLock creation and lock contention', () => {
   let tempDir: string
 
   beforeEach(async () => {
@@ -85,24 +86,42 @@ describe('acquireRunPidLock', () => {
     expect(fs.readFileSync(pidFile, 'utf-8')).toBe('4242\n')
   })
 
-  it('throws RunAlreadyActiveError when existing runner.pid is alive', () => {
+  it('throws RunAlreadyActiveError when existing runner.pid is alive and preserves control.sock', () => {
     const runDir = path.join(tempDir, 'active-run')
     fs.mkdirSync(runDir, { recursive: true })
     const pidFile = path.join(runDir, RUNNER_PID_FILE)
+    const sockFile = path.join(runDir, CONTROL_SOCKET_NAME)
     fs.writeFileSync(pidFile, `${process.pid}\n`, 'utf-8')
+    fs.writeFileSync(sockFile, 'fake-socket-content', 'utf-8')
 
     expect(() => acquireRunPidLock(runDir, 'active-run', 9999)).toThrow(RunAlreadyActiveError)
     expect(fs.readFileSync(pidFile, 'utf-8')).toBe(`${process.pid}\n`)
+    expect(fs.existsSync(sockFile)).toBe(true)
+  })
+})
+
+describe('acquireRunPidLock stale pid and socket recovery', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-pid-lock-test-'))
   })
 
-  it('overwrites stale runner.pid when existing pid is dead', () => {
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('overwrites stale runner.pid and unlinks stale control.sock when existing pid is dead', () => {
     const runDir = path.join(tempDir, 'dead-run')
     fs.mkdirSync(runDir, { recursive: true })
     const pidFile = path.join(runDir, RUNNER_PID_FILE)
+    const sockFile = path.join(runDir, CONTROL_SOCKET_NAME)
     fs.writeFileSync(pidFile, '999999\n', 'utf-8')
+    fs.writeFileSync(sockFile, 'stale-socket', 'utf-8')
 
     acquireRunPidLock(runDir, 'dead-run', 7777)
     expect(fs.readFileSync(pidFile, 'utf-8')).toBe('7777\n')
+    expect(fs.existsSync(sockFile)).toBe(false)
   })
 
   it('overwrites stale runner.pid when existing pid file contains corrupt content', () => {
@@ -113,6 +132,18 @@ describe('acquireRunPidLock', () => {
 
     acquireRunPidLock(runDir, 'corrupt-run', 8888)
     expect(fs.readFileSync(pidFile, 'utf-8')).toBe('8888\n')
+  })
+
+  it('unlinks stale control.sock when runner.pid does not exist', () => {
+    const runDir = path.join(tempDir, 'no-pid-run')
+    fs.mkdirSync(runDir, { recursive: true })
+    const sockFile = path.join(runDir, CONTROL_SOCKET_NAME)
+    fs.writeFileSync(sockFile, 'orphaned-socket', 'utf-8')
+
+    acquireRunPidLock(runDir, 'no-pid-run', 6666)
+    const pidFile = path.join(runDir, RUNNER_PID_FILE)
+    expect(fs.readFileSync(pidFile, 'utf-8')).toBe('6666\n')
+    expect(fs.existsSync(sockFile)).toBe(false)
   })
 })
 
