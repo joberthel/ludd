@@ -105,3 +105,64 @@ describe('createGateWaiter abort and concurrency', () => {
     expect(res2.action).toBe('skip')
   })
 })
+
+describe('createGateWaiter AbortSignal support', () => {
+  it('aborts waiting promise when defaultSignal aborts', async () => {
+    const controller = new AbortController()
+    const waiter = createGateWaiter(controller.signal)
+    const waitPromise = waiter.waitForResolution(sampleGate)
+
+    controller.abort('Controller aborted')
+    await expect(waitPromise).rejects.toThrow('Controller aborted')
+    expect(waiter.isWaiting()).toBe(false)
+  })
+
+  it('aborts waiting promise with default message when aborted without reason', async () => {
+    const controller = new AbortController()
+    const waiter = createGateWaiter(controller.signal)
+    const waitPromise = waiter.waitForResolution(sampleGate)
+
+    controller.abort()
+    await expect(waitPromise).rejects.toThrow('This operation was aborted')
+  })
+
+  it('aborts waiting promise with error message when aborted with Error reason', async () => {
+    const controller = new AbortController()
+    const waiter = createGateWaiter(controller.signal)
+    const waitPromise = waiter.waitForResolution(sampleGate)
+
+    controller.abort(new Error('Controller error reason'))
+    await expect(waitPromise).rejects.toThrow('Controller error reason')
+  })
+
+  it('rejects immediately when defaultSignal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('Already aborted error'))
+    const waiter = createGateWaiter(controller.signal)
+
+    await expect(waiter.waitForResolution(sampleGate)).rejects.toThrow('Already aborted error')
+  })
+
+  it('aborts waiting promise when per-call signal aborts', async () => {
+    const waiter = createGateWaiter()
+    const controller = new AbortController()
+    const waitPromise = waiter.waitForResolution(sampleGate, controller.signal)
+
+    controller.abort('Per-call abort')
+    await expect(waitPromise).rejects.toThrow('Per-call abort')
+  })
+
+  it('rejects immediately when per-call signal is already aborted', async () => {
+    const waiter = createGateWaiter()
+    const controller = new AbortController()
+    controller.abort('Pre-aborted call')
+
+    await expect(waiter.waitForResolution(sampleGate, controller.signal)).rejects.toThrow('Pre-aborted call')
+  })
+
+  it('falls back to default message when signal reason is neither string nor Error', async () => {
+    const waiter = createGateWaiter()
+    const fakeSignal = { aborted: true, reason: 123 } as unknown as AbortSignal
+    await expect(waiter.waitForResolution(sampleGate, fakeSignal)).rejects.toThrow('Gate resolution aborted')
+  })
+})

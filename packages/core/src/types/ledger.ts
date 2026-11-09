@@ -3,6 +3,7 @@ export type LedgerEventType
     | 'run.resumed'
     | 'run.passed'
     | 'run.failed'
+    | 'run.teardown'
     | 'step.started'
     | 'step.passed'
     | 'step.skipped'

@@ -17,25 +17,31 @@ export function createHostEnvironmentFromDescriptor(descriptor: {
   id: string
   type: string
   workingDir: string
-}): ProvisionedEnvironment {
+}, defaultSignal?: AbortSignal): ProvisionedEnvironment {
   const workingDir = path.resolve(descriptor.workingDir)
   return {
     __kind: 'environment',
     id: descriptor.id,
     type: descriptor.type,
     workingDir,
-    exec: async (command, options) => execHostCommand(workingDir, command, options),
+    exec: async (command, options) => execHostCommand(workingDir, command, {
+      signal: options?.signal ?? defaultSignal,
+      ...options,
+    }),
     ping: async () => fs.existsSync(workingDir),
     teardown: async () => {},
   }
 }
 
-export function createDefaultHostEnvironment(workspaceDir: string): ProvisionedEnvironment {
+export function createDefaultHostEnvironment(
+  workspaceDir: string,
+  defaultSignal?: AbortSignal,
+): ProvisionedEnvironment {
   return createHostEnvironmentFromDescriptor({
     id: 'host',
     type: 'host',
     workingDir: workspaceDir,
-  })
+  }, defaultSignal)
 }
 
 export function recordEnvironment(
@@ -67,6 +73,7 @@ export async function resolveStepEnvironment(
   workspaceDir: string,
   snapshot?: RunStateSnapshot,
   runDir?: string,
+  defaultSignal?: AbortSignal,
 ): Promise<ProvisionedEnvironment> {
   let env: ProvisionedEnvironment
   if (step.environment !== undefined) {
@@ -77,7 +84,14 @@ export async function resolveStepEnvironment(
     env = resolved
   }
   else {
-    env = createDefaultHostEnvironment(workspaceDir)
+    env = createDefaultHostEnvironment(workspaceDir, defaultSignal)
+  }
+  if (defaultSignal && step.environment !== undefined) {
+    const originalExec = env.exec.bind(env)
+    env.exec = async (command, options) => originalExec(command, {
+      signal: options?.signal ?? defaultSignal,
+      ...options,
+    })
   }
   recordEnvironment(env, ctx, snapshot, runDir)
   return env
@@ -108,23 +122,24 @@ export interface RehydrateEnvironmentsParams {
   workspaceDir: string
   snapshot?: RunStateSnapshot
   runDir?: string
+  defaultSignal?: AbortSignal
 }
 
 export async function rehydrateEnvironmentsAndCheckHealth(
   params: RehydrateEnvironmentsParams,
 ): Promise<void> {
-  const { previousEnvironments, ctx, activeStep, workspaceDir, snapshot, runDir } = params
+  const { previousEnvironments, ctx, activeStep, workspaceDir, snapshot, runDir, defaultSignal } = params
 
   if (previousEnvironments !== undefined) {
     for (const desc of Object.values(previousEnvironments)) {
       if (ctx.environments[desc.id] === undefined) {
-        ctx.environments[desc.id] = createHostEnvironmentFromDescriptor(desc)
+        ctx.environments[desc.id] = createHostEnvironmentFromDescriptor(desc, defaultSignal)
       }
     }
   }
 
   if (activeStep?.environment !== undefined) {
-    await resolveStepEnvironment(activeStep, ctx, workspaceDir, snapshot, runDir)
+    await resolveStepEnvironment(activeStep, ctx, workspaceDir, snapshot, runDir, defaultSignal)
   }
 
   for (const env of Object.values(ctx.environments)) {

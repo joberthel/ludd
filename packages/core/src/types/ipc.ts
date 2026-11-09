@@ -59,9 +59,28 @@ export interface GateResolveResult {
   ok: boolean
 }
 
+export interface RunAbortParams {
+  reason?: string
+  teardown?: boolean
+}
+
+export interface RunAbortResult {
+  ok: boolean
+}
+
+export interface RunTeardownParams {
+  force?: boolean
+}
+
+export interface RunTeardownResult {
+  ok: boolean
+}
+
 export interface ControlRpcHandlers {
   getStatus: () => RunStateSnapshot | Promise<RunStateSnapshot>
   resolveGate?: (params: unknown) => GateResolveResult | Promise<GateResolveResult>
+  abort?: (params?: unknown) => RunAbortResult | Promise<RunAbortResult>
+  teardown?: (params?: unknown) => RunTeardownResult | Promise<RunTeardownResult>
   [method: string]: ((params: unknown) => unknown | Promise<unknown>) | undefined
 }
 
@@ -74,6 +93,8 @@ export interface ControlClient {
   readonly socketPath: string
   readonly status: () => Promise<RunStateSnapshot>
   readonly resolveGate: (params: GateResolveParams) => Promise<GateResolveResult>
+  readonly abort: (params?: RunAbortParams) => Promise<RunAbortResult>
+  readonly teardown: (params?: RunTeardownParams) => Promise<RunTeardownResult>
   readonly request: <T = unknown>(method: string, params?: unknown) => Promise<T>
   readonly close: () => Promise<void>
 }

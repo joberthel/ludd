@@ -4,6 +4,10 @@ import type {
   GateResolveResult,
   JsonRpcRequest,
   JsonRpcResponse,
+  RunAbortParams,
+  RunAbortResult,
+  RunTeardownParams,
+  RunTeardownResult,
 } from '../types/ipc.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import net from 'node:net'
@@ -153,6 +157,8 @@ export async function createControlClient(runDir: string): Promise<ControlClient
     socketPath,
     status: async () => request<RunStateSnapshot>('run.status'),
     resolveGate: async (params: GateResolveParams) => request<GateResolveResult>('gate.resolve', params),
+    abort: async (params?: RunAbortParams) => request<RunAbortResult>('run.abort', params),
+    teardown: async (params?: RunTeardownParams) => request<RunTeardownResult>('run.teardown', params),
     request,
     close,
   }

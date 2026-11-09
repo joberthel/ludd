@@ -2,6 +2,7 @@ export interface EnvironmentExecOptions {
   cwd?: string
   env?: Record<string, string>
   timeoutMs?: number
+  signal?: AbortSignal
 }
 
 export interface EnvironmentExecResult {

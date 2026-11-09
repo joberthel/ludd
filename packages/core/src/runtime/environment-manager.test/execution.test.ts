@@ -2,11 +2,12 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createDefaultHostEnvironment,
   execHostCommand,
   killProcessTree,
+  resolveStepEnvironment,
 } from '../environment-manager.js'
 
 describe('execHostCommand standard execution', () => {
@@ -62,7 +63,7 @@ describe('execHostCommand standard execution', () => {
   })
 })
 
-describe('execHostCommand errors and timeouts', () => {
+describe('execHostCommand input validation and failures', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'exec-host-errors-'))
 
   it('throws on empty string command', async () => {
@@ -81,6 +82,10 @@ describe('execHostCommand errors and timeouts', () => {
     await expect(execHostCommand(tmpDir, ['non-existent-binary-12345'])).rejects.toThrow()
     await expect(execHostCommand(tmpDir, ['non-existent-binary-12345'], { timeoutMs: 5000 })).rejects.toThrow()
   })
+})
+
+describe('execHostCommand timeout and abort handling', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'exec-host-abort-'))
 
   it('handles timeout by killing process tree and resolving with timedOut true', async () => {
     const result = await execHostCommand(tmpDir, ['node', '-e', 'setInterval(() => {}, 1000)'], {
@@ -88,6 +93,38 @@ describe('execHostCommand errors and timeouts', () => {
     })
     expect(result.timedOut).toBe(true)
     expect(result.exitCode).toBeNull()
+  })
+
+  it('rejects immediately when AbortSignal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('Pre-aborted command'))
+    await expect(
+      execHostCommand(tmpDir, ['node', '-e', 'console.log("ok")'], { signal: controller.signal }),
+    ).rejects.toThrow('Pre-aborted command')
+  })
+
+  it('aborts running command, kills process tree, and rejects', async () => {
+    const controller = new AbortController()
+    const execPromise = execHostCommand(
+      tmpDir,
+      ['node', '-e', 'setInterval(() => {}, 1000)'],
+      { signal: controller.signal, timeoutMs: 10000 },
+    )
+    setTimeout(() => controller.abort('Process canceled by user'), 50)
+    await expect(execPromise).rejects.toThrow('Process canceled by user')
+  })
+
+  it('rejects with default message when aborted without reason', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      execHostCommand(tmpDir, ['node', '-e', 'console.log("ok")'], { signal: controller.signal }),
+    ).rejects.toThrow('This operation was aborted')
+
+    const fakeSignal = { aborted: true, reason: undefined } as unknown as AbortSignal
+    await expect(
+      execHostCommand(tmpDir, ['node', '-e', 'console.log("ok")'], { signal: fakeSignal }),
+    ).rejects.toThrow('Command aborted')
   })
 })
 
@@ -141,5 +178,46 @@ describe('createDefaultHostEnvironment', () => {
     const execResult = await env.exec(['node', '-e', 'console.log("ok")'])
     expect(execResult.exitCode).toBe(0)
     expect(execResult.stdout.trim()).toBe('ok')
+  })
+})
+
+describe('resolveStepEnvironment with defaultSignal', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resolve-step-env-'))
+
+  it('wraps custom environment exec with defaultSignal and options.signal override', async () => {
+    const defaultCtrl = new AbortController()
+    const customEnv = createDefaultHostEnvironment(dir)
+    const execSpy = vi.spyOn(customEnv, 'exec')
+    const ctx = {
+      runId: 'env-step-run',
+      environments: {},
+      steps: {},
+      step: { id: 'custom-step', output: undefined, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+    const resolved = await resolveStepEnvironment(
+      {
+        id: 'custom-step',
+        environment: customEnv,
+        run: async () => 'ok',
+      },
+      ctx,
+      dir,
+      undefined,
+      undefined,
+      defaultCtrl.signal,
+    )
+    await resolved.exec(['node', '-e', 'console.log("wrapped")'])
+    expect(execSpy).toHaveBeenCalledWith(
+      ['node', '-e', 'console.log("wrapped")'],
+      expect.objectContaining({ signal: defaultCtrl.signal }),
+    )
+    const overrideCtrl = new AbortController()
+    await resolved.exec(['node', '-e', 'console.log("override")'], { signal: overrideCtrl.signal })
+    expect(execSpy).toHaveBeenCalledWith(
+      ['node', '-e', 'console.log("override")'],
+      expect.objectContaining({ signal: overrideCtrl.signal }),
+    )
   })
 })

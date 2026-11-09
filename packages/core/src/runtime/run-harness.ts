@@ -8,15 +8,8 @@ import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
-import { randomUUID } from 'node:crypto'
-import process from 'node:process'
 import { validateHarnessConfig } from '../define-harness.js'
-import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
-import { startControlServer } from '../ipc/control-server.js'
-import { createGateResolveHandler } from '../ipc/gate-resolve-handler.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
-import { acquireRunPidLock } from '../persistence/pid-lock.js'
-import { readRunState, resolveRunDir } from '../persistence/state-store.js'
 import {
   rehydrateEnvironmentsAndCheckHealth,
   resolveStepEnvironment,
@@ -29,10 +22,12 @@ import {
   completeSuccessfulRun,
   createInitialContext,
   emitLedgerEvent,
+  handleRunError,
   handleStepFailure,
+  initControlServer,
   persistSnapshot,
   recordStepResult,
-  resolveOption,
+  resolveAndLockRunDir,
   setupHarnessStores,
 } from './run-harness-lifecycle.js'
 
@@ -64,6 +59,7 @@ async function runStep(
   mcpServer?: EmbeddedMcpServer,
   logStore?: LogStore,
   gateWaiter?: GateWaiter,
+  signal?: AbortSignal,
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
   const attempt = rehydration?.attempt ?? 1
@@ -77,7 +73,7 @@ async function runStep(
       return null
     }
 
-    const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir)
+    const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir, signal)
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
     const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore, gateWaiter)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
@@ -101,15 +97,30 @@ async function executeStepPipeline(
   mcpServer?: EmbeddedMcpServer,
   logStore?: LogStore,
   gateWaiter?: GateWaiter,
+  signal?: AbortSignal,
 ): Promise<HarnessRunResult | null> {
   for (const step of steps) {
+    if (signal?.aborted) {
+      return null
+    }
     if (ctx.steps[step.id]?.status === 'passed' || ctx.steps[step.id]?.status === 'skipped') {
       continue
     }
     const stepRehydration = rehydration?.stepId === step.id
       ? rehydration
       : undefined
-    const failure = await runStep(step, ctx, snapshot, runDir, workspaceDir, stepRehydration, mcpServer, logStore, gateWaiter)
+    const failure = await runStep(
+      step,
+      ctx,
+      snapshot,
+      runDir,
+      workspaceDir,
+      stepRehydration,
+      mcpServer,
+      logStore,
+      gateWaiter,
+      signal,
+    )
     if (failure !== null) {
       return failure
     }
@@ -130,6 +141,7 @@ async function prepareRunContext(
   runDir: string,
   runId: string,
   workspaceDir: string,
+  signal?: AbortSignal,
 ): Promise<PreparedRun> {
   const ctx = createInitialContext(runId, runDir)
   const steps = validatedConfig.steps
@@ -144,6 +156,7 @@ async function prepareRunContext(
       workspaceDir,
       snapshot,
       runDir,
+      defaultSignal: signal,
     })
   }
   const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
@@ -158,66 +171,48 @@ async function prepareRunContext(
   }
 }
 
-function handleRunError(error: unknown, runDir: string, runId: string, snapshot?: RunStateSnapshot): void {
-  if (error instanceof EnvironmentUnreachableError) {
-    emitLedgerEvent(runDir, runId, null, 'run.failed', {
-      error: error.message,
-      envId: error.envId,
-      workingDir: error.workingDir,
-    })
-    const state = snapshot ?? readRunState(runDir)
-    state.status = 'failed'
-    persistSnapshot(runDir, state)
-  }
-}
-
-function resolveAndLockRunDir(options?: RunHarnessOptions): { runId: string, workspaceDir: string, runDir: string } {
-  const runId = resolveOption(options?.runId, randomUUID)
-  const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
-  const runDir = resolveRunDir(workspaceDir, runId)
-  acquireRunPidLock(runDir, runId)
-  return { runId, workspaceDir, runDir }
-}
-
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
 ): Promise<HarnessRunResult> {
   const validatedConfig = validateHarnessConfig(config)
   const { runId, workspaceDir, runDir } = resolveAndLockRunDir(options)
-  const gateWaiter = createGateWaiter()
+  const abortController = new AbortController()
+  const gateWaiter = createGateWaiter(abortController.signal)
   let mcpServer: EmbeddedMcpServer | undefined
   let controlServer: ControlServer | undefined
   let snapshot: RunStateSnapshot | undefined
 
   try {
-    const prepared = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir)
-    mcpServer = prepared.mcpServer
-    snapshot = prepared.snapshot
-    controlServer = await startControlServer(runDir, {
-      getStatus: () => snapshot!,
-      resolveGate: createGateResolveHandler({
-        runDir,
-        getSnapshot: () => snapshot!,
-        gateWaiter,
-      }),
-    })
+    const prep = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir, abortController.signal)
+    mcpServer = prep.mcpServer
+    snapshot = prep.snapshot
+    controlServer = await initControlServer(runDir, snapshot, prep.ctx.environments, abortController, gateWaiter)
 
     const failure = await executeStepPipeline(
       validatedConfig.steps,
-      prepared.ctx,
+      prep.ctx,
       snapshot,
       runDir,
       workspaceDir,
-      prepared.rehydration,
+      prep.rehydration,
       mcpServer,
-      prepared.logStore,
+      prep.logStore,
       gateWaiter,
+      abortController.signal,
     )
     if (failure !== null) {
       return failure
     }
-    return completeSuccessfulRun(runDir, snapshot, prepared.ctx.steps)
+    if (abortController.signal.aborted) {
+      return {
+        runId: snapshot.runId,
+        status: 'failed',
+        steps: prep.ctx.steps,
+        error: abortController.signal.reason,
+      }
+    }
+    return completeSuccessfulRun(runDir, snapshot, prep.ctx.steps)
   }
   catch (error: unknown) {
     handleRunError(error, runDir, runId, snapshot)

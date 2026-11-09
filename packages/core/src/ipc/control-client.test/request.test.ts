@@ -104,6 +104,44 @@ describe('control client gate resolution', () => {
   })
 })
 
+describe('control client abort and teardown', () => {
+  it('invokes run.abort RPC method via typed helper', async () => {
+    let capturedParams: unknown
+    const handlers: ControlRpcHandlers = {
+      getStatus: () => createFakeSnapshot(),
+      abort: (params: unknown) => {
+        capturedParams = params
+        return { ok: true }
+      },
+    }
+    server = await startControlServer(tempDir, handlers)
+
+    const client = await createControlClient(tempDir)
+    const result = await client.abort({ reason: 'Manual abort', teardown: true })
+    expect(result).toEqual({ ok: true })
+    expect(capturedParams).toEqual({ reason: 'Manual abort', teardown: true })
+    await client.close()
+  })
+
+  it('invokes run.teardown RPC method via typed helper', async () => {
+    let capturedParams: unknown
+    const handlers: ControlRpcHandlers = {
+      getStatus: () => createFakeSnapshot(),
+      teardown: (params: unknown) => {
+        capturedParams = params
+        return { ok: true }
+      },
+    }
+    server = await startControlServer(tempDir, handlers)
+
+    const client = await createControlClient(tempDir)
+    const result = await client.teardown({ force: true })
+    expect(result).toEqual({ ok: true })
+    expect(capturedParams).toEqual({ force: true })
+    await client.close()
+  })
+})
+
 describe('control client RPC errors and schema payloads', () => {
   it('rejects with JsonRpcResponseError on RPC error response', async () => {
     server = await startControlServer(tempDir, {

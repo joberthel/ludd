@@ -20,6 +20,13 @@ export {
   type GateResolveHandlerContext,
   validateGateResolveParams,
 } from './ipc/gate-resolve-handler.js'
+export {
+  createRunAbortHandler,
+  createRunTeardownHandler,
+  type RunControlHandlerContext,
+  validateRunAbortParams,
+  validateRunTeardownParams,
+} from './ipc/run-control-handlers.js'
 export { CONTROL_SOCKET_NAME, getControlSocketPath } from './ipc/socket-path.js'
 export { loadHarnessConfig } from './loader/load-harness-config.js'
 export {
@@ -95,6 +102,11 @@ export {
   resolveMatrixItems,
 } from './runtime/matrix-executor.js'
 export { type HarnessRunResult, runHarness, type RunHarnessOptions } from './runtime/run-harness.js'
+export {
+  teardownRun,
+  type TeardownRunOptions,
+  type TeardownRunResult,
+} from './runtime/teardown-run.js'
 export type {
   AgentAccessMode,
   AgentRunner,
@@ -178,6 +190,10 @@ export {
   type JsonRpcRequest,
   type JsonRpcResponse,
   type JsonRpcSuccessResponse,
+  type RunAbortParams,
+  type RunAbortResult,
+  type RunTeardownParams,
+  type RunTeardownResult,
 } from './types/ipc.js'
 export type { LedgerEvent, LedgerEventType } from './types/ledger.js'
 export type {

@@ -55,6 +55,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.handleGuardrailEscalation).toBe('function')
     expect(typeof core.resolveMatrixItems).toBe('function')
     expect(typeof core.executeMatrixStep).toBe('function')
+    expect(typeof core.teardownRun).toBe('function')
   })
 })
 
@@ -103,6 +104,10 @@ describe('@ludd/core IPC exports', () => {
     expect(typeof core.startControlServer).toBe('function')
     expect(typeof core.createGateResolveHandler).toBe('function')
     expect(typeof core.validateGateResolveParams).toBe('function')
+    expect(typeof core.createRunAbortHandler).toBe('function')
+    expect(typeof core.createRunTeardownHandler).toBe('function')
+    expect(typeof core.validateRunAbortParams).toBe('function')
+    expect(typeof core.validateRunTeardownParams).toBe('function')
     expect(typeof core.createGateWaiter).toBe('function')
     expect(typeof core.getControlSocketPath).toBe('function')
     expect(core.CONTROL_SOCKET_NAME).toBe('control.sock')

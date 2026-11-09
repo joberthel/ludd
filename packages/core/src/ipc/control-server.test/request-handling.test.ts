@@ -86,7 +86,7 @@ describe('dispatchRpcRequest parser and validation errors', () => {
   })
 })
 
-describe('dispatchRpcRequest method execution', () => {
+describe('dispatchRpcRequest core methods', () => {
   it('dispatches run.status returning snapshot', async () => {
     const handlers: ControlRpcHandlers = {
       getStatus: () => createFakeSnapshot('passed'),
@@ -103,6 +103,25 @@ describe('dispatchRpcRequest method execution', () => {
     })
   })
 
+  it('dispatches gate.resolve, run.abort, and run.teardown when registered', async () => {
+    const handlers: ControlRpcHandlers = {
+      getStatus: () => createFakeSnapshot(),
+      resolveGate: () => ({ ok: true }),
+      abort: () => ({ ok: true }),
+      teardown: () => ({ ok: true }),
+    }
+    const gateRes = await handleRpcMessage(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'gate.resolve' }), handlers)
+    expect(gateRes?.result).toEqual({ ok: true })
+
+    const abortRes = await handleRpcMessage(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'run.abort' }), handlers)
+    expect(abortRes?.result).toEqual({ ok: true })
+
+    const tdRes = await handleRpcMessage(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'run.teardown' }), handlers)
+    expect(tdRes?.result).toEqual({ ok: true })
+  })
+})
+
+describe('dispatchRpcRequest custom and missing methods', () => {
   it('dispatches custom method if registered in handlers', async () => {
     const handlers: ControlRpcHandlers = {
       getStatus: () => createFakeSnapshot(),

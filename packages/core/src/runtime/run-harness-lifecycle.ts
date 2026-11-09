@@ -1,16 +1,24 @@
+import type { RunControlHandlerContext } from '../ipc/run-control-handlers.js'
 import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
-import type { HarnessRunResult } from '../types/harness.js'
+import type { ProvisionedEnvironment } from '../types/environment.js'
+import type { HarnessRunResult, RunHarnessOptions } from '../types/harness.js'
 import type { ControlServer } from '../types/ipc.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { GateWaiter } from './gate-waiter.js'
+import { randomUUID } from 'node:crypto'
+import process from 'node:process'
+import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
+import { startControlServer } from '../ipc/control-server.js'
+import { createGateResolveHandler } from '../ipc/gate-resolve-handler.js'
+import { createRunAbortHandler, createRunTeardownHandler } from '../ipc/run-control-handlers.js'
 import { createArtifactStore } from '../mcp/artifact-store.js'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
-import { releaseRunPidLock } from '../persistence/pid-lock.js'
-import { writeRunStateAtomic } from '../persistence/state-store.js'
+import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
+import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 
 export function resolveOption(value: string | undefined, fallback: () => string): string {
   const trimmed = value?.trim()
@@ -78,9 +86,11 @@ export function handleStepFailure(
 ): HarnessRunResult {
   const errorMessage = (error as { message?: string } | null)?.message ?? String(error)
   emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage }, matrixIndex)
-  emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
+  if (snapshot.status !== 'failed') {
+    emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
+    snapshot.status = 'failed'
+  }
   snapshot.steps[stepId] = { status: 'failed', output: undefined }
-  snapshot.status = 'failed'
   snapshot.activeStepId = null
   persistSnapshot(runDir, snapshot)
   return {
@@ -159,4 +169,53 @@ export async function cleanupRunResources(
       releaseRunPidLock(runDir)
     }
   }
+}
+
+export function handleRunError(error: unknown, runDir: string, runId: string, snapshot?: RunStateSnapshot): void {
+  if (error instanceof EnvironmentUnreachableError) {
+    emitLedgerEvent(runDir, runId, null, 'run.failed', {
+      error: error.message,
+      envId: error.envId,
+      workingDir: error.workingDir,
+    })
+    const state = snapshot ?? readRunState(runDir)
+    state.status = 'failed'
+    persistSnapshot(runDir, state)
+  }
+}
+
+export function resolveAndLockRunDir(
+  options?: RunHarnessOptions,
+): { runId: string, workspaceDir: string, runDir: string } {
+  const runId = resolveOption(options?.runId, randomUUID)
+  const workspaceDir = resolveOption(options?.workspaceDir, () => process.cwd())
+  const runDir = resolveRunDir(workspaceDir, runId)
+  acquireRunPidLock(runDir, runId)
+  return { runId, workspaceDir, runDir }
+}
+
+export async function initControlServer(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  environments: Record<string, ProvisionedEnvironment>,
+  abortController: AbortController,
+  gateWaiter: GateWaiter,
+): Promise<ControlServer> {
+  const controlCtx: RunControlHandlerContext = {
+    runDir,
+    getSnapshot: () => snapshot,
+    getEnvironments: () => environments,
+    abortController,
+    gateWaiter,
+  }
+  return startControlServer(runDir, {
+    getStatus: () => snapshot,
+    resolveGate: createGateResolveHandler({
+      runDir,
+      getSnapshot: () => snapshot,
+      gateWaiter,
+    }),
+    abort: createRunAbortHandler(controlCtx),
+    teardown: createRunTeardownHandler(controlCtx),
+  })
 }
