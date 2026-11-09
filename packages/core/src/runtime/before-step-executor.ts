@@ -30,6 +30,7 @@ export interface RunBeforeStepGuardrailsParams {
   readonly environment?: ProvisionedEnvironment
   readonly logStore?: LogStore
   readonly gateWaiter?: GateWaiter
+  readonly startIndex?: number
 }
 
 export function formatBeforeStepNotification(
@@ -193,8 +194,9 @@ export async function runBeforeStepGuardrails(
 
   const store = params.logStore ?? createLogStore(runDir)
   const results: BeforeStepExecutionResult[] = []
+  const startIndex = params.startIndex ?? 0
 
-  for (let k = 0; k < step.beforeStep.length; k++) {
+  for (let k = startIndex; k < step.beforeStep.length; k++) {
     const guardrail = step.beforeStep[k]
     const result = await executeSingleBeforeStepGuardrail(params, guardrail, k, store)
     results.push(result)

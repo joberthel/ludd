@@ -79,6 +79,8 @@ function recordEscalationActiveGate(
   prompt: string,
 ): ActiveGateState {
   const { step, ctx, runDir, snapshot } = params
+  const isMatchingExisting = snapshot.activeGate?.guardrailIndex === guardrailIndex
+    && snapshot.activeGate?.phase === 'afterStep'
   const activeGate: ActiveGateState = {
     stepId: step.id,
     ...(ctx.matrix?.index !== undefined
@@ -88,11 +90,14 @@ function recordEscalationActiveGate(
     guardrailIndex,
     gateType: 'max_retries_exceeded',
     prompt,
-    createdAt: new Date().toISOString(),
+    createdAt: isMatchingExisting
+      ? snapshot.activeGate!.createdAt
+      : new Date().toISOString(),
   }
 
   snapshot.status = 'waiting_for_gate'
   snapshot.activeGate = activeGate
+  snapshot.activeStepOutput = ctx.step.output
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
 
@@ -140,6 +145,7 @@ function handleRetryResolution(
 
   snapshot.status = 'running'
   snapshot.activeGate = null
+  snapshot.activeStepOutput = undefined
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
 

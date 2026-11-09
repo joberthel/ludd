@@ -148,3 +148,29 @@ describe('runHarness crash rehydration: prompt rehydration', () => {
     expect(capturedPrompt).toContain('Original instruction for step')
   })
 })
+
+describe('runHarness crash rehydration: granted budgets', () => {
+  it('preserves grantedExtraRetries and grantedExtraTurns in snapshot on rehydration', async () => {
+    const runId = 'rehydrate-granted-budgets'
+    const runDir = resolveRunDir(tempDir, runId)
+    const snapshot: RunStateSnapshot = {
+      ...createRetrySnapshot(runId),
+      grantedExtraRetries: { 'step-impl:0': 2 },
+      grantedExtraTurns: { 'step-impl': 3 },
+    }
+    writeRunStateAtomic(runDir, snapshot)
+
+    const config: HarnessConfig = {
+      name: 'retry-harness',
+      steps: [
+        {
+          id: 'step-impl',
+          run: async () => 'ok',
+        },
+      ],
+    }
+
+    const res = await runHarness(config, { runId, workspaceDir: tempDir })
+    expect(res.status).toBe('passed')
+  })
+})

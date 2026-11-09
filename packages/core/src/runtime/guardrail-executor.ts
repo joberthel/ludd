@@ -4,12 +4,11 @@ import type { Guardrail, GuardrailVerdict } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
-import type { RunStateSnapshot } from '../types/state.js'
+import type { ActiveGateState, RunStateSnapshot } from '../types/state.js'
 import type { GateWaiter } from './gate-waiter.js'
 import process from 'node:process'
 import { offloadGuardrailLog } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
-import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
@@ -18,6 +17,7 @@ import {
   getEffectiveMaxTotalTurns,
   handleGuardrailEscalation,
 } from './escalation-manager.js'
+import { checkGuardrailRetries, clearActiveGuardrailRetries } from './guardrail-retries.js'
 import { formatGuardrailRetryPrompt } from './guardrail-retry-prompt.js'
 import { GuardrailRetrySignal } from './guardrail-retry-signal.js'
 
@@ -41,6 +41,8 @@ export interface RunAfterStepGuardrailsParams {
   environment?: ProvisionedEnvironment
   logStore?: LogStore
   gateWaiter?: GateWaiter
+  startGuardrailIndex?: number
+  rehydratedGate?: ActiveGateState | null
 }
 
 export function emitGuardrailEvent(
@@ -120,30 +122,6 @@ async function executeGuardrail(
   })
 }
 
-function clearActiveGuardrailRetries(runDir: string, snapshot: RunStateSnapshot): void {
-  if (snapshot.activeGuardrailRetries !== undefined) {
-    snapshot.activeGuardrailRetries = undefined
-    snapshot.updatedAt = new Date().toISOString()
-    writeRunStateAtomic(runDir, snapshot)
-  }
-}
-
-function checkGuardrailRetries(
-  snapshot: RunStateSnapshot,
-  k: number,
-  runDir: string,
-): number {
-  if (!snapshot.activeGuardrailRetries) {
-    snapshot.activeGuardrailRetries = {}
-  }
-  const key = String(k)
-  const count = (snapshot.activeGuardrailRetries[key] ?? 0) + 1
-  snapshot.activeGuardrailRetries[key] = count
-  snapshot.updatedAt = new Date().toISOString()
-  writeRunStateAtomic(runDir, snapshot)
-  return count
-}
-
 function triggerGuardrailRetry(
   params: RunAfterStepGuardrailsParams,
   k: number,
@@ -192,6 +170,11 @@ async function processGuardrailResult(
 ): Promise<void> {
   const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
   emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', { phase: 'afterStep', guardrailIndex: k, attempt })
+  if (params.rehydratedGate?.guardrailIndex === k && params.rehydratedGate.gateType === 'max_retries_exceeded') {
+    const verdict: GuardrailVerdict = { status: 'fail', body: params.rehydratedGate.prompt }
+    await handleGuardrailEscalation(params, k, guardrail, verdict, 'guardrail_max_retries')
+    return
+  }
   const verdict = guardrail.type === 'human_review'
     ? await executeHumanReviewAfterStepGuardrail(params, guardrail, k)
     : await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment, snapshot)
@@ -228,7 +211,8 @@ export async function runAfterStepGuardrails(
     return
   }
 
-  for (let k = 0; k < step.afterStep.length; k++) {
+  const startIndex = params.startGuardrailIndex ?? 0
+  for (let k = startIndex; k < step.afterStep.length; k++) {
     await processGuardrailResult(step.afterStep[k], k, params)
   }
 

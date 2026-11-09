@@ -1,5 +1,6 @@
 import type { ArtifactValidationIssue } from '../types/artifact.js'
 import type { GuardrailVerdict } from '../types/guardrail.js'
+import type { ActiveGateState } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { readLedgerEvents } from '../persistence/ledger-writer.js'
@@ -11,6 +12,8 @@ export interface RehydratedAgentPromptState {
   attempt?: number
   matrixIndex?: number | null
   matrixOutputs?: readonly unknown[]
+  activeGate?: ActiveGateState | null
+  activeStepOutput?: unknown
 }
 
 export type RetryIssueList = readonly {

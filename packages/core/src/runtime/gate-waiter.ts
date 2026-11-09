@@ -41,62 +41,77 @@ function wireSignalAbort(
   }, { once: true })
 }
 
-export function createGateWaiter(defaultSignal?: AbortSignal): GateWaiter {
-  let activeGate: ActiveGateState | null = null
-  let pendingResolve: ((resolution: GateResolveParams) => void) | null = null
-  let pendingReject: ((error: Error) => void) | null = null
+interface WaiterState {
+  activeGate: ActiveGateState | null
+  pendingResolve: ((resolution: GateResolveParams) => void) | null
+  pendingReject: ((error: Error) => void) | null
+  bufferedResolution: GateResolveParams | null
+}
 
-  const abort = (reason?: string): void => {
-    if (pendingReject === null) {
-      return
-    }
-    const rejectFn = pendingReject
-    activeGate = null
-    pendingResolve = null
-    pendingReject = null
-    rejectFn(new Error(reason ?? 'Gate resolution aborted'))
+function abortPending(state: WaiterState, reason?: string): void {
+  state.bufferedResolution = null
+  if (state.pendingReject === null) {
+    return
   }
+  const rejectFn = state.pendingReject
+  state.activeGate = null
+  state.pendingResolve = null
+  state.pendingReject = null
+  rejectFn(new Error(reason ?? 'Gate resolution aborted'))
+}
 
+function resolvePending(state: WaiterState, resolution: GateResolveParams): void {
+  if (state.pendingResolve === null) {
+    state.bufferedResolution = resolution
+    return
+  }
+  const resolveFn = state.pendingResolve
+  state.activeGate = null
+  state.pendingResolve = null
+  state.pendingReject = null
+  resolveFn(resolution)
+}
+
+export function createGateWaiter(defaultSignal?: AbortSignal): GateWaiter {
+  const state: WaiterState = {
+    activeGate: null,
+    pendingResolve: null,
+    pendingReject: null,
+    bufferedResolution: null,
+  }
+  const abort = (reason?: string): void => {
+    abortPending(state, reason)
+  }
   wireSignalAbort(defaultSignal, abort)
 
-  const waiter: GateWaiter = {
+  return {
     async waitForResolution(gate: ActiveGateState, signal?: AbortSignal): Promise<GateResolveParams> {
-      if (activeGate !== null) {
+      if (state.activeGate !== null) {
         throw new Error(
-          `A gate is already waiting for resolution: ${activeGate.stepId} (index ${activeGate.guardrailIndex})`,
+          `A gate is already waiting for resolution: ${state.activeGate.stepId} (index ${state.activeGate.guardrailIndex})`,
         )
       }
       checkPreAborted(signal, defaultSignal)
-
-      activeGate = gate
+      if (state.bufferedResolution !== null) {
+        const res = state.bufferedResolution
+        state.bufferedResolution = null
+        state.activeGate = null
+        return res
+      }
+      state.activeGate = gate
       return new Promise<GateResolveParams>((resolve, reject) => {
-        pendingResolve = resolve
-        pendingReject = reject
+        state.pendingResolve = resolve
+        state.pendingReject = reject
         wireSignalAbort(signal, abort)
       })
     },
 
     resolve(resolution: GateResolveParams): void {
-      if (pendingResolve === null) {
-        return
-      }
-      const resolveFn = pendingResolve
-      activeGate = null
-      pendingResolve = null
-      pendingReject = null
-      resolveFn(resolution)
+      resolvePending(state, resolution)
     },
 
     abort,
-
-    getActiveGate(): ActiveGateState | null {
-      return activeGate
-    },
-
-    isWaiting(): boolean {
-      return activeGate !== null
-    },
+    getActiveGate: () => state.activeGate,
+    isWaiting: () => state.activeGate !== null,
   }
-
-  return waiter
 }

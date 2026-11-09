@@ -1,14 +1,13 @@
 import type { AgentRunner } from '../types/agent.js'
 import type { EmbeddedMcpServer } from '../types/artifact.js'
-import type { DynamicProperty, StepContext } from '../types/context.js'
+import type { StepContext } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
-import type { RunStateSnapshot } from '../types/state.js'
+import type { ActiveGateState, RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentPromptState } from './agent-prompt.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
-import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { StepArtifactValidationError } from '../errors/step-artifact-validation-error.js'
@@ -16,6 +15,11 @@ import { StepOutputValidationError } from '../errors/step-output-validation-erro
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { formatRetryPrompt, resolveInitialPrompt } from './agent-prompt.js'
+import {
+  createAgentStepOutput,
+  resolveSessionId,
+  validateStepOutput,
+} from './agent-step-output.js'
 import { emitPreTurnEvents, emitTurnCompleted } from './agent-telemetry.js'
 import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
 import { createDefaultHostEnvironment } from './environment-manager.js'
@@ -26,43 +30,7 @@ import {
 } from './guardrail-executor.js'
 
 export type RehydratedAgentState = RehydratedAgentPromptState
-export { formatRetryPrompt, resolveInitialPrompt }
-
-export async function validateStepOutput(
-  stepId: string,
-  schema: StepConfig['outputSchema'],
-  rawOutput: unknown,
-): Promise<unknown> {
-  if (schema === undefined) {
-    return rawOutput
-  }
-  const parsed = await schema.safeParseAsync(rawOutput)
-  if (!parsed.success) {
-    throw new StepOutputValidationError(stepId, rawOutput, parsed.error.issues)
-  }
-  return parsed.data
-}
-
-export function createAgentStepOutput(validatedOutput: unknown, sessionId: string): unknown {
-  const isObj = typeof validatedOutput === 'object' && validatedOutput !== null && !Array.isArray(validatedOutput)
-  return isObj
-    ? { ...(validatedOutput as Record<string, unknown>), sessionId }
-    : { value: validatedOutput, sessionId }
-}
-
-async function resolveSessionId(
-  sessionIdProp: DynamicProperty<string | undefined> | undefined,
-  ctx: StepContext,
-): Promise<string> {
-  if (sessionIdProp !== undefined) {
-    const raw = await resolveDynamicProperty(sessionIdProp, ctx)
-    const trimmed = raw?.trim()
-    if (trimmed !== undefined && trimmed.length > 0) {
-      return trimmed
-    }
-  }
-  return `session-${randomUUID()}`
-}
+export { createAgentStepOutput, formatRetryPrompt, resolveInitialPrompt, validateStepOutput }
 
 interface TurnRetryParams {
   stepId: string
@@ -102,6 +70,7 @@ function handleTurnRetry(err: unknown, params: TurnRetryParams): string {
 function persistActiveTurn(runDir: string, snapshot: RunStateSnapshot, sessionId: string, attempt: number): void {
   snapshot.activeSessionId = sessionId
   snapshot.activeStepAttempt = attempt
+  snapshot.activeStepOutput = undefined
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
 }
@@ -137,6 +106,35 @@ interface AgentTurnExecutionScope {
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
   logStore?: LogStore
   gateWaiter?: GateWaiter
+  activeGate?: ActiveGateState | null
+  activeStepOutput?: unknown
+}
+
+async function resumeAfterStepGate(
+  scope: AgentTurnExecutionScope,
+  attempt: number,
+  gate: ActiveGateState,
+): Promise<{ success: true, result: unknown } | { success: false, nextPrompt: string }> {
+  try {
+    const output = typeof scope.activeStepOutput === 'object' && scope.activeStepOutput !== null
+      && !('sessionId' in (scope.activeStepOutput as Record<string, unknown>))
+      ? createAgentStepOutput(scope.activeStepOutput, scope.sessionId)
+      : scope.activeStepOutput
+    scope.ctx.step.output = output
+    await runAfterStepGuardrails({
+      ...scope,
+      step: scope.step,
+      sessionId: scope.sessionId,
+      attempt,
+      startGuardrailIndex: gate.guardrailIndex,
+      rehydratedGate: gate,
+    })
+    return { success: true, result: output }
+  }
+  catch (err: unknown) {
+    const nextPrompt = handleTurnRetry(err, { ...scope, stepId: scope.step.id, attempt })
+    return { success: false, nextPrompt }
+  }
 }
 
 async function runTurnLoopAttempt(
@@ -145,6 +143,12 @@ async function runTurnLoopAttempt(
   attempt: number,
 ): Promise<{ success: true, result: unknown } | { success: false, nextPrompt: string }> {
   scope.ctx.step.attempt = attempt
+  if (scope.activeGate?.phase === 'afterStep') {
+    const gate = scope.activeGate
+    scope.activeGate = null
+    return resumeAfterStepGate(scope, attempt, gate)
+  }
+
   persistActiveTurn(scope.runDir, scope.snapshot, scope.sessionId, attempt)
   emitPreTurnEvents(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, currentPrompt, scope.agent.mode, attempt)
 
@@ -217,6 +221,8 @@ export async function executeAgentStep(
     mcpServer,
     logStore,
     gateWaiter,
+    activeGate: rehydration?.activeGate,
+    activeStepOutput: rehydration?.activeStepOutput,
   }
 
   while (true) {

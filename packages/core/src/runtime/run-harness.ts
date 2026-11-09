@@ -63,7 +63,7 @@ async function runStep(
 ): Promise<HarnessRunResult | null> {
   const stepId = step.id
   const attempt = rehydration?.attempt ?? 1
-  ctx.step = { id: stepId, output: undefined, attempt }
+  ctx.step = { id: stepId, output: rehydration?.activeStepOutput, attempt }
   snapshot.activeStepId = stepId
   persistSnapshot(runDir, snapshot)
 
@@ -171,6 +171,32 @@ async function prepareRunContext(
   }
 }
 
+function wireAbortSignal(abortController: AbortController, signal?: AbortSignal): void {
+  if (!signal) {
+    return
+  }
+  if (signal.aborted) {
+    abortController.abort(signal.reason)
+    return
+  }
+  signal.addEventListener('abort', () => {
+    abortController.abort(signal.reason)
+  }, { once: true })
+}
+
+function formatAbortedResult(
+  snapshot: RunStateSnapshot,
+  steps: Record<string, StepResult<unknown>>,
+  reason: unknown,
+): HarnessRunResult {
+  return {
+    runId: snapshot.runId,
+    status: 'failed',
+    steps,
+    error: reason,
+  }
+}
+
 export async function runHarness(
   config: HarnessConfig,
   options?: RunHarnessOptions,
@@ -178,6 +204,7 @@ export async function runHarness(
   const validatedConfig = validateHarnessConfig(config)
   const { runId, workspaceDir, runDir } = resolveAndLockRunDir(options)
   const abortController = new AbortController()
+  wireAbortSignal(abortController, options?.signal)
   const gateWaiter = createGateWaiter(abortController.signal)
   let mcpServer: EmbeddedMcpServer | undefined
   let controlServer: ControlServer | undefined
@@ -205,12 +232,7 @@ export async function runHarness(
       return failure
     }
     if (abortController.signal.aborted) {
-      return {
-        runId: snapshot.runId,
-        status: 'failed',
-        steps: prep.ctx.steps,
-        error: abortController.signal.reason,
-      }
+      return formatAbortedResult(snapshot, prep.ctx.steps, abortController.signal.reason)
     }
     return completeSuccessfulRun(runDir, snapshot, prep.ctx.steps)
   }

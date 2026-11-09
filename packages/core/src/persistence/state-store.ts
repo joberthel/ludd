@@ -53,6 +53,7 @@ export const runStateSnapshotSchema = z.object({
   ]),
   activeStepId: z.string().nullable(),
   activeGate: activeGateStateSchema.nullable().optional(),
+  activeStepOutput: z.unknown().optional(),
   activeSessionId: z.string().nullable().optional(),
   activeStepAttempt: z.number().optional(),
   activeMatrixIndex: z.number().int().nonnegative().nullable().optional(),

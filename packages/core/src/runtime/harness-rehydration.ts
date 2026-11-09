@@ -1,6 +1,6 @@
 import type { StepContext, StepResult } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
-import type { RunStateSnapshot } from '../types/state.js'
+import type { ActiveGateState, RunStateSnapshot } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
@@ -13,6 +13,8 @@ export interface RehydrationInfo {
   matrixIndex?: number | null
   matrixOutputs?: readonly unknown[]
   guardrailRetries?: Record<string, number>
+  activeGate?: ActiveGateState | null
+  activeStepOutput?: unknown
 }
 
 function resolvePreviousRehydration(
@@ -26,6 +28,8 @@ function resolvePreviousRehydration(
     || typeof previous.activeMatrixIndex === 'number'
     || typeof previous.activeStepAttempt === 'number'
     || previous.activeGuardrailRetries !== undefined
+    || Boolean(previous.activeGate)
+    || previous.status === 'waiting_for_gate'
 
   const guardrailRetries = previous.activeGuardrailRetries
     ? { ...previous.activeGuardrailRetries }
@@ -39,6 +43,8 @@ function resolvePreviousRehydration(
       matrixIndex: previous.activeMatrixIndex ?? null,
       matrixOutputs: previous.activeMatrixOutputs ?? [],
       guardrailRetries,
+      activeGate: previous.activeGate ?? null,
+      activeStepOutput: previous.activeStepOutput,
     }
   }
 }
@@ -66,18 +72,27 @@ function buildSnapshot(
   const logs = previous?.logs
     ? { ...previous.logs }
     : undefined
+  const isWaiting = Boolean(rehydration?.activeGate) || previous?.status === 'waiting_for_gate'
 
   return {
     schemaVersion: 1,
     runId,
     harnessName,
-    status: 'running',
+    status: isWaiting ? 'waiting_for_gate' : 'running',
     activeStepId,
+    activeGate: rehydration?.activeGate ?? null,
+    activeStepOutput: rehydration?.activeStepOutput,
     activeSessionId: rehydration?.sessionId ?? null,
     activeStepAttempt: rehydration?.attempt ?? 1,
     activeMatrixIndex: rehydration?.matrixIndex ?? null,
     activeMatrixOutputs: matrixOutputs,
     activeGuardrailRetries: guardrailRetries,
+    grantedExtraRetries: previous?.grantedExtraRetries
+      ? { ...previous.grantedExtraRetries }
+      : undefined,
+    grantedExtraTurns: previous?.grantedExtraTurns
+      ? { ...previous.grantedExtraTurns }
+      : undefined,
     environments,
     steps: ctxSteps,
     artifacts,

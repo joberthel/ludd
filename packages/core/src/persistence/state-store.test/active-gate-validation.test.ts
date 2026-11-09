@@ -60,12 +60,14 @@ describe('readRunState activeGate valid states', () => {
       status: 'running',
       activeStepId: 'step-1',
       activeGate: null,
+      activeStepOutput: { count: 42, summary: 'done' },
       steps: {},
       updatedAt: '2026-11-09T20:00:00.000Z',
     })
 
     const parsed = readRunState(runDir)
     expect(parsed.activeGate).toBeNull()
+    expect(parsed.activeStepOutput).toEqual({ count: 42, summary: 'done' })
   })
 })
 

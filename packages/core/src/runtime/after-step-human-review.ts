@@ -38,6 +38,8 @@ function recordActiveGate(
   prompt: string,
 ): ActiveGateState {
   const { step, ctx, runDir, snapshot } = params
+  const isMatchingExisting = snapshot.activeGate?.guardrailIndex === guardrailIndex
+    && snapshot.activeGate?.phase === 'afterStep'
   const activeGate: ActiveGateState = {
     stepId: step.id,
     ...(ctx.matrix?.index !== undefined
@@ -47,11 +49,14 @@ function recordActiveGate(
     guardrailIndex,
     gateType: 'human_review',
     prompt,
-    createdAt: new Date().toISOString(),
+    createdAt: isMatchingExisting
+      ? snapshot.activeGate!.createdAt
+      : new Date().toISOString(),
   }
 
   snapshot.status = 'waiting_for_gate'
   snapshot.activeGate = activeGate
+  snapshot.activeStepOutput = ctx.step.output
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
 

@@ -117,6 +117,7 @@ export interface HarnessConfig<
 export interface RunHarnessOptions {
   runId?: string
   workspaceDir?: string
+  signal?: AbortSignal
 }
 
 export interface HarnessRunResult {

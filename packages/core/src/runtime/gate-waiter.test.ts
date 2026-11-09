@@ -25,6 +25,15 @@ describe('createGateWaiter state and resolution', () => {
     expect(waiter.isWaiting()).toBe(false)
   })
 
+  it('buffers resolution if resolved before waitForResolution is called', async () => {
+    const waiter = createGateWaiter()
+    waiter.resolve({ stepId: 'step-review', action: 'pass', feedback: 'early resolution' })
+
+    const result = await waiter.waitForResolution(sampleGate)
+    expect(result).toEqual({ stepId: 'step-review', action: 'pass', feedback: 'early resolution' })
+    expect(waiter.isWaiting()).toBe(false)
+  })
+
   it('registers active gate and resolves with resolution params', async () => {
     const waiter = createGateWaiter()
     const waitPromise = waiter.waitForResolution(sampleGate)
