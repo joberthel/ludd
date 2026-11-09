@@ -30,6 +30,7 @@ const environmentDescriptorSchema = z.object({
   type: z.string(),
   workingDir: z.string(),
   branchName: z.string().optional(),
+  containerId: z.string().optional(),
   tornDown: z.boolean().optional(),
 })
 

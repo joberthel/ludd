@@ -9,9 +9,11 @@ import { EnvironmentUnreachableError } from '../errors/environment-unreachable-e
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isEnvironmentAdapter, isProvisionedEnvironment } from '../types/environment.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
+import { createDockerWorktreeEnvironmentFromDescriptor } from './docker-worktree-rehydration.js'
 import { execHostCommand } from './environment-exec.js'
 import { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
 
+export { createDockerWorktreeEnvironmentFromDescriptor } from './docker-worktree-rehydration.js'
 export { execHostCommand, killProcessTree } from './environment-exec.js'
 export { createGitWorktreeEnvironmentFromDescriptor } from './git-worktree-rehydration.js'
 
@@ -57,12 +59,16 @@ export function recordEnvironment(
     if (!snapshot.environments) {
       snapshot.environments = {}
     }
+    const containerId = (env as { containerId?: string }).containerId
     snapshot.environments[env.id] = {
       id: env.id,
       type: env.type,
       workingDir: env.workingDir,
       ...(env.branchName !== undefined
         ? { branchName: env.branchName }
+        : {}),
+      ...(containerId !== undefined
+        ? { containerId }
         : {}),
       tornDown: false,
     }
@@ -180,6 +186,10 @@ function rehydrateEnvironmentDescriptor(
   defaultSignal?: AbortSignal,
 ): void {
   if (desc.tornDown || ctx.environments[desc.id] !== undefined) {
+    return
+  }
+  if (desc.type === 'docker-worktree') {
+    ctx.environments[desc.id] = createDockerWorktreeEnvironmentFromDescriptor(desc, defaultSignal, workspaceDir)
     return
   }
   ctx.environments[desc.id] = desc.type === 'git-worktree'

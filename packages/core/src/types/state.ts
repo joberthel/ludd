@@ -18,6 +18,7 @@ export interface EnvironmentDescriptor {
   type: string
   workingDir: string
   branchName?: string
+  containerId?: string
   tornDown?: boolean
 }
 

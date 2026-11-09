@@ -75,6 +75,7 @@ export {
 } from './runtime/before-step-executor.js'
 export {
   createDefaultHostEnvironment,
+  createDockerWorktreeEnvironmentFromDescriptor,
   createGitWorktreeEnvironmentFromDescriptor,
   createHostEnvironmentFromDescriptor,
   recordEnvironment,

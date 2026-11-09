@@ -18,6 +18,7 @@ export interface ProvisionedEnvironment {
   readonly type: string
   readonly workingDir: string
   readonly branchName?: string
+  readonly containerId?: string
   exec: (command: string | readonly string[], options?: EnvironmentExecOptions) => Promise<EnvironmentExecResult>
   ping: () => Promise<boolean>
   teardown: () => Promise<void>

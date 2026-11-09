@@ -24,8 +24,8 @@ function writeRawState(content: unknown): string {
   return runDir
 }
 
-describe('readRunState environments validation', () => {
-  it('accepts valid environments map and rejects invalid descriptors', () => {
+describe('readRunState host environment descriptor validation', () => {
+  it('accepts valid host environment descriptor', () => {
     const runDir = writeRawState({
       schemaVersion: 1,
       runId: 'run-env',
@@ -52,7 +52,44 @@ describe('readRunState environments validation', () => {
       branchName: 'main',
       tornDown: false,
     })
+  })
+})
 
+describe('readRunState docker-worktree environment descriptor validation', () => {
+  it('accepts valid docker-worktree environment descriptor with containerId', () => {
+    const dockerDir = writeRawState({
+      schemaVersion: 1,
+      runId: 'run-docker-env',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: null,
+      environments: {
+        'docker-wt': {
+          id: 'docker-wt',
+          type: 'docker-worktree',
+          workingDir: '/worktrees/wt-1',
+          branchName: 'ludd/wt-1',
+          containerId: 'c1234567890abcdef',
+          tornDown: false,
+        },
+      },
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+    const parsedDocker = readRunState(dockerDir)
+    expect(parsedDocker.environments?.['docker-wt']).toEqual({
+      id: 'docker-wt',
+      type: 'docker-worktree',
+      workingDir: '/worktrees/wt-1',
+      branchName: 'ludd/wt-1',
+      containerId: 'c1234567890abcdef',
+      tornDown: false,
+    })
+  })
+})
+
+describe('readRunState environments invalid descriptors', () => {
+  it('rejects invalid descriptors', () => {
     const invalidDir = writeRawState({
       schemaVersion: 1,
       runId: 'run-invalid-env',

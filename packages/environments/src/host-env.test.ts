@@ -126,6 +126,59 @@ describe('hostEnv validation and timeouts', () => {
   })
 })
 
+describe('hostEnv abort signal handling', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-env-sig-'))
+
+  it('rejects when signal is already aborted', async () => {
+    const env = hostEnv({ cwd: tmpDir })
+    const controller = new AbortController()
+    controller.abort(new Error('pre-aborted'))
+    await expect(env.exec(['node', '-e', 'console.log("hi")'], { signal: controller.signal })).rejects.toThrow('pre-aborted')
+
+    const strController = new AbortController()
+    strController.abort('custom-string-reason')
+    await expect(env.exec(['node', '-e', 'console.log("hi")'], { signal: strController.signal })).rejects.toThrow('custom-string-reason')
+
+    const defaultController = new AbortController()
+    defaultController.abort()
+    await expect(env.exec(['node', '-e', 'console.log("hi")'], { signal: defaultController.signal })).rejects.toThrow('This operation was aborted')
+
+    const fakeSignal = { aborted: true, reason: undefined } as unknown as AbortSignal
+    await expect(env.exec(['node', '-e', 'console.log("hi")'], { signal: fakeSignal })).rejects.toThrow('Command aborted')
+  })
+
+  it('aborts running process and cleans up listeners with and without timeout', async () => {
+    const env = hostEnv({ cwd: tmpDir })
+    // Abort with active timeout timer
+    const controllerWithTimeout = new AbortController()
+    const execWithTimeout = env.exec(['node', '-e', 'setInterval(() => {}, 1000)'], {
+      signal: controllerWithTimeout.signal,
+      timeoutMs: 10000,
+    })
+    setTimeout(() => {
+      controllerWithTimeout.abort(new Error('aborted-with-timeout'))
+    }, 30)
+    await expect(execWithTimeout).rejects.toThrow('aborted-with-timeout')
+
+    // Abort without active timeout timer
+    const controllerNoTimeout = new AbortController()
+    const execNoTimeout = env.exec(['node', '-e', 'setInterval(() => {}, 1000)'], {
+      signal: controllerNoTimeout.signal,
+    })
+    setTimeout(() => {
+      controllerNoTimeout.abort(new Error('aborted-no-timeout'))
+    }, 30)
+    await expect(execNoTimeout).rejects.toThrow('aborted-no-timeout')
+
+    // Clean execution also removes listeners without error
+    const normalController = new AbortController()
+    const normalRes = await env.exec(['node', '-e', 'console.log("ok")'], {
+      signal: normalController.signal,
+    })
+    expect(normalRes.exitCode).toBe(0)
+  })
+})
+
 describe('hostEnv killProcessTree unit cases', () => {
   it('safely handles undefined, zero, and dead pid on unix and win32', () => {
     expect(() => killProcessTree(undefined)).not.toThrow()

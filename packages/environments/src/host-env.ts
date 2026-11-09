@@ -111,6 +111,39 @@ function setupTimeoutTimer(
   }, timeoutMs)
 }
 
+function extractAbortError(signal: AbortSignal | undefined): Error {
+  if (signal?.reason instanceof Error) {
+    return signal.reason
+  }
+  return new Error(String(signal?.reason ?? 'Command aborted'))
+}
+
+function setupAbortSignal(
+  signal: AbortSignal | undefined,
+  child: ChildProcess,
+  timer: NodeJS.Timeout | undefined,
+  state: ExecutionState,
+  reject: (err: Error) => void,
+): void {
+  if (!signal) {
+    return
+  }
+  const onAbort = (): void => {
+    state.settled = true
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
+    killProcessTree(child.pid)
+    reject(extractAbortError(signal))
+  }
+  const cleanup = (): void => {
+    signal.removeEventListener('abort', onAbort)
+  }
+  signal.addEventListener('abort', onAbort, { once: true })
+  child.once('close', cleanup)
+  child.once('error', cleanup)
+}
+
 function attachProcessLifecycle(
   child: ChildProcess,
   timer: NodeJS.Timeout | undefined,
@@ -155,6 +188,11 @@ export async function execHostEnvCommand(
   }
 
   return new Promise((resolve, reject) => {
+    if (options?.signal?.aborted) {
+      reject(extractAbortError(options.signal))
+      return
+    }
+
     const child = spawn(file, args as string[], {
       cwd,
       env,
@@ -166,6 +204,7 @@ export async function execHostEnvCommand(
     attachChildStreams(child, state)
     const timer = setupTimeoutTimer(child.pid, options?.timeoutMs, state, resolve)
     attachProcessLifecycle(child, timer, state, resolve, reject)
+    setupAbortSignal(options?.signal, child, timer, state, reject)
   })
 }
 

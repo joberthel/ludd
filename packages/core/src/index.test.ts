@@ -30,6 +30,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.createArtifactStore).toBe('function')
     expect(typeof core.startEmbeddedMcpServer).toBe('function')
     expect(typeof core.createDefaultHostEnvironment).toBe('function')
+    expect(typeof core.createDockerWorktreeEnvironmentFromDescriptor).toBe('function')
     expect(typeof core.createGitWorktreeEnvironmentFromDescriptor).toBe('function')
     expect(typeof core.createHostEnvironmentFromDescriptor).toBe('function')
     expect(typeof core.recordEnvironment).toBe('function')

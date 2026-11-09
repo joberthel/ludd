@@ -8,6 +8,7 @@ import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { isProcessAlive, RUNNER_PID_FILE } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import {
+  createDockerWorktreeEnvironmentFromDescriptor,
   createGitWorktreeEnvironmentFromDescriptor,
   createHostEnvironmentFromDescriptor,
 } from './environment-manager.js'
@@ -43,6 +44,9 @@ function createEnvironmentFromDescriptor(
   desc: EnvironmentDescriptor,
   workspaceDir?: string,
 ): ProvisionedEnvironment {
+  if (desc.type === 'docker-worktree') {
+    return createDockerWorktreeEnvironmentFromDescriptor(desc, undefined, workspaceDir)
+  }
   return desc.type === 'git-worktree'
     ? createGitWorktreeEnvironmentFromDescriptor(desc, undefined, workspaceDir)
     : createHostEnvironmentFromDescriptor(desc)

@@ -121,6 +121,40 @@ describe('teardownRun inactive runs reconstructed from state.json (AC 6.6.2)', (
   })
 })
 
+describe('teardownRun docker-worktree reconstructed from state.json', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-teardown-run-'))
+  })
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('tears down docker-worktree environments reconstructed from state.json', async () => {
+    const runId = 'docker-wt-reconstructed'
+    const runDir = resolveRunDir(tempDir, runId)
+    const wtDir = path.join(tempDir, '.harness', 'worktrees', 'run-dock-wt')
+    fs.mkdirSync(wtDir, { recursive: true })
+
+    writeRunStateAtomic(runDir, createSnapshot(runId, 'failed', {
+      'dock-env': {
+        id: 'dock-env',
+        type: 'docker-worktree',
+        workingDir: wtDir,
+        branchName: 'ludd/run-dock-wt',
+        containerId: 'c-tear-101',
+      },
+    }))
+
+    const result = await teardownRun(runId, { workspaceDir: tempDir })
+    expect(result.ok).toBe(true)
+    expect(readRunState(runDir).environments).toEqual({})
+    expect(fs.existsSync(wtDir)).toBe(false)
+  })
+})
+
 describe('teardownRun active runner checks (AC 6.6.3)', () => {
   let tempDir: string
 
