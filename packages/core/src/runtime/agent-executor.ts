@@ -159,6 +159,7 @@ async function runTurnLoopAttempt(
     sessionId: scope.sessionId,
     attempt,
     mode: scope.agent.mode,
+    dangerMode: Boolean(scope.step.dangerMode),
     runDir: scope.runDir,
     environment: scope.environment,
     mcpServerUrl: scope.mcpServer?.url ?? '',

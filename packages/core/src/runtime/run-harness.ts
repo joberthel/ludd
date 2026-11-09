@@ -9,6 +9,7 @@ import type { RehydratedAgentState } from './agent-executor.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
 import { validateHarnessConfig } from '../define-harness.js'
+import { UnsafeDangerModeError } from '../errors/unsafe-danger-mode-error.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
 import {
   rehydrateEnvironmentsAndCheckHealth,
@@ -74,6 +75,9 @@ async function runStep(
     }
 
     const stepEnv = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir, signal)
+    if (step.dangerMode === true && !stepEnv.supportsDangerMode) {
+      throw new UnsafeDangerModeError(step.id, stepEnv.type)
+    }
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
     const output = await executeStep(step, ctx, snapshot, runDir, rehydration, mcpServer, stepEnv, logStore, gateWaiter)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
@@ -179,9 +183,7 @@ function wireAbortSignal(abortController: AbortController, signal?: AbortSignal)
     abortController.abort(signal.reason)
     return
   }
-  signal.addEventListener('abort', () => {
-    abortController.abort(signal.reason)
-  }, { once: true })
+  signal.addEventListener('abort', () => abortController.abort(signal.reason), { once: true })
 }
 
 function formatAbortedResult(

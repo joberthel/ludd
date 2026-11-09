@@ -36,6 +36,7 @@ describe('createDockerWorktreeEnvironmentFromDescriptor properties', () => {
     expect(env.__kind).toBe('environment')
     expect(env.id).toBe('dock-1')
     expect(env.type).toBe('docker-worktree')
+    expect(env.supportsDangerMode).toBe(true)
     expect(env.branchName).toBe('feature/docker')
     expect(env.containerId).toBe('c-101')
     expect(env.workingDir).toBe(wtDir)
@@ -79,6 +80,16 @@ describe('createDockerWorktreeEnvironmentFromDescriptor exec with containerId', 
       'sh',
       '-c',
       'echo hi',
+    ], expect.any(Object))
+
+    await env.exec(['id'], { dangerMode: true })
+    expect(execSpy).toHaveBeenCalledWith(wtDir, [
+      'docker',
+      'exec',
+      '-u',
+      '0:0',
+      'c-exec',
+      'id',
     ], expect.any(Object))
 
     execSpy.mockRestore()

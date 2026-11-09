@@ -120,15 +120,26 @@ export async function resolveStepEnvironment(
   else {
     env = createDefaultHostEnvironment(workspaceDir, defaultSignal)
   }
-  if (defaultSignal && step.environment !== undefined) {
-    const originalExec = env.exec.bind(env)
-    env.exec = async (command, options) => originalExec(command, {
-      signal: options?.signal ?? defaultSignal,
-      ...options,
-    })
-  }
-  recordEnvironment(env, ctx, snapshot, runDir)
-  return env
+  const stepDangerMode = step.dangerMode !== undefined
+    ? Boolean(step.dangerMode)
+    : undefined
+  const needsWrap = (defaultSignal !== undefined && step.environment !== undefined) || stepDangerMode !== undefined
+  const stepEnv: ProvisionedEnvironment = needsWrap
+    ? {
+        ...env,
+        exec: async (command, options) => env.exec(command, {
+          ...(defaultSignal !== undefined
+            ? { signal: defaultSignal }
+            : {}),
+          ...(stepDangerMode !== undefined
+            ? { dangerMode: stepDangerMode }
+            : {}),
+          ...options,
+        }),
+      }
+    : env
+  recordEnvironment(stepEnv, ctx, snapshot, runDir)
+  return stepEnv
 }
 
 async function resolveGuardrailAdapterOrEnv(

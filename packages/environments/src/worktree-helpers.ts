@@ -54,3 +54,43 @@ export async function removeGitWorktree(
     fs.rmSync(worktreePath, { recursive: true, force: true })
   }
 }
+
+export async function removeContainer(
+  workspaceDir: string,
+  containerId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    await execHostEnvCommand(workspaceDir, ['docker', 'rm', '-f', containerId], { signal })
+  }
+  catch {
+    // Ignore errors if container already removed
+  }
+}
+
+export async function pingDockerWorktree(
+  worktreePath: string,
+  containerId: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!fs.existsSync(worktreePath)) {
+    return false
+  }
+  try {
+    const result = await execHostEnvCommand(
+      worktreePath,
+      [
+        'docker',
+        'inspect',
+        '-f',
+        '{{.State.Running}}',
+        containerId,
+      ],
+      { signal },
+    )
+    return result.exitCode === 0 && result.stdout.trim() === 'true'
+  }
+  catch {
+    return false
+  }
+}

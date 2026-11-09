@@ -20,6 +20,7 @@ describe('isProvisionedEnvironment type guard', () => {
 
   it('returns true for a fully compliant ProvisionedEnvironment', () => {
     expect(isProvisionedEnvironment(validEnv)).toBe(true)
+    expect(isProvisionedEnvironment({ ...validEnv, supportsDangerMode: true })).toBe(true)
   })
 
   it('returns false for non-objects or null', () => {
@@ -82,6 +83,7 @@ describe('isEnvironmentAdapter type guard', () => {
 
   it('returns true for a fully compliant EnvironmentAdapter', () => {
     expect(isEnvironmentAdapter(validAdapter)).toBe(true)
+    expect(isEnvironmentAdapter({ ...validAdapter, supportsDangerMode: true })).toBe(true)
   })
 
   it('returns false for non-objects or null', () => {

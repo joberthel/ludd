@@ -9,6 +9,7 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   sessionId: string
   attempt: number
   mode: AgentAccessMode
+  dangerMode?: boolean
   runDir: string
   environment: ProvisionedEnvironment
   mcpServerUrl: string

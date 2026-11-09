@@ -4,12 +4,23 @@ import type {
   EnvironmentExecResult,
   ProvisionedEnvironment,
 } from '@ludd/core'
-import fs from 'node:fs'
+import type { DockerMount } from './security/mount-validator.js'
 import path from 'node:path'
 import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
 import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
-import { addGitWorktree, removeGitWorktree } from './worktree-helpers.js'
+import {
+  buildMountFlags,
+  validateAllMountPaths,
+} from './security/mount-validator.js'
+import {
+  addGitWorktree,
+  pingDockerWorktree,
+  removeContainer,
+  removeGitWorktree,
+} from './worktree-helpers.js'
+
+export type { DockerMount }
 
 export interface DockerWorktreeEnvOptions {
   id: string
@@ -20,6 +31,8 @@ export interface DockerWorktreeEnvOptions {
   branchPrefix?: string
   whitelistEnv?: readonly string[]
   env?: Record<string, string>
+  customMounts?: readonly DockerMount[]
+  mounts?: readonly DockerMount[]
 }
 
 function validateOptions(options: DockerWorktreeEnvOptions): string {
@@ -30,8 +43,7 @@ function validateOptions(options: DockerWorktreeEnvOptions): string {
 }
 
 export function translateMcpServerUrl(url: string, bridgeHost: string = 'host.docker.internal'): string {
-  const hasScheme = url.startsWith('http://') || url.startsWith('https://')
-  const normalized = hasScheme
+  const normalized = url.startsWith('http://') || url.startsWith('https://')
     ? url
     : `http://${url}`
   return normalized.replace(/\b(127\.0\.0\.1|localhost)\b/, bridgeHost)
@@ -73,6 +85,7 @@ async function spawnContainer(
 ): Promise<string> {
   const containerWorkdir = options.containerWorkdir ?? '/workspace'
   const image = options.image ?? 'node:22-alpine'
+  const mountFlags = buildMountFlags(workspaceDir, options.customMounts ?? options.mounts)
   const dockerArgs = [
     'docker',
     'run',
@@ -83,6 +96,7 @@ async function spawnContainer(
     'host.docker.internal:host-gateway',
     '-v',
     `${worktreePath}:${containerWorkdir}`,
+    ...mountFlags,
     '-w',
     containerWorkdir,
     image,
@@ -98,44 +112,41 @@ async function spawnContainer(
   return result.stdout.trim()
 }
 
-async function removeContainer(
-  workspaceDir: string,
-  containerId: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  try {
-    await execHostEnvCommand(workspaceDir, ['docker', 'rm', '-f', containerId], { signal })
-  }
-  catch {
-    // Ignore errors if container already removed
-  }
-}
-
-async function pingDockerWorktree(
+async function execDockerEnv(
   worktreePath: string,
   containerId: string,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  if (!fs.existsSync(worktreePath)) {
-    return false
-  }
-  try {
-    const result = await execHostEnvCommand(
-      worktreePath,
-      [
-        'docker',
-        'inspect',
-        '-f',
-        '{{.State.Running}}',
-        containerId,
-      ],
-      { signal },
-    )
-    return result.exitCode === 0 && result.stdout.trim() === 'true'
-  }
-  catch {
-    return false
-  }
+  command: string | readonly string[],
+  options: DockerWorktreeEnvOptions,
+  bridgeHost: string,
+  execOptions?: EnvironmentExecOptions,
+  defaultSignal?: AbortSignal,
+): Promise<EnvironmentExecResult> {
+  const cmdArgs = parseContainerCommand(command)
+  const isolatedEnv = buildIsolatedEnvironmentVars({
+    hostProcessEnv: process.env,
+    whitelistEnv: options.whitelistEnv,
+    staticEnv: options.env,
+    injectedEnv: execOptions?.env,
+  })
+  const envFlags = buildDockerEnvFlags(isolatedEnv, bridgeHost)
+  const userFlags = execOptions?.dangerMode
+    ? ['-u', '0:0']
+    : []
+  return execHostEnvCommand(
+    worktreePath,
+    [
+      'docker',
+      'exec',
+      ...userFlags,
+      ...envFlags,
+      containerId,
+      ...cmdArgs,
+    ],
+    {
+      timeoutMs: execOptions?.timeoutMs,
+      signal: execOptions?.signal ?? defaultSignal,
+    },
+  )
 }
 
 function createProvisionedDockerEnv(
@@ -151,33 +162,19 @@ function createProvisionedDockerEnv(
     __kind: 'environment',
     id: options.id,
     type: 'docker-worktree',
+    supportsDangerMode: true,
     workingDir: worktreePath,
     containerId,
     branchName,
-    exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> => {
-      const cmdArgs = parseContainerCommand(command)
-      const isolatedEnv = buildIsolatedEnvironmentVars({
-        hostProcessEnv: process.env,
-        whitelistEnv: options.whitelistEnv,
-        staticEnv: options.env,
-        injectedEnv: execOptions?.env,
-      })
-      const envFlags = buildDockerEnvFlags(isolatedEnv, bridgeHost)
-      return execHostEnvCommand(
-        worktreePath,
-        [
-          'docker',
-          'exec',
-          ...envFlags,
-          containerId,
-          ...cmdArgs,
-        ],
-        {
-          timeoutMs: execOptions?.timeoutMs,
-          signal: execOptions?.signal ?? defaultSignal,
-        },
-      )
-    },
+    exec: async (command, execOptions) => execDockerEnv(
+      worktreePath,
+      containerId,
+      command,
+      options,
+      bridgeHost,
+      execOptions,
+      defaultSignal,
+    ),
     ping: async (): Promise<boolean> => pingDockerWorktree(worktreePath, containerId, defaultSignal),
     teardown: async (): Promise<void> => {
       await removeContainer(workspaceDir, containerId, defaultSignal)
@@ -193,9 +190,11 @@ export function dockerWorktreeEnv(options: DockerWorktreeEnvOptions): Environmen
     __kind: 'environment-adapter',
     id,
     type: 'docker-worktree',
+    supportsDangerMode: true,
     provision: async ({ runId, workspaceDir, defaultSignal }) => {
       const workspace = path.resolve(workspaceDir)
       const worktreePath = path.resolve(workspace, '.harness', 'worktrees', `${runId}-${id}`)
+      validateAllMountPaths(workspace, worktreePath, options.customMounts ?? options.mounts)
       const branchPrefix = options.branchPrefix ?? 'ludd'
       const branchName = `${branchPrefix}/${runId}-${id}`
       const containerName = `ludd-${runId}-${id}`

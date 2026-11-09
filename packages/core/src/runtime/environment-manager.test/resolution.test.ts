@@ -2,7 +2,7 @@ import type { StepContext } from '../../types/context.js'
 import type { ProvisionedEnvironment } from '../../types/environment.js'
 import type { Guardrail } from '../../types/guardrail.js'
 import type { StepConfig } from '../../types/harness.js'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   resolveGuardrailEnvironment,
   resolveStepEnvironment,
@@ -77,7 +77,9 @@ describe('resolveStepEnvironment', () => {
     expect(resolved.type).toBe('host')
     expect(ctx.environments.host).toBe(resolved)
   })
+})
 
+describe('resolveStepEnvironment dangerMode and error handling', () => {
   it('throws when step.environment resolves to invalid environment', async () => {
     const ctx = makeMockCtx()
     const step: StepConfig = {
@@ -88,6 +90,25 @@ describe('resolveStepEnvironment', () => {
 
     await expect(resolveStepEnvironment(step, ctx, '/workspace')).rejects.toThrow(
       'Step "step-bad" environment must resolve to a valid ProvisionedEnvironment.',
+    )
+  })
+
+  it('wraps exec with dangerMode: true when step.dangerMode is true and defaultSignal is undefined', async () => {
+    const ctx = makeMockCtx()
+    const customEnv = makeMockEnv('custom-danger-env')
+    const execSpy = vi.spyOn(customEnv, 'exec')
+    const step: StepConfig = {
+      id: 'step-danger',
+      environment: customEnv,
+      dangerMode: true,
+      run: () => {},
+    }
+
+    const resolved = await resolveStepEnvironment(step, ctx, '/workspace')
+    await resolved.exec(['echo', 'hello'])
+    expect(execSpy).toHaveBeenCalledWith(
+      ['echo', 'hello'],
+      expect.objectContaining({ dangerMode: true }),
     )
   })
 })

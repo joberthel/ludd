@@ -19,6 +19,7 @@ export interface PlainStepDef<
 > {
   id: TId
   name?: string
+  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   matrix?: never
@@ -50,6 +51,7 @@ export interface ItemsMatrixStepDef<
 > {
   id: TId
   name?: string
+  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   matrix: {
@@ -85,6 +87,7 @@ export interface ArtifactMatrixStepDef<
 > {
   id: TId
   name?: string
+  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<
     ProvisionedEnvironment,

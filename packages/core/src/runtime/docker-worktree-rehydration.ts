@@ -1,4 +1,8 @@
-import type { ProvisionedEnvironment } from '../types/environment.js'
+import type {
+  EnvironmentExecOptions,
+  EnvironmentExecResult,
+  ProvisionedEnvironment,
+} from '../types/environment.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execHostCommand } from './environment-exec.js'
@@ -71,6 +75,39 @@ async function teardownDockerWorktree(
   }
 }
 
+async function execDockerWorktree(
+  workingDir: string,
+  containerId: string | undefined,
+  command: string | readonly string[],
+  options?: EnvironmentExecOptions,
+  defaultSignal?: AbortSignal,
+): Promise<EnvironmentExecResult> {
+  const signal = options?.signal ?? defaultSignal
+  if (containerId === undefined || containerId === '') {
+    return execHostCommand(workingDir, command, { signal, ...options })
+  }
+  const cmdArgs = Array.isArray(command)
+    ? command.map(String)
+    : [
+        'sh',
+        '-c',
+        String(command),
+      ]
+  const userArgs = options?.dangerMode
+    ? ['-u', '0:0']
+    : []
+  return execHostCommand(workingDir, [
+    'docker',
+    'exec',
+    ...userArgs,
+    containerId,
+    ...cmdArgs,
+  ], {
+    signal,
+    ...options,
+  })
+}
+
 export function createDockerWorktreeEnvironmentFromDescriptor(
   descriptor: {
     id: string
@@ -87,6 +124,7 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     __kind: 'environment',
     id: descriptor.id,
     type: 'docker-worktree',
+    supportsDangerMode: true,
     workingDir,
     ...(descriptor.containerId !== undefined
       ? { containerId: descriptor.containerId }
@@ -94,28 +132,13 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     ...(descriptor.branchName !== undefined
       ? { branchName: descriptor.branchName }
       : {}),
-    exec: async (command, options) => {
-      const signal = options?.signal ?? defaultSignal
-      if (descriptor.containerId === undefined || descriptor.containerId === '') {
-        return execHostCommand(workingDir, command, { signal, ...options })
-      }
-      const cmdArgs = Array.isArray(command)
-        ? command.map(String)
-        : [
-            'sh',
-            '-c',
-            String(command),
-          ]
-      return execHostCommand(workingDir, [
-        'docker',
-        'exec',
-        descriptor.containerId,
-        ...cmdArgs,
-      ], {
-        signal,
-        ...options,
-      })
-    },
+    exec: async (command, options) => execDockerWorktree(
+      workingDir,
+      descriptor.containerId,
+      command,
+      options,
+      defaultSignal,
+    ),
     ping: async () => pingDockerWorktree(workingDir, descriptor.containerId, defaultSignal),
     teardown: async () => teardownDockerWorktree(workingDir, descriptor.containerId, workspaceDir, defaultSignal),
   }

@@ -4,6 +4,7 @@ export interface EnvironmentExecOptions {
   timeoutMs?: number
   signal?: AbortSignal
   inheritEnv?: boolean
+  dangerMode?: boolean
 }
 
 export interface EnvironmentExecResult {
@@ -18,6 +19,7 @@ export interface ProvisionedEnvironment {
   readonly id: string
   readonly type: string
   readonly workingDir: string
+  readonly supportsDangerMode?: boolean
   readonly branchName?: string
   readonly containerId?: string
   exec: (command: string | readonly string[], options?: EnvironmentExecOptions) => Promise<EnvironmentExecResult>
@@ -29,6 +31,7 @@ export interface EnvironmentAdapter {
   readonly __kind: 'environment-adapter'
   readonly id: string
   readonly type: string
+  readonly supportsDangerMode?: boolean
   provision: (context: {
     runId: string
     workspaceDir: string

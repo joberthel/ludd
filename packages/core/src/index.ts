@@ -1,5 +1,6 @@
 export { defineHarness, validateHarnessConfig } from './define-harness.js'
 export { EnvironmentUnreachableError } from './errors/environment-unreachable-error.js'
+export { ForbiddenMountPathError } from './errors/forbidden-mount-path-error.js'
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError, type HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
@@ -13,6 +14,7 @@ export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-err
 export { StepArtifactValidationError } from './errors/step-artifact-validation-error.js'
 export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
+export { UnsafeDangerModeError } from './errors/unsafe-danger-mode-error.js'
 export { createControlClient } from './ipc/control-client.js'
 export { startControlServer } from './ipc/control-server.js'
 export {

@@ -93,6 +93,7 @@ export interface StepConfig<
 > {
   id: TId
   name?: string
+  dangerMode?: boolean
   if?: (ctx: TMatrixContext) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
