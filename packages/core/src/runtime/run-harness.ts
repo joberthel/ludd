@@ -20,13 +20,16 @@ export type { HarnessRunResult, RunHarnessOptions }
 
 interface RehydrationInfo {
   stepId: string
-  sessionId: string
-  attempt: number
+  sessionId?: string
+  attempt?: number
+  matrixIndex?: number | null
+  matrixOutputs?: readonly unknown[]
 }
 
 function resolveOption(value: string | undefined, fallback: () => string): string {
-  if (value !== undefined && value.trim() !== '') {
-    return value.trim()
+  const trimmed = value?.trim()
+  if (typeof trimmed === 'string' && trimmed.length > 0) {
+    return trimmed
   }
   return fallback()
 }
@@ -50,16 +53,17 @@ async function executeStep(
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
 ): Promise<unknown> {
-  if (step.matrix !== undefined) {
-    return executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer)
-  }
-  return executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer)
+  return step.matrix !== undefined
+    ? executeMatrixStep(step, step.matrix, ctx, snapshot, runDir, rehydration, mcpServer)
+    : executeSingleSlice(step, ctx, snapshot, runDir, rehydration, mcpServer)
 }
 
 function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot): void {
   snapshot.activeStepId = null
   snapshot.activeSessionId = null
   snapshot.activeStepAttempt = 1
+  snapshot.activeMatrixIndex = null
+  snapshot.activeMatrixOutputs = []
   persistSnapshot(runDir, snapshot)
 }
 
@@ -76,15 +80,33 @@ function emitLedgerEvent(
   payload: Record<string, unknown>,
   matrixIndex?: number,
 ): void {
+  const timestamp = new Date().toISOString()
   appendLedgerEvent(runDir, {
     schemaVersion: 1,
-    timestamp: new Date().toISOString(),
+    timestamp,
     runId,
     stepId,
     matrixIndex,
     eventType,
     payload,
   })
+}
+
+function resolvePreviousRehydration(
+  previous: RunStateSnapshot,
+  activeStepId: string | null,
+): RehydrationInfo | undefined {
+  const prevSession = previous.activeSessionId
+  const hasValidSession = typeof prevSession === 'string' && prevSession.trim() !== ''
+  if (activeStepId !== null && (previous.activeStepId ?? activeStepId) === activeStepId && (hasValidSession || typeof previous.activeMatrixIndex === 'number')) {
+    return {
+      stepId: activeStepId,
+      sessionId: hasValidSession ? prevSession : undefined,
+      attempt: previous.activeStepAttempt ?? 1,
+      matrixIndex: previous.activeMatrixIndex ?? null,
+      matrixOutputs: previous.activeMatrixOutputs ?? [],
+    }
+  }
 }
 
 function initOrRehydrateSnapshot(
@@ -105,19 +127,8 @@ function initOrRehydrateSnapshot(
         ctx.steps[id] = result
       }
     }
-    activeStepId = steps.find(
-      s => ctx.steps[s.id]?.status !== 'passed' && ctx.steps[s.id]?.status !== 'skipped',
-    )?.id ?? null
-
-    const interruptedStepId = previous.activeStepId ?? activeStepId
-    const prevSession = previous.activeSessionId
-    if (typeof prevSession === 'string' && prevSession.trim() !== '' && activeStepId !== null && interruptedStepId === activeStepId) {
-      rehydration = {
-        stepId: activeStepId,
-        sessionId: prevSession,
-        attempt: previous.activeStepAttempt ?? 1,
-      }
-    }
+    activeStepId = steps.find(s => !['passed', 'skipped'].includes(ctx.steps[s.id]?.status ?? ''))?.id ?? null
+    rehydration = resolvePreviousRehydration(previous, activeStepId)
   }
 
   const snapshot: RunStateSnapshot = {
@@ -128,6 +139,8 @@ function initOrRehydrateSnapshot(
     activeStepId,
     activeSessionId: null,
     activeStepAttempt: 1,
+    activeMatrixIndex: null,
+    activeMatrixOutputs: [],
     steps: ctx.steps,
     updatedAt: new Date().toISOString(),
   }
@@ -143,9 +156,7 @@ function handleStepFailure(
   error: unknown,
   matrixIndex?: number,
 ): HarnessRunResult {
-  const errorMessage = error instanceof Error
-    ? error.message
-    : String(error)
+  const errorMessage = (error as { message?: string } | null)?.message ?? String(error)
   emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage }, matrixIndex)
   emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
   snapshot.steps[stepId] = { status: 'failed', output: undefined }

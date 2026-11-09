@@ -19,6 +19,8 @@ export const runStateSnapshotSchema = z.object({
   activeStepId: z.string().nullable(),
   activeSessionId: z.string().nullable().optional(),
   activeStepAttempt: z.number().optional(),
+  activeMatrixIndex: z.number().int().nonnegative().nullable().optional(),
+  activeMatrixOutputs: z.array(z.unknown()).optional(),
   steps: z.record(z.string(), stepResultSchema),
   updatedAt: z.string(),
 })

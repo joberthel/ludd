@@ -152,3 +152,62 @@ describe('readRunState structural validation (AC 2.3.3)', () => {
     expect(parsed.activeStepAttempt).toBe(2)
   })
 })
+
+describe('readRunState active matrix valid properties (AC 4.5.1 & AC 4.5.3)', () => {
+  it('accepts valid activeMatrixIndex and activeMatrixOutputs properties', () => {
+    const runDir = writeRawState({
+      schemaVersion: 1,
+      runId: 'run-active-matrix',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: 'step-matrix',
+      activeMatrixIndex: 2,
+      activeMatrixOutputs: [
+        { foo: 'bar' },
+        42,
+      ],
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+
+    const parsed = readRunState(runDir)
+    expect(parsed.activeMatrixIndex).toBe(2)
+    expect(parsed.activeMatrixOutputs).toEqual([
+      { foo: 'bar' },
+      42,
+    ])
+
+    const runDirNull = writeRawState({
+      schemaVersion: 1,
+      runId: 'run-null-matrix',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: 'step-matrix',
+      activeMatrixIndex: null,
+      activeMatrixOutputs: [],
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+    const parsedNull = readRunState(runDirNull)
+    expect(parsedNull.activeMatrixIndex).toBeNull()
+    expect(parsedNull.activeMatrixOutputs).toEqual([])
+  })
+})
+
+describe('readRunState active matrix validation errors (AC 4.5.1)', () => {
+  it('throws ZodError on invalid activeMatrixIndex or activeMatrixOutputs', () => {
+    const baseState = {
+      schemaVersion: 1,
+      runId: 'run-invalid-matrix',
+      harnessName: 'test',
+      status: 'running',
+      activeStepId: 'step-matrix',
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    }
+
+    expect(() => readRunState(writeRawState({ ...baseState, activeMatrixIndex: -1 }))).toThrow(ZodError)
+    expect(() => readRunState(writeRawState({ ...baseState, activeMatrixIndex: 1.5 }))).toThrow(ZodError)
+    expect(() => readRunState(writeRawState({ ...baseState, activeMatrixOutputs: 'invalid' }))).toThrow(ZodError)
+  })
+})

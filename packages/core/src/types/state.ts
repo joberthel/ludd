@@ -10,6 +10,8 @@ export interface RunStateSnapshot {
   activeStepId: string | null
   activeSessionId?: string | null
   activeStepAttempt?: number
+  activeMatrixIndex?: number | null
+  activeMatrixOutputs?: unknown[]
   steps: Record<string, StepResult<unknown>>
   updatedAt: string // ISO-8601 timestamp
 }

@@ -4,6 +4,7 @@ import type { MatrixConfig, StepConfig } from '../types/harness.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import { StepMatrixResolutionError } from '../errors/step-matrix-resolution-error.js'
+import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isAgentRunner } from '../types/harness.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
@@ -81,20 +82,41 @@ export async function executeMatrixStep(
   }
   const items = await resolveMatrixItems(step.id, config, ctx)
   const total = items.length
-  const outputs: unknown[] = []
+  const outputs: unknown[] = rehydration?.matrixOutputs
+    ? [...rehydration.matrixOutputs]
+    : []
+  const startIndex = rehydration?.matrixIndex ?? 0
 
-  for (let index = 0; index < total; index++) {
+  for (let index = startIndex; index < total; index++) {
+    snapshot.activeMatrixIndex = index
+    snapshot.activeMatrixOutputs = [...outputs]
+    snapshot.updatedAt = new Date().toISOString()
+    writeRunStateAtomic(runDir, snapshot)
+
     ctx.matrix = { index, total, item: items[index] }
     ctx.step = { id: step.id, output: undefined, attempt: 1 }
+
+    const sliceRehydration = index === startIndex
+      ? rehydration
+      : undefined
     const sliceOutput = await executeSingleSlice(
       step,
       ctx,
       snapshot,
       runDir,
-      rehydration,
+      sliceRehydration,
       mcpServer,
     )
     outputs.push(sliceOutput)
+
+    snapshot.activeMatrixOutputs = [...outputs]
+    snapshot.activeMatrixIndex = index + 1 < total
+      ? index + 1
+      : null
+    snapshot.activeSessionId = null
+    snapshot.activeStepAttempt = 1
+    snapshot.updatedAt = new Date().toISOString()
+    writeRunStateAtomic(runDir, snapshot)
   }
   ctx.matrix = undefined
   return outputs

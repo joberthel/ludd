@@ -21,6 +21,8 @@ import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-val
 export interface RehydratedAgentState {
   sessionId?: string | null
   attempt?: number
+  matrixIndex?: number | null
+  matrixOutputs?: readonly unknown[]
 }
 
 type RetryIssueList = readonly { path?: readonly (string | number | symbol)[], message: string }[]
