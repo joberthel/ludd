@@ -1,6 +1,8 @@
 import type {
   AgentStreamEvent,
   AgentStreamEventType,
+  GcOptions,
+  GcResult,
   JsonRpcRequest,
   JsonRpcResponse,
   LedgerEvent,
@@ -14,10 +16,6 @@ import { describe, expect, it } from 'vitest'
 import * as core from './index.js'
 
 describe('@ludd/core harness and configuration exports', () => {
-  it('exports resolveDynamicProperty as a function', () => {
-    expect(typeof core.resolveDynamicProperty).toBe('function')
-  })
-
   it('exports harness configuration factory and utilities', () => {
     expect(typeof core.defineHarness).toBe('function')
     expect(typeof core.validateHarnessConfig).toBe('function')
@@ -64,7 +62,28 @@ describe('@ludd/core harness and configuration exports', () => {
   })
 })
 
+describe('@ludd/core gc exports', () => {
+  it('exports gc function and verifies contracts', () => {
+    expect(typeof core.gc).toBe('function')
+    const opts: GcOptions = {
+      workspaceDir: '/tmp',
+      olderThan: '1h',
+      status: ['passed'],
+      dryRun: true,
+    }
+    const res: GcResult = {
+      cleanedRunIds: ['run-1'],
+      skippedActiveRunIds: [],
+    }
+    expect(opts.workspaceDir).toBe('/tmp')
+    expect(res.cleanedRunIds).toHaveLength(1)
+  })
+})
+
 describe('@ludd/core dynamic property and legacy exports', () => {
+  it('exports resolveDynamicProperty as a function', () => {
+    expect(typeof core.resolveDynamicProperty).toBe('function')
+  })
   it('does not export deprecated placeholder foo or bar', () => {
     expect((core as Record<string, unknown>).foo).toBeUndefined()
     expect((core as Record<string, unknown>).bar).toBeUndefined()

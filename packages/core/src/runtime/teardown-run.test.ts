@@ -209,6 +209,12 @@ describe('teardownRun dead runner pid and default cwd', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('returns ok: true when state.json does not exist in run directory', async () => {
+    const runId = 'missing-state-run'
+    const result = await teardownRun(runId, { workspaceDir: tempDir })
+    expect(result.ok).toBe(true)
+  })
+
   it('defaults workspaceDir to process.cwd() when options are omitted', async () => {
     const runId = 'default-cwd-run'
     const runDir = resolveRunDir(tempDir, runId)

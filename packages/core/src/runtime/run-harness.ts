@@ -11,6 +11,7 @@ import type { RehydrationInfo } from './harness-rehydration.js'
 import { validateHarnessConfig } from '../define-harness.js'
 import { UnsafeDangerModeError } from '../errors/unsafe-danger-mode-error.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
+import { applyCleanupPolicy } from './cleanup-policy.js'
 import {
   rehydrateEnvironmentsAndCheckHealth,
   resolveStepEnvironment,
@@ -230,13 +231,18 @@ export async function runHarness(
       gateWaiter,
       abortController.signal,
     )
-    if (failure !== null) {
-      return failure
-    }
-    if (abortController.signal.aborted) {
-      return formatAbortedResult(snapshot, prep.ctx.steps, abortController.signal.reason)
-    }
-    return completeSuccessfulRun(runDir, snapshot, prep.ctx.steps)
+    const result = failure ?? (abortController.signal.aborted
+      ? formatAbortedResult(snapshot, prep.ctx.steps, abortController.signal.reason)
+      : completeSuccessfulRun(runDir, snapshot, prep.ctx.steps))
+
+    await applyCleanupPolicy(
+      validatedConfig.cleanupPolicy,
+      result,
+      runId,
+      workspaceDir,
+      prep.ctx.environments,
+    )
+    return result
   }
   catch (error: unknown) {
     handleRunError(error, runDir, runId, snapshot)

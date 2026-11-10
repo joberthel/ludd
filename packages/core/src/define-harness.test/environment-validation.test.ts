@@ -47,6 +47,26 @@ describe('validateHarnessConfig valid step environment', () => {
     })
     expect(config.steps[0].environment).toBe(fn)
   })
+
+  it('accepts step with a valid static EnvironmentAdapter', () => {
+    const adapter = {
+      __kind: 'environment-adapter' as const,
+      id: 'adapter-1',
+      type: 'git-worktree',
+      provision: async () => dummyEnv,
+    }
+    const config = validateHarnessConfig({
+      name: 'env-adapter-test',
+      steps: [
+        {
+          id: 's1',
+          environment: adapter,
+          run: () => {},
+        },
+      ],
+    })
+    expect(config.steps[0].environment).toBe(adapter)
+  })
 })
 
 describe('validateHarnessConfig invalid step environment', () => {

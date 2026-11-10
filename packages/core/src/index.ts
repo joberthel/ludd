@@ -97,6 +97,11 @@ export {
   type GateWaiter,
 } from './runtime/gate-waiter.js'
 export {
+  gc,
+  type GcOptions,
+  type GcResult,
+} from './runtime/gc-runs.js'
+export {
   formatGuardrailRetryPrompt,
   GuardrailRetrySignal,
   runAfterStepGuardrails,

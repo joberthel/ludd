@@ -1,5 +1,5 @@
 import { HarnessConfigError } from './errors/harness-config-error.js'
-import { isProvisionedEnvironment } from './types/environment.js'
+import { isEnvironmentAdapter, isProvisionedEnvironment } from './types/environment.js'
 import { isGuardrail } from './types/guardrail.js'
 import { isAgentRunner } from './types/harness.js'
 
@@ -179,6 +179,7 @@ export function validateStep(step: unknown, index: number, seenIds: Set<string>)
     rawStep.environment !== undefined
     && typeof rawStep.environment !== 'function'
     && !isProvisionedEnvironment(rawStep.environment)
+    && !isEnvironmentAdapter(rawStep.environment)
   ) {
     throw new HarnessConfigError(
       `Step "${id}" "environment" must be a ProvisionedEnvironment or a function.`,

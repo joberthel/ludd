@@ -81,6 +81,11 @@ export async function teardownRun(
 
   verifyRunnerNotActive(runDir, runId, options?.force)
 
+  const statePath = path.join(runDir, 'state.json')
+  if (!fs.existsSync(statePath)) {
+    return { ok: true }
+  }
+
   const snapshot = readRunState(runDir)
   const envMap = collectEnvironmentsToTeardown(snapshot, options)
   const envList = Array.from(envMap.values())
