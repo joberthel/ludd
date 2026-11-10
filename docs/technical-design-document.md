@@ -244,6 +244,9 @@ Within each isolated run directory, the runner maintains:
 
 * **`read-only` SDK Enforcement \[DECISION\]:** `piAgent` read-only sessions are created with `excludeTools: ['write', 'edit', 'bash']` and a `tool_call` extension hook that rejects those tools and routes every `path` argument through `assertSafeWorkspacePath` (`@ludd/agents`). The guard resolves symlinks via `realpath` (nearest existing parent for nonexistent targets), always forbids `.harness/runs` and `.git/hooks`, and rejects workspace escapes unless `dangerMode` is set. Violations throw `SandboxViolationError` (`@ludd/core`). MCP tools remain available.
 
+* **`workspace-write` SDK Enforcement \[DECISION\]:** `piAgent` workspace-write sessions install a `tool_call` extension (`workspaceWriteExtension`) intercepting `read`, `write` and `edit` (their `path` goes through `assertSafeWorkspacePath`; violations throw `SandboxViolationError`) and `bash` (commands referencing `.harness/runs/` or `.git/hooks/` are rejected). The `bash` string matching is **best-effort only** and trivially bypassable (variables, globbing, encoding); the container boundary (ADR-0009 Layer 2) is the real control.
+* **Docker `bash` delegation \[DECISION\]:** `ProvisionedEnvironment.type` is the discriminator (`'docker-worktree'`; no new field needed). `PiSessionFactoryOptions.environment` carries the environment; for `docker-worktree`, `bash` is overridden through `customTools` (`createBashToolDefinition` with custom `BashOperations`) so commands run as `environment.exec(['sh', '-c', command])` inside the container instead of a host shell. Container stdout/stderr are merged into one stream and the Pi timeout (seconds) maps to `timeoutMs`.
+
 ### 5.6.2 Explicit Secret Whitelisting and Host-Override Hooks
 
 * **\[DECISION\]** Host environment variables, SSH keys, and API tokens are **never** implicitly passed into isolated containers or VMs:  

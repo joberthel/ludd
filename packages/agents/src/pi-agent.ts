@@ -11,7 +11,9 @@ import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptio
 import path from 'node:path'
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from '@earendil-works/pi-coding-agent'
 import { appendStreamEvent } from '@ludd/core'
+import { environmentBashTool } from './security/environment-bash.js'
 import { READ_ONLY_EXCLUDED_TOOLS, readOnlyExtension } from './security/read-only-extension.js'
+import { workspaceWriteExtension } from './security/workspace-write-extension.js'
 
 export interface PiAgentConfig<TContext extends StepContext<any, any, any, any> = StepContext<any, any, any, any>> {
   mode?: AgentAccessMode
@@ -26,30 +28,36 @@ export interface PiAgentConfig<TContext extends StepContext<any, any, any, any> 
 export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessionFactoryOptions) => {
   const sessionManager = SessionManager.open(options.sessionFile, path.dirname(options.sessionFile), options.cwd)
   const readOnly = options.mode === 'read-only'
-  let resourceLoader: DefaultResourceLoader | undefined
-  if (readOnly) {
-    resourceLoader = new DefaultResourceLoader({
-      cwd: options.cwd,
-      agentDir: getAgentDir(),
-      extensionFactories: [
-        readOnlyExtension(options.cwd),
-      ],
-    })
-    await resourceLoader.reload()
-  }
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: options.cwd,
+    agentDir: getAgentDir(),
+    extensionFactories: [
+      readOnly
+        ? readOnlyExtension(options.cwd)
+        : workspaceWriteExtension(options.cwd),
+    ],
+  })
+  await resourceLoader.reload()
+  const bashTool = readOnly
+    ? undefined
+    : environmentBashTool(options.environment)
   const { session } = await createAgentSession({
     cwd: options.cwd,
     sessionManager,
     ...(options.model === undefined
       ? {}
       : { model: options.model as never }),
-    ...(resourceLoader === undefined
+    resourceLoader,
+    ...(readOnly
+      ? { excludeTools: READ_ONLY_EXCLUDED_TOOLS }
+      : {}),
+    ...(bashTool === undefined
       ? {}
-      : { resourceLoader, excludeTools: READ_ONLY_EXCLUDED_TOOLS }),
+      : {
+          customTools: [bashTool],
+        }),
   })
-  if (readOnly) {
-    await session.bindExtensions({})
-  }
+  await session.bindExtensions({})
   return session
 }
 
@@ -176,6 +184,7 @@ export function piAgent<
         sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
         mode: input.mode,
         model: config.model,
+        environment: input.environment,
       })
       await runTurn(session, input)
       return {

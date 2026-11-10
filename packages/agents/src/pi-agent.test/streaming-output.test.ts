@@ -36,6 +36,7 @@ describe('piAgent output and streaming', () => {
       sessionFile: path.join(dir, 'pi-sessions', 'sess-1.jsonl'),
       mode: 'read-only',
       model: { id: 'm' },
+      environment: expect.objectContaining({ type: 'host', workingDir: '/work' }),
     })
   })
 })

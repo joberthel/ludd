@@ -18,6 +18,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   createAgentSession,
   DefaultResourceLoader: FakeLoader,
   getAgentDir: () => '/agent',
+  createBashToolDefinition: (cwd: string, opts: unknown) => ({ name: 'bash', cwd, opts }),
 }))
 
 const base = { cwd: '/w', sessionFile: '/r/pi-sessions/a.jsonl' }
@@ -27,15 +28,17 @@ describe('defaultPiSessionFactory', () => {
     vi.clearAllMocks()
   })
 
-  it('creates an unrestricted session in workspace-write mode', async () => {
+  it('installs the workspace-write guard extension in workspace-write mode', async () => {
     const { defaultPiSessionFactory } = await import('../pi-agent.js')
     const session = await defaultPiSessionFactory({ ...base, mode: 'workspace-write' })
     expect(open).toHaveBeenCalledWith('/r/pi-sessions/a.jsonl', '/r/pi-sessions', '/w')
     expect(createAgentSession).toHaveBeenCalledWith({
       cwd: '/w',
       sessionManager: { manager: true },
+      resourceLoader: expect.any(FakeLoader),
     })
-    expect(bindExtensions).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledOnce()
+    expect(bindExtensions).toHaveBeenCalledWith({})
     expect(session).toMatchObject({ s: 1 })
   })
 
@@ -49,6 +52,7 @@ describe('defaultPiSessionFactory', () => {
     expect(createAgentSession).toHaveBeenCalledWith({
       cwd: '/w',
       sessionManager: { manager: true },
+      resourceLoader: expect.any(FakeLoader),
       model: { id: 'm' },
     })
   })

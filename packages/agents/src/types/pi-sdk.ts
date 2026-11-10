@@ -1,4 +1,4 @@
-import type { AgentAccessMode } from '@ludd/core'
+import type { AgentAccessMode, ProvisionedEnvironment } from '@ludd/core'
 
 /**
  * Minimal structural view of a Pi SDK `AgentSessionEvent`. Only the fields the
@@ -30,6 +30,8 @@ export interface PiSessionFactoryOptions {
   /** Absolute path of the JSONL session file (`<runDir>/pi-sessions/<sessionId>.jsonl`). Resumed when present. */
   sessionFile: string
   mode: AgentAccessMode
+  /** Provisioned environment; `docker-worktree` environments receive a container-delegating `bash` tool. */
+  environment?: ProvisionedEnvironment
   /** Opaque Pi SDK model object, forwarded to `createAgentSession`. */
   model?: unknown
 }
