@@ -242,6 +242,8 @@ Within each isolated run directory, the runner maintains:
   1. **SDK-Level Access Modes (`read-only` vs. `workspace-write`) \[DECISION\]:** Configured directly on the agent instance (`piAgent({ mode: 'read-only' | 'workspace-write' })`). In `read-only` mode (used for triage, specification, or code review), the SDK blocks file modifications while still permitting the agent to write structured artifacts to the host's MCP server. In `workspace-write` mode, the agent can modify code within its assigned workspace.  
   2. **Physical Isolation & `dangerMode` \[DECISION\]:** True physical isolation is achieved by assigning a container or VM environment adapter to the step. Inside an encapsulated container or VM, steps can enable an explicit `dangerMode`, granting the agent administrative privileges inside the disposable sandbox to install system packages or modify build tools without risking the host machine. Protected paths (such as `.harness/runs/`) remain blacklisted at all times.
 
+* **`read-only` SDK Enforcement \[DECISION\]:** `piAgent` read-only sessions are created with `excludeTools: ['write', 'edit', 'bash']` and a `tool_call` extension hook that rejects those tools and routes every `path` argument through `assertSafeWorkspacePath` (`@ludd/agents`). The guard resolves symlinks via `realpath` (nearest existing parent for nonexistent targets), always forbids `.harness/runs` and `.git/hooks`, and rejects workspace escapes unless `dangerMode` is set. Violations throw `SandboxViolationError` (`@ludd/core`). MCP tools remain available.
+
 ### 5.6.2 Explicit Secret Whitelisting and Host-Override Hooks
 
 * **\[DECISION\]** Host environment variables, SSH keys, and API tokens are **never** implicitly passed into isolated containers or VMs:  

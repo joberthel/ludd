@@ -9,8 +9,9 @@ import type {
 } from '@ludd/core'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 import path from 'node:path'
-import { createAgentSession, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from '@earendil-works/pi-coding-agent'
 import { appendStreamEvent } from '@ludd/core'
+import { READ_ONLY_EXCLUDED_TOOLS, readOnlyExtension } from './security/read-only-extension.js'
 
 export interface PiAgentConfig<TContext extends StepContext<any, any, any, any> = StepContext<any, any, any, any>> {
   mode?: AgentAccessMode
@@ -24,13 +25,31 @@ export interface PiAgentConfig<TContext extends StepContext<any, any, any, any> 
 
 export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessionFactoryOptions) => {
   const sessionManager = SessionManager.open(options.sessionFile, path.dirname(options.sessionFile), options.cwd)
+  const readOnly = options.mode === 'read-only'
+  let resourceLoader: DefaultResourceLoader | undefined
+  if (readOnly) {
+    resourceLoader = new DefaultResourceLoader({
+      cwd: options.cwd,
+      agentDir: getAgentDir(),
+      extensionFactories: [
+        readOnlyExtension(options.cwd),
+      ],
+    })
+    await resourceLoader.reload()
+  }
   const { session } = await createAgentSession({
     cwd: options.cwd,
     sessionManager,
     ...(options.model === undefined
       ? {}
       : { model: options.model as never }),
+    ...(resourceLoader === undefined
+      ? {}
+      : { resourceLoader, excludeTools: READ_ONLY_EXCLUDED_TOOLS }),
   })
+  if (readOnly) {
+    await session.bindExtensions({})
+  }
   return session
 }
 
