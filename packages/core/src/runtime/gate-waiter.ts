@@ -7,6 +7,8 @@ export interface GateWaiter {
   getActiveGate: () => ActiveGateState | null
   abort: (reason?: string) => void
   isWaiting: () => boolean
+  /** Run-level abort signal, exposed so agent runners can cancel in-flight turns. */
+  readonly signal?: AbortSignal
 }
 
 function extractSignalReason(signal: AbortSignal | undefined): string {
@@ -85,6 +87,7 @@ export function createGateWaiter(defaultSignal?: AbortSignal): GateWaiter {
   wireSignalAbort(defaultSignal, abort)
 
   return {
+    signal: defaultSignal,
     async waitForResolution(gate: ActiveGateState, signal?: AbortSignal): Promise<GateResolveParams> {
       if (state.activeGate !== null) {
         throw new Error(

@@ -14,6 +14,8 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   environment: ProvisionedEnvironment
   mcpServerUrl: string
   mcpAuthToken: string
+  /** Fires when the run is aborted (e.g. via IPC `run.abort`). */
+  signal?: AbortSignal
 }
 
 export interface AgentTurnResult<TOutput = unknown> {

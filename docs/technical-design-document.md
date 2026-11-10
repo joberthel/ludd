@@ -206,6 +206,7 @@ Within each isolated run directory, the runner maintains:
 
 * **Session Capture & Declarative Reuse \[DECISION\]:** When an agent step finishes, the state machine captures its resulting `sessionId` as part of the step's output. Subsequent steps—or subsequent iterations within a sequential matrix—can declaratively pass a static configuration or a callback (`sessionId: (ctx) => ...`) to either spawn a fresh agent session or resume a prior conversation thread.  
 * **Initial Technology Focus (Pi SDK) \[DECISION\]:** The initial implementation standardizes strictly around the **Pi SDK** (`@ludd/agents`). Additional agent runtimes can be plugged in later via clean adapter interfaces.
+* **`piAgent` Adapter \[DECISION\]:** `piAgent({ mode, prompt, sessionId?, model?, sessionFactory? })` wraps `@earendil-works/pi-coding-agent` behind the unchanged `AgentRunner` contract. Each turn creates a session with `createAgentSession({ cwd: environment.workingDir, sessionManager })`, persisted at `<runDir>/pi-sessions/<sessionId>.jsonl` (resumed when the file exists, so `sessionId: (ctx) => ctx.steps[...].output.sessionId` continues the thread). `message_update` maps to `thought`/`message_chunk` and `tool_execution_*` to `tool_call` events appended to `streams/<sessionId>.jsonl`; the turn resolves only after `agent_settled` (the harness then emits `turn.completed`). On run abort, `AgentTurnInput.signal` fires and the adapter calls `session.abort()`. Unit tests inject a `PiSessionFactory` and never reach a real LLM.
 
 ---
 

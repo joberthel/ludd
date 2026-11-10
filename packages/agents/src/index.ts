@@ -15,8 +15,11 @@ import type {
   MockAgentTelemetryEvent,
   MockAgentTurnResultWithEvents,
 } from './mock-agent.js'
+import type { PiAgentConfig } from './pi-agent.js'
+import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 
 export { mockAgent } from './mock-agent.js'
+export { piAgent } from './pi-agent.js'
 export {
   appendStreamEvent,
   readStreamEvents,
@@ -37,4 +40,9 @@ export type {
   MockAgentRunner,
   MockAgentTelemetryEvent,
   MockAgentTurnResultWithEvents,
+  PiAgentConfig,
+  PiSession,
+  PiSessionEvent,
+  PiSessionFactory,
+  PiSessionFactoryOptions,
 }

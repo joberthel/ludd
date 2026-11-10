@@ -164,6 +164,7 @@ async function runTurnLoopAttempt(
     environment: scope.environment,
     mcpServerUrl: scope.mcpServer?.url ?? '',
     mcpAuthToken: scope.mcpServer?.authToken ?? '',
+    signal: scope.gateWaiter?.signal,
   })
   emitTurnCompleted(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, turnResult.output, attempt)
 

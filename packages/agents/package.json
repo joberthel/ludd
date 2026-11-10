@@ -26,6 +26,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.1",
     "@ludd/core": "workspace:*"
   },
   "devDependencies": {
