@@ -10,7 +10,8 @@ import type {
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 import path from 'node:path'
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from '@earendil-works/pi-coding-agent'
-import { appendStreamEvent } from '@ludd/core'
+import { appendStreamEvent, StepOutputValidationError } from '@ludd/core'
+import { createMcpBridgeTools, createSubmitStepOutputTool, MISSING_SUBMISSION_ISSUE } from './mcp/pi-mcp-tools.js'
 import { environmentBashTool } from './security/environment-bash.js'
 import { READ_ONLY_EXCLUDED_TOOLS, readOnlyExtension } from './security/read-only-extension.js'
 import { workspaceWriteExtension } from './security/workspace-write-extension.js'
@@ -41,6 +42,12 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
   const bashTool = readOnly
     ? undefined
     : environmentBashTool(options.environment)
+  const customTools = [
+    ...(bashTool === undefined
+      ? []
+      : [bashTool]),
+    ...(options.customTools ?? []),
+  ]
   const { session } = await createAgentSession({
     cwd: options.cwd,
     sessionManager,
@@ -51,11 +58,9 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
     ...(readOnly
       ? { excludeTools: READ_ONLY_EXCLUDED_TOOLS }
       : {}),
-    ...(bashTool === undefined
+    ...(customTools.length === 0
       ? {}
-      : {
-          customTools: [bashTool],
-        }),
+      : { customTools }),
   })
   await session.bindExtensions({})
   return session
@@ -179,14 +184,35 @@ export function piAgent<
     prompt: config.prompt,
     sessionId: config.sessionId,
     executeTurn: async (input: AgentTurnInput<any>): Promise<AgentTurnResult<TOutput>> => {
+      const submit = input.outputSchema === undefined
+        ? undefined
+        : createSubmitStepOutputTool(input.outputSchema)
+      const customTools = [
+        ...(input.mcpServerUrl === ''
+          ? []
+          : createMcpBridgeTools({ url: input.mcpServerUrl, authToken: input.mcpAuthToken })),
+        ...(submit === undefined
+          ? []
+          : [submit.tool]),
+      ]
       const session = await factory({
         cwd: input.environment.workingDir,
         sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
         mode: input.mode,
         model: config.model,
         environment: input.environment,
+        ...(customTools.length === 0
+          ? {}
+          : { customTools }),
       })
       await runTurn(session, input)
+      if (submit !== undefined) {
+        const submission = submit.getSubmission()
+        if (submission === undefined) {
+          throw new StepOutputValidationError(input.stepId, session.getLastAssistantText(), [MISSING_SUBMISSION_ISSUE])
+        }
+        return { output: submission.value as TOutput, sessionId: input.sessionId }
+      }
       return {
         output: (session.getLastAssistantText() ?? '') as TOutput,
         sessionId: input.sessionId,

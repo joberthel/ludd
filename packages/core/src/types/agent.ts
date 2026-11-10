@@ -1,3 +1,4 @@
+import type { z } from 'zod'
 import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
 
 export type AgentAccessMode = 'read-only' | 'workspace-write'
@@ -14,6 +15,11 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   environment: ProvisionedEnvironment
   mcpServerUrl: string
   mcpAuthToken: string
+  /**
+   * The step's `outputSchema`, when declared. Adapters use it to collect structured output
+   * in-turn (e.g. `piAgent`'s `submit_step_output` tool).
+   */
+  outputSchema?: z.ZodType
   /** Fires when the run is aborted (e.g. via IPC `run.abort`). */
   signal?: AbortSignal
 }

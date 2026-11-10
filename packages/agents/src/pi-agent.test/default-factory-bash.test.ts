@@ -45,4 +45,31 @@ describe('defaultPiSessionFactory docker bash delegation', () => {
     await defaultPiSessionFactory({ ...base, mode: 'workspace-write', environment })
     expect(createAgentSession.mock.calls[0]?.[0]).not.toHaveProperty('customTools')
   })
+
+  it('merges bridge customTools after the docker bash override and keeps them in read-only mode', async () => {
+    const { defaultPiSessionFactory } = await import('../pi-agent.js')
+    const bridge = { name: 'put_artifact' } as never
+    const environment = { type: 'docker-worktree', workingDir: '/w' } as never
+    await defaultPiSessionFactory({
+      ...base,
+      mode: 'workspace-write',
+      environment,
+      customTools: [bridge],
+    })
+    expect(createAgentSession.mock.calls[0]?.[0]).toMatchObject({
+      customTools: [
+        expect.objectContaining({ name: 'bash' }),
+        bridge,
+      ],
+    })
+    await defaultPiSessionFactory({
+      ...base,
+      mode: 'read-only',
+      environment,
+      customTools: [bridge],
+    })
+    expect(createAgentSession.mock.calls[1]?.[0]).toMatchObject({
+      customTools: [bridge],
+    })
+  })
 })

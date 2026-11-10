@@ -23,6 +23,10 @@ describe('read-only tool_call handler', () => {
     expect(() => handler(call('read', { path: '.harness/runs/r1/state.json' }))).toThrow(SandboxViolationError)
   })
 
+  it.each(['submit_step_output', 'put_artifact'])('exempts bridge tool %s from the path guard', (tool) => {
+    expect(handler(call(tool, { path: '../../etc/passwd' }))).toBeUndefined()
+  })
+
   it('allows safe reads, pathless calls and MCP tools', () => {
     expect(handler(call('read', { path: 'src/a.ts' }))).toBeUndefined()
     expect(handler(call('ls', {}))).toBeUndefined()

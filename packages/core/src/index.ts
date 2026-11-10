@@ -41,6 +41,7 @@ export {
   sanitizeLogKey,
 } from './mcp/log-store.js'
 export { startEmbeddedMcpServer } from './mcp/mcp-server.js'
+export { MCP_TOOLS_LIST } from './mcp/mcp-tools.js'
 export { appendLedgerEvent, readLedgerEvents } from './persistence/ledger-writer.js'
 export {
   acquireRunPidLock,

@@ -93,6 +93,40 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
   })
 })
 
+describe('executeAgentStep outputSchema forwarding', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-agent-exec-schema-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('forwards the step outputSchema to the agent turn only when declared', async () => {
+    const seen: AgentTurnInput[] = []
+    const agent: AgentRunner<unknown> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'p',
+      executeTurn: async (input) => {
+        seen.push(input)
+        return {
+          output: { ok: true },
+          sessionId: input.sessionId,
+        }
+      },
+    }
+    const schema = z.object({
+      ok: z.boolean(),
+    })
+    await executeAgentStep({ id: 's-1', run: agent, outputSchema: schema }, agent, createDummyContext(), createDummySnapshot('s-1'), tempDir)
+    await executeAgentStep({ id: 's-1', run: agent }, agent, createDummyContext(), createDummySnapshot('s-1'), tempDir)
+    expect(seen[0]?.outputSchema).toBe(schema)
+    expect(seen[1]).not.toHaveProperty('outputSchema')
+  })
+})
+
 describe('executeAgentStep dynamic sessionId and fallback handling', () => {
   let tempDir: string
 

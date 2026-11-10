@@ -1,3 +1,4 @@
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { AgentAccessMode, ProvisionedEnvironment } from '@ludd/core'
 
 /**
@@ -34,6 +35,8 @@ export interface PiSessionFactoryOptions {
   environment?: ProvisionedEnvironment
   /** Opaque Pi SDK model object, forwarded to `createAgentSession`. */
   model?: unknown
+  /** Extra Pi `customTools` (MCP bridge, `submit_step_output`), available in every mode. */
+  customTools?: ToolDefinition[]
 }
 
 /** Injectable factory so unit tests never hit a real LLM. */

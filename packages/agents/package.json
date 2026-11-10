@@ -27,7 +27,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.5.1",
-    "@ludd/core": "workspace:*"
+    "@ludd/core": "workspace:*",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
