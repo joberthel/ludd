@@ -12,6 +12,7 @@ import type {
   StepContext,
 } from '@ludd/core'
 import { randomUUID } from 'node:crypto'
+import { piAgent } from '@ludd/agents'
 import {
   appendLedgerEvent,
   appendStreamEvent,
@@ -30,7 +31,8 @@ export interface AgentGuardrailConfig<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   bodySchema?: z.ZodType<TBody>
   prompt: DynamicProperty<string, TContext>
-  agent: AgentRunner<any, any>
+  /** Defaults to `piAgent({ mode, prompt, sessionId: fresh })` from `@ludd/agents`. */
+  agent?: AgentRunner<any, any>
   environment?: DynamicProperty<ProvisionedEnvironment, TContext>
   pagination?: ExecLogPaginationConfig
 }
@@ -78,7 +80,7 @@ function validateAgentGuardrailConfig<TBody, TContext extends StepContext<any, a
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('agentGuardrail configuration must be a non-null object.')
   }
-  if (!isAgentRunner(config.agent)) {
+  if (config.agent !== undefined && !isAgentRunner(config.agent)) {
     throw new TypeError('agentGuardrail "agent" must be a valid AgentRunner.')
   }
   const isValidPrompt = (typeof config.prompt === 'string' && config.prompt.trim() !== '') || typeof config.prompt === 'function'
@@ -188,7 +190,12 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     : input.environment
 
   emitPreExecutionTelemetry(input as GuardrailExecutionInput<StepContext>, sessionId, prompt, mode)
-  const turnResult = await config.agent.executeTurn({
+  const verdictSchema = z.object({
+    status: z.enum(['pass', 'fail', 'skip']),
+    body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,
+  })
+  const agent = config.agent ?? piAgent({ mode, prompt, sessionId })
+  const turnResult = await agent.executeTurn({
     ctx: input.ctx,
     stepId: input.stepId,
     prompt,
@@ -199,13 +206,10 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     environment: env,
     mcpServerUrl: input.mcpServerUrl,
     mcpAuthToken: input.mcpAuthToken,
+    outputSchema: verdictSchema,
   })
   emitPostExecutionTelemetry(input as GuardrailExecutionInput<StepContext>, sessionId, turnResult.output)
 
-  const verdictSchema = z.object({
-    status: z.enum(['pass', 'fail', 'skip']),
-    body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,
-  })
   const parsed = await verdictSchema.safeParseAsync(turnResult.output)
   if (!parsed.success) {
     throw new StepOutputValidationError(input.stepId, turnResult.output, parsed.error.issues)

@@ -253,6 +253,9 @@ importers:
 
   packages/guardrails:
     dependencies:
+      '@ludd/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@ludd/core':
         specifier: workspace:*
         version: link:../core

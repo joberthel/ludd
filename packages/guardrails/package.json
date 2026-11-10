@@ -26,6 +26,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@ludd/agents": "workspace:*",
     "@ludd/core": "workspace:*",
     "zod": "^4.6.7"
   },
