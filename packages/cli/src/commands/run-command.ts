@@ -11,6 +11,8 @@ export interface RunCommandOptions {
   runId?: string
   workspace?: string
   stream?: boolean
+  detach?: boolean
+  worker?: boolean
 }
 
 export async function runCommand(options: RunCommandOptions): Promise<number> {
@@ -23,6 +25,10 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   const absoluteConfig = path.resolve(workspaceDir, configPath)
   const config = await loadHarnessConfig(absoluteConfig)
   const id = runId ?? randomUUID()
+  if (options.detach && !options.worker) {
+    const { spawnDetachedRunner } = await import('../daemon/spawn-detached-runner.js')
+    return spawnDetachedRunner({ configPath: absoluteConfig, runId: id, workspaceDir })
+  }
   const runDir = resolveRunDir(workspaceDir, id)
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()
@@ -50,7 +56,8 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
       gateKey = key
       const client = await createControlClient(runDir)
       try {
-        await promptForGate(state, client)
+        if (!options.worker)
+          await promptForGate(state, client)
       }
       finally {
         await client.close()

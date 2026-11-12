@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient, isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, runHarness, RUNNER_PID_FILE, RunAlreadyActiveError, RunNotFoundError } from '@ludd/core'
+import { createControlClient, isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@ludd/core'
 import { promptForGate } from '../prompts/inline-gate-prompter.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
 
@@ -10,9 +10,11 @@ export interface ResumeCommandOptions {
   workspace?: string
   stream?: boolean
   configPath?: string
+  detach?: boolean
+  worker?: boolean
 }
 
-async function watchForGate(runDir: string, stateFile: string, isCompleted: () => boolean): Promise<void> {
+async function watchForGate(runDir: string, stateFile: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
   let gateKey = ''
   return (async () => {
     while (true) {
@@ -35,7 +37,8 @@ async function watchForGate(runDir: string, stateFile: string, isCompleted: () =
       gateKey = key
       const client = await createControlClient(runDir)
       try {
-        await promptForGate(state, client)
+        if (!worker)
+          await promptForGate(state, client)
       }
       finally {
         await client.close()
@@ -69,11 +72,16 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   }
 
   const configPath = state.configPath ?? 'harness.config.ts'
-  const config = await loadHarnessConfig(path.resolve(workspaceDir, configPath))
+  const absoluteConfigPath = path.resolve(workspaceDir, configPath)
+  const config = await loadHarnessConfig(absoluteConfigPath)
+  if (options.detach && !options.worker) {
+    const { spawnDetachedRunner } = await import('../daemon/spawn-detached-runner.js')
+    return spawnDetachedRunner({ configPath: absoluteConfigPath, runId: options.runId, workspaceDir })
+  }
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()
   let completed = false
-  const gateWatcher = watchForGate(runDir, stateFile, () => completed)
+  const gateWatcher = watchForGate(runDir, stateFile, () => completed, options.worker ?? false)
   try {
     const result = await runHarness(config, { runId: options.runId, workspaceDir, configPath })
     return result.status === 'passed'

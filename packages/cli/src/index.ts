@@ -1,4 +1,7 @@
+export { gateCommand, type GateCommandOptions } from './commands/gate-command.js'
 export { resumeCommand, type ResumeCommandOptions } from './commands/resume-command.js'
 export { runCommand, type RunCommandOptions } from './commands/run-command.js'
+export { statusCommand, type StatusCommandOptions } from './commands/status-command.js'
+export { spawnDetachedRunner, type SpawnDetachedRunnerOptions } from './daemon/spawn-detached-runner.js'
 export { promptForGate } from './prompts/inline-gate-prompter.js'
 export { LiveRunTailer } from './tailer/live-run-tailer.js'

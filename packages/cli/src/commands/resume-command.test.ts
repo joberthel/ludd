@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RunAlreadyActiveError } from '@ludd/core'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resumeCommand } from './resume-command.js'
 
 const directories: string[] = []
