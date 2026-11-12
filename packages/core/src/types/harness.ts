@@ -54,6 +54,19 @@ export interface StepRunFn<
   readonly __context?: TContext
 }
 
+/** A context-aware factory for constructing an agent runner at step execution time. */
+export interface StepRunFactory<
+  TContext extends StepContext<any, any, any, any> = StepContext,
+> {
+  (ctx: TContext): AgentRunner<any, TContext> | Promise<AgentRunner<any, TContext>>
+  readonly __context?: TContext
+}
+
+/** Static before-step guardrails, or a factory that receives the step context. */
+export type BeforeStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>
+  = | readonly Guardrail<any, any>[]
+    | ((ctx: TContext) => readonly Guardrail<any, any>[])
+
 /** Static after-step guardrails, or a factory that receives the typed completed-step context. */
 export type AfterStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>
   = | readonly Guardrail<any, any>[]
@@ -106,9 +119,9 @@ export interface StepConfig<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<any, any>[]
+  beforeStep?: BeforeStepGuardrails<TMatrixContext>
   afterStep?: AfterStepGuardrails<TContext>
-  run: StepRunFn<TOutput, TContext> | AgentRunner<TOutput, TContext>
+  run: StepRunFn<TOutput, TContext> | StepRunFactory<TContext> | AgentRunner<TOutput, TContext>
 }
 
 export interface HarnessConfig<

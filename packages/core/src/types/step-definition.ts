@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
 import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
-import type { AfterStepGuardrails, StepRunFn } from './harness.js'
+import type { AfterStepGuardrails, BeforeStepGuardrails, StepRunFactory, StepRunFn } from './harness.js'
 import type {
   AccumulateArtifactItemMap,
   AccumulatePriorSteps,
@@ -27,7 +27,7 @@ export interface PlainStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>[]
+  beforeStep?: BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   afterStep?: AfterStepGuardrails<
     StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
@@ -38,6 +38,7 @@ export interface PlainStepDef<
   >
   run:
     | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+    | StepRunFactory<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
     | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
 }
 
@@ -62,7 +63,7 @@ export interface ItemsMatrixStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>[]
+  beforeStep?: BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   afterStep?: AfterStepGuardrails<
     StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
@@ -73,6 +74,7 @@ export interface ItemsMatrixStepDef<
   >
   run:
     | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+    | StepRunFactory<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
     | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
 }
 
@@ -105,8 +107,7 @@ export interface ArtifactMatrixStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: readonly Guardrail<
-    any,
+  beforeStep?: BeforeStepGuardrails<
     StepContext<
       unknown,
       AccumulatePriorSteps<TPriorSteps>,
@@ -125,6 +126,14 @@ export interface ArtifactMatrixStepDef<
   run:
     | StepRunFn<
       any,
+      StepContext<
+        unknown,
+        AccumulatePriorSteps<TPriorSteps>,
+        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+        true
+      >
+    >
+    | StepRunFactory<
       StepContext<
         unknown,
         AccumulatePriorSteps<TPriorSteps>,

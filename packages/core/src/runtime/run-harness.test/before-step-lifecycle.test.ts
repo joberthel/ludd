@@ -36,6 +36,96 @@ function makePassFailRails(): [Guardrail, Guardrail] {
   return [passRail, failRail]
 }
 
+describe('beforeStep factories', () => {
+  it('accepts an empty beforeStep factory', async () => {
+    const result = await runHarness({
+      name: 'empty-before-step-factory-test',
+      steps: [
+        {
+          id: 'step',
+          beforeStep: () => [],
+          run: () => ({ ok: true }),
+        },
+      ],
+    }, { workspaceDir: tempDir })
+
+    expect(result.status).toBe('passed')
+  })
+
+  it('rejects a beforeStep factory that does not return an array', async () => {
+    const result = await runHarness({
+      name: 'invalid-before-step-factory-test',
+      steps: [
+        {
+          id: 'step',
+          beforeStep: (() => 'invalid') as never,
+          run: () => ({ ok: true }),
+        },
+      ],
+    }, { workspaceDir: tempDir })
+    expect(result.status).toBe('failed')
+    expect((result.error as Error).message).toContain('beforeStep factory must return an array.')
+  })
+
+  it('rejects an invalid guardrail returned by a beforeStep factory', async () => {
+    const result = await runHarness({
+      name: 'invalid-before-step-guardrail-factory-test',
+      steps: [
+        {
+          id: 'step',
+          beforeStep: (() => ['invalid']) as never,
+          run: () => ({ ok: true }),
+        },
+      ],
+    }, { workspaceDir: tempDir })
+    expect(result.status).toBe('failed')
+    expect((result.error as Error).message).toContain('beforeStep factory returned an invalid Guardrail at index 0.')
+  })
+})
+
+describe('context-aware step factories', () => {
+  it('builds beforeStep guardrails and an agent from the typed step context', async () => {
+    let seenGuess: number | undefined
+    const rail: Guardrail = {
+      __kind: 'guardrail',
+      type: 'fn',
+      execute: async () => ({ status: 'pass' }),
+    }
+    const result = await runHarness({
+      name: 'context-factory-step-test',
+      steps: [
+        {
+          id: 'guess',
+          run: () => ({ guess: 7 }),
+        },
+        {
+          id: 'review',
+          beforeStep: (ctx) => {
+            seenGuess = ctx.steps.guess.output?.guess
+            return [rail]
+          },
+          run: (ctx) => {
+            const guess = ctx.steps.guess.output?.guess
+            return {
+              __kind: 'agent',
+              mode: 'read-only',
+              prompt: `Review guess ${guess}`,
+              executeTurn: async (input: AgentTurnInput) => ({
+                output: { accepted: true },
+                sessionId: input.sessionId,
+              }),
+            }
+          },
+        },
+      ],
+    }, { workspaceDir: tempDir })
+
+    expect(result.status).toBe('passed')
+    expect(seenGuess).toBe(7)
+    expect(result.steps.review?.output).toMatchObject({ accepted: true })
+  })
+})
+
 describe('beforeStep non-halting context collection (AC 5.3.4)', () => {
   it('collects beforeStep logs without halting on fail verdicts and injects context', async () => {
     let turn1Prompt = ''

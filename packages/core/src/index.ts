@@ -165,7 +165,9 @@ export {
 export {
   type AccumulateArtifactItemMap,
   type AccumulatePriorSteps,
+  type AfterStepGuardrails,
   type ArtifactMatrixStepDef,
+  type BeforeStepGuardrails,
   type CleanupPolicy,
   type CleanupPolicyAction,
   type DerivedStepContext,
@@ -184,6 +186,7 @@ export {
   type StepArtifactItemMap,
   type StepConfig,
   type StepHasMatrix,
+  type StepRunFactory,
   type StepRunFn,
   type StepTupleEntry,
   type TypedStep,

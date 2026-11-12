@@ -7,12 +7,9 @@ import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import type { GateWaiter } from './gate-waiter.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
-import { isAgentRunner } from '../types/harness.js'
-import { executeAgentStep, validateStepOutput } from './agent-executor.js'
-import { validateStepArtifacts } from './artifact-validator.js'
 import { runBeforeStepGuardrails } from './before-step-executor.js'
-import { runAfterStepGuardrails } from './guardrail-executor.js'
 import { assertMatrixConfig, persistSliceState, resolveMatrixItems } from './matrix-resolver.js'
+import { executeStepRun } from './step-run-executor.js'
 
 export { resolveMatrixItems }
 
@@ -31,7 +28,7 @@ async function resolveBeforeStepContext(
     return ''
   }
   const isInitial = !rehydration || (rehydration.attempt ?? 1) <= 1
-  if (!isInitial || !step.beforeStep || step.beforeStep.length === 0) {
+  if (!isInitial || !step.beforeStep) {
     return ''
   }
   const startIndex = rehydration?.activeGate?.phase === 'beforeStep'
@@ -48,84 +45,6 @@ async function resolveBeforeStepContext(
     gateWaiter,
     startIndex,
   })
-}
-
-async function resumeFunctionAfterStepGate(
-  step: StepConfig,
-  ctx: StepContext,
-  snapshot: RunStateSnapshot,
-  runDir: string,
-  rehydration: RehydratedAgentState,
-  mcpServer?: EmbeddedMcpServer,
-  environment?: ProvisionedEnvironment,
-  logStore?: LogStore,
-  gateWaiter?: GateWaiter,
-): Promise<unknown> {
-  const activeGate = rehydration.activeGate!
-  ctx.step = { id: step.id, output: rehydration.activeStepOutput, attempt: ctx.step.attempt }
-  await runAfterStepGuardrails({
-    step,
-    ctx,
-    snapshot,
-    runDir,
-    attempt: ctx.step.attempt,
-    sessionId: undefined,
-    maxTotalTurns: 1,
-    initialPrompt: '',
-    mcpServer,
-    environment,
-    logStore,
-    gateWaiter,
-    startGuardrailIndex: activeGate.guardrailIndex,
-    rehydratedGate: activeGate,
-  })
-  return rehydration.activeStepOutput
-}
-
-async function executeFunctionStep(
-  step: StepConfig,
-  runner: (ctx: StepContext) => Promise<unknown> | unknown,
-  ctx: StepContext,
-  snapshot: RunStateSnapshot,
-  runDir: string,
-  rehydration?: RehydratedAgentState,
-  mcpServer?: EmbeddedMcpServer,
-  environment?: ProvisionedEnvironment,
-  logStore?: LogStore,
-  gateWaiter?: GateWaiter,
-): Promise<unknown> {
-  if (rehydration?.activeGate?.phase === 'afterStep') {
-    return resumeFunctionAfterStepGate(
-      step,
-      ctx,
-      snapshot,
-      runDir,
-      rehydration,
-      mcpServer,
-      environment,
-      logStore,
-      gateWaiter,
-    )
-  }
-  const rawOutput: unknown = await runner(ctx)
-  const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
-  await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
-  ctx.step = { id: step.id, output: validated, attempt: ctx.step.attempt }
-  await runAfterStepGuardrails({
-    step,
-    ctx,
-    snapshot,
-    runDir,
-    attempt: ctx.step.attempt,
-    sessionId: undefined,
-    maxTotalTurns: 1,
-    initialPrompt: '',
-    mcpServer,
-    environment,
-    logStore,
-    gateWaiter,
-  })
-  return validated
 }
 
 export async function executeSingleSlice(
@@ -151,32 +70,16 @@ export async function executeSingleSlice(
     gateWaiter,
   )
 
-  return isAgentRunner(step.run)
-    ? executeAgentStep(
-        step,
-        step.run,
-        ctx,
-        snapshot,
-        runDir,
-        rehydration,
-        mcpServer,
-        environment,
-        logStore,
-        beforeStepNotification,
-        gateWaiter,
-      )
-    : executeFunctionStep(
-        step,
-        step.run,
-        ctx,
-        snapshot,
-        runDir,
-        rehydration,
-        mcpServer,
-        environment,
-        logStore,
-        gateWaiter,
-      )
+  return executeStepRun(step, {
+    ctx,
+    snapshot,
+    runDir,
+    rehydration,
+    mcpServer,
+    environment,
+    logStore,
+    gateWaiter,
+  }, beforeStepNotification)
 }
 
 export async function executeMatrixStep(

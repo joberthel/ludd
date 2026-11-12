@@ -55,6 +55,49 @@ describe('defineHarness outputSchema type inference', () => {
   })
 })
 
+describe('defineHarness context-aware step factories', () => {
+  it('types beforeStep and run factories from prior step outputs', () => {
+    const harness = defineHarness({
+      name: 'typed-step-factories',
+      steps: [
+        {
+          id: 'guess',
+          outputSchema: z.object({
+            guess: z.number(),
+          }),
+          run: () => ({ guess: 7 }),
+        },
+        {
+          id: 'review',
+          outputSchema: z.object({
+            accepted: z.boolean(),
+          }),
+          beforeStep: (ctx) => {
+            const guess: number = ctx.steps.guess.output!.guess
+            expectTypeOf(guess).toEqualTypeOf<number>()
+            return []
+          },
+          run: (ctx) => {
+            const guess: number = ctx.steps.guess.output!.guess
+            expectTypeOf(guess).toEqualTypeOf<number>()
+            return {
+              __kind: 'agent',
+              mode: 'read-only',
+              prompt: `Review guess ${guess}`,
+              executeTurn: async () => ({
+                output: { accepted: true },
+                sessionId: 'session',
+              }),
+            }
+          },
+        },
+      ],
+    })
+
+    expect(harness.steps[1].id).toBe('review')
+  })
+})
+
 describe('agentStepOutput type inference', () => {
   it('merges sessionId on objects and wraps primitives / arrays in value', () => {
     type ObjOutput = AgentStepOutput<{ score: number }>

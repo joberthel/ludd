@@ -114,7 +114,7 @@ export function validateStepGuardrailsConfig(
   if (guardrails === undefined) {
     return
   }
-  if (phase === 'afterStep' && typeof guardrails === 'function') {
+  if (typeof guardrails === 'function') {
     return
   }
   if (!Array.isArray(guardrails)) {

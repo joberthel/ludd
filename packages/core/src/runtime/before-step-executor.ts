@@ -11,6 +11,7 @@ import process from 'node:process'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
+import { isGuardrail } from '../types/guardrail.js'
 import { executeHumanReviewBeforeStepGuardrail } from './before-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
 
@@ -188,16 +189,30 @@ export async function runBeforeStepGuardrails(
   params: RunBeforeStepGuardrailsParams,
 ): Promise<string> {
   const { step, runDir } = params
-  if (!step.beforeStep || step.beforeStep.length === 0) {
+  const beforeStep = typeof step.beforeStep === 'function'
+    ? step.beforeStep(params.ctx)
+    : step.beforeStep
+  if (beforeStep !== undefined && !Array.isArray(beforeStep)) {
+    throw new TypeError(`Step "${step.id}" beforeStep factory must return an array.`)
+  }
+  if (!beforeStep || beforeStep.length === 0) {
     return ''
+  }
+  const guardrails: Guardrail[] = []
+  for (let i = 0; i < beforeStep.length; i++) {
+    const guardrail: unknown = beforeStep[i]
+    if (!isGuardrail(guardrail)) {
+      throw new TypeError(`Step "${step.id}" beforeStep factory returned an invalid Guardrail at index ${i}.`)
+    }
+    guardrails.push(guardrail)
   }
 
   const store = params.logStore ?? createLogStore(runDir)
   const results: BeforeStepExecutionResult[] = []
   const startIndex = params.startIndex ?? 0
 
-  for (let k = startIndex; k < step.beforeStep.length; k++) {
-    const guardrail = step.beforeStep[k]
+  for (let k = startIndex; k < guardrails.length; k++) {
+    const guardrail = guardrails[k]
     const result = await executeSingleBeforeStepGuardrail(params, guardrail, k, store)
     results.push(result)
   }
