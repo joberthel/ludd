@@ -15,6 +15,9 @@ export class LiveRunTailer {
   }
 
   stop(): void {
+    // Drain events written after the last interval tick so short runs still
+    // show their final status in the foreground CLI.
+    this.poll()
     if (this.timer)
       clearInterval(this.timer)
   }
