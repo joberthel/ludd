@@ -30,6 +30,7 @@ describe('readRunState host environment descriptor validation', () => {
       schemaVersion: 1,
       runId: 'run-env',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       environments: {
@@ -61,6 +62,7 @@ describe('readRunState host environment with ports and injected env', () => {
       schemaVersion: 1,
       runId: 'run-env-ports',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       environments: {
@@ -94,6 +96,7 @@ describe('readRunState docker-worktree environment descriptor validation', () =>
       schemaVersion: 1,
       runId: 'run-docker-env',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       environments: {
@@ -127,6 +130,7 @@ describe('readRunState environments invalid descriptors', () => {
       schemaVersion: 1,
       runId: 'run-invalid-env',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       environments: {

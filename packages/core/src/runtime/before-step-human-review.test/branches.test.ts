@@ -31,6 +31,7 @@ function makeSnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'r-hr',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-clarify',
     steps: {},

@@ -24,6 +24,7 @@ describe('readRunState basic round-trip', () => {
       schemaVersion: 1,
       runId: 'run-roundtrip',
       harnessName: 'roundtrip-harness',
+      workflowName: 'roundtrip-harness',
       status: 'passed',
       activeStepId: null,
       activeGuardrailRetries: { 0: 2 },
@@ -65,6 +66,7 @@ describe('readRunState artifacts and logs round-trip', () => {
       schemaVersion: 1,
       runId: 'run-artifacts-logs',
       harnessName: 'artifacts-logs-harness',
+      workflowName: 'artifacts-logs-harness',
       status: 'running',
       activeStepId: 'step-1',
       steps: {

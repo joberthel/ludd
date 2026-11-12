@@ -50,6 +50,8 @@ export const runStateSnapshotSchema = z.object({
   schemaVersion: z.literal(SUPPORTED_SCHEMA_VERSION),
   runId: z.string(),
   harnessName: z.string(),
+  workflowName: z.string().optional(),
+  configPath: z.string().optional(),
   status: z.enum([
     'running',
     'waiting_for_gate',
@@ -71,7 +73,10 @@ export const runStateSnapshotSchema = z.object({
   artifacts: z.array(z.string()).optional(),
   logs: z.record(z.string(), logMetadataSchema).optional(),
   updatedAt: z.string(),
-})
+}).transform(snapshot => ({
+  ...snapshot,
+  workflowName: snapshot.workflowName ?? snapshot.harnessName,
+}))
 
 export function resolveRunDir(workspaceDir: string, runId: string): string {
   return path.resolve(workspaceDir, '.harness', 'runs', runId)

@@ -25,6 +25,7 @@ function createDummySnapshot(stepId = 'test-step'): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'r-exec-test',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: stepId,
     activeSessionId: null,

@@ -122,6 +122,7 @@ describe('runHarness fallback when activeStepAttempt missing in state', () => {
       schemaVersion: 1,
       runId,
       harnessName: 'legacy-pipeline',
+      workflowName: 'legacy-pipeline',
       status: 'failed',
       activeStepId: 'step-legacy',
       activeSessionId: 'legacy-sess-id',

@@ -8,6 +8,7 @@ import { HarnessConfigError } from '../errors/harness-config-error.js'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
 import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
+import { RunAlreadyExistsError } from '../errors/run-already-exists-error.js'
 import { SchemaVersionMismatchError } from '../errors/schema-version-mismatch-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-writer.js'
@@ -45,6 +46,7 @@ function createCoreModule(): Record<string, unknown> {
     HarnessConfigLoadError,
     MaxTotalTurnsExceededError,
     RunAlreadyActiveError,
+    RunAlreadyExistsError,
     SUPPORTED_SCHEMA_VERSION,
     SchemaVersionMismatchError,
     StepOutputValidationError,

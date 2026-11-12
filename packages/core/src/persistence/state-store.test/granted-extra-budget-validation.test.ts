@@ -30,6 +30,7 @@ describe('readRunState valid granted extra budget', () => {
       schemaVersion: 1,
       runId: 'run-budget',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-1',
       grantedExtraRetries: {
@@ -62,6 +63,7 @@ describe('readRunState invalid granted extra budget', () => {
       schemaVersion: 1,
       runId: 'run-invalid-retries',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       steps: {},
@@ -84,6 +86,7 @@ describe('readRunState invalid granted extra budget', () => {
       schemaVersion: 1,
       runId: 'run-invalid-turns',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       steps: {},

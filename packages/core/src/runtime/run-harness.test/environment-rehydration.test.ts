@@ -32,6 +32,7 @@ describe('runHarness crash rehydration: unreachable environment (AC 5.5.1)', () 
       schemaVersion: 1,
       runId,
       harnessName: 'health-check-harness',
+      workflowName: 'health-check-harness',
       status: 'running',
       activeStepId: 'step-resume',
       environments: {
@@ -82,6 +83,7 @@ describe('runHarness crash rehydration: reachable environment (AC 5.5.1)', () =>
       schemaVersion: 1,
       runId,
       harnessName: 'reachable-harness',
+      workflowName: 'reachable-harness',
       status: 'running',
       activeStepId: 'step-resume',
       environments: {
@@ -130,6 +132,7 @@ describe('runHarness crash rehydration: active step environment check', () => {
       schemaVersion: 1,
       runId,
       harnessName: 'step-env-harness',
+      workflowName: 'step-env-harness',
       status: 'running',
       activeStepId: 'step-configured',
       steps: {},

@@ -15,6 +15,7 @@ function makeSnapshot(
     schemaVersion: 1,
     runId: 'r-budgets',
     harnessName: 'test',
+    workflowName: 'test',
     status: 'running',
     activeStepId: 'step-1',
     grantedExtraRetries: extraRetries,

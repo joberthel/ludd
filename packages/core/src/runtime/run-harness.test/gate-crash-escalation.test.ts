@@ -34,6 +34,7 @@ function createEscalationSnapshot(runId: string): RunStateSnapshot {
     schemaVersion: 1,
     runId,
     harnessName: 'escalate-crash-harness',
+    workflowName: 'escalate-crash-harness',
     status: 'waiting_for_gate',
     activeStepId: 'step-build',
     activeGate,

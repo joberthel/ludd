@@ -28,6 +28,8 @@ export interface RunStateSnapshot {
   schemaVersion: 1
   runId: string
   harnessName: string
+  workflowName: string
+  configPath?: string
   status: RunStatus
   activeStepId: string | null
   activeGate?: ActiveGateState | null

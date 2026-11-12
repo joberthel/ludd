@@ -33,6 +33,7 @@ export function createDummySnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'r-matrix-test',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-matrix',
     activeSessionId: null,

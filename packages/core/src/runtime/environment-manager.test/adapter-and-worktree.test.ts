@@ -73,6 +73,7 @@ function makeMockSnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'run-adapter-1',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-1',
     steps: {},

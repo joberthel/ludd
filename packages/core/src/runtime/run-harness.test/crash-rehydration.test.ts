@@ -197,6 +197,7 @@ describe('runHarness crash rehydration: completed runs and dead pid recovery', (
       schemaVersion: 1,
       runId,
       harnessName: 'complete-harness',
+      workflowName: 'complete-harness',
       status: 'running',
       activeStepId: null,
       steps: {

@@ -8,6 +8,7 @@ import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
+import path from 'node:path'
 import { validateHarnessConfig } from '../define-harness.js'
 import { UnsafeDangerModeError } from '../errors/unsafe-danger-mode-error.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
@@ -146,11 +147,12 @@ async function prepareRunContext(
   runDir: string,
   runId: string,
   workspaceDir: string,
+  configPath: string | undefined,
   signal?: AbortSignal,
 ): Promise<PreparedRun> {
   const ctx = createInitialContext(runId, runDir)
   const steps = validatedConfig.steps
-  const initResult = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx)
+  const initResult = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx, configPath)
   const snapshot = initResult.snapshot
   if (initResult.previous !== undefined) {
     const activeStep = steps.find(s => !['passed', 'skipped'].includes(ctx.steps[s.id]?.status ?? ''))
@@ -214,7 +216,10 @@ export async function runHarness(
   let snapshot: RunStateSnapshot | undefined
 
   try {
-    const prep = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir, abortController.signal)
+    const configPath = options?.configPath === undefined
+      ? undefined
+      : path.relative(workspaceDir, path.resolve(workspaceDir, options.configPath))
+    const prep = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir, configPath, abortController.signal)
     mcpServer = prep.mcpServer
     snapshot = prep.snapshot
     controlServer = await initControlServer(runDir, snapshot, prep.ctx.environments, abortController, gateWaiter)

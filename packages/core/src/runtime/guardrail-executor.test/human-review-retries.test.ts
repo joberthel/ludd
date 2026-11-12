@@ -28,6 +28,7 @@ function makeInitialSnapshot(runDir: string): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'r-hr-test',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 's-hr',
     steps: {},

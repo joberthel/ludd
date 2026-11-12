@@ -36,6 +36,7 @@ function makeHostSnapshot(runId: string, descriptor: any) {
     schemaVersion: 1 as const,
     runId,
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running' as const,
     activeStepId: 'step-resume',
     environments: { host: descriptor },

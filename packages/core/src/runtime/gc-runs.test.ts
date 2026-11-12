@@ -31,6 +31,7 @@ function createRun(
     schemaVersion: 1,
     runId,
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status,
     activeStepId: null,
     steps: {},

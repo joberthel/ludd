@@ -15,6 +15,7 @@ function createSampleSnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'run-gate-test',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'waiting_for_gate',
     activeStepId: 'step-1',
     activeGate: {

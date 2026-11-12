@@ -47,6 +47,7 @@ function makeSnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'r-esc-exec',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-exec',
     steps: {},

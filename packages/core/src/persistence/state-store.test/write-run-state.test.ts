@@ -40,6 +40,7 @@ describe('writeRunStateAtomic initialization', () => {
       schemaVersion: 1,
       runId: 'run-1',
       harnessName: 'test-harness',
+      workflowName: 'test-harness',
       status: 'running',
       activeStepId: 'step-a',
       steps: {
@@ -83,6 +84,7 @@ describe('writeRunStateAtomic updates', () => {
       schemaVersion: 1,
       runId: 'run-2',
       harnessName: 'test-harness',
+      workflowName: 'test-harness',
       status: 'running',
       activeStepId: 'step-1',
       steps: {},

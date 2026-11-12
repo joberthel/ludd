@@ -52,6 +52,7 @@ function resolvePreviousRehydration(
 function buildSnapshot(
   runId: string,
   harnessName: string,
+  configPath: string | undefined,
   activeStepId: string | null,
   ctxSteps: Record<string, StepResult<unknown>>,
   rehydration?: RehydrationInfo,
@@ -78,6 +79,10 @@ function buildSnapshot(
     schemaVersion: 1,
     runId,
     harnessName,
+    workflowName: harnessName,
+    ...((configPath ?? previous?.configPath) !== undefined
+      ? { configPath: configPath ?? previous?.configPath }
+      : {}),
     status: isWaiting ? 'waiting_for_gate' : 'running',
     activeStepId,
     activeGate: rehydration?.activeGate ?? null,
@@ -107,6 +112,7 @@ export function initOrRehydrateSnapshot(
   harnessName: string,
   steps: readonly StepConfig[],
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
+  configPath?: string,
 ): {
   snapshot: RunStateSnapshot
   rehydration?: RehydrationInfo
@@ -128,7 +134,7 @@ export function initOrRehydrateSnapshot(
     rehydration = resolvePreviousRehydration(previous, activeStepId)
   }
 
-  const snapshot = buildSnapshot(runId, harnessName, activeStepId, ctx.steps, rehydration, previous)
+  const snapshot = buildSnapshot(runId, harnessName, configPath, activeStepId, ctx.steps, rehydration, previous)
   writeRunStateAtomic(runDir, snapshot)
   appendLedgerEvent(runDir, {
     schemaVersion: 1,

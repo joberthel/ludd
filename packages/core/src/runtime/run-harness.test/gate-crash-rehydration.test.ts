@@ -33,6 +33,7 @@ function createGateWaitingSnapshot(runId: string): RunStateSnapshot {
     schemaVersion: 1,
     runId,
     harnessName: 'gate-crash-harness',
+    workflowName: 'gate-crash-harness',
     status: 'waiting_for_gate',
     activeStepId: 'step-spec',
     activeGate,

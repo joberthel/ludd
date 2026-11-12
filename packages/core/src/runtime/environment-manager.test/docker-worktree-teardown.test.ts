@@ -96,6 +96,7 @@ describe('recordEnvironment with containerId', () => {
       schemaVersion: 1,
       runId: 'r-rec',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 's-1',
       steps: {},

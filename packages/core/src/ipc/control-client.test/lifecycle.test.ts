@@ -13,6 +13,7 @@ function createFakeSnapshot(): RunStateSnapshot {
     schemaVersion: 1,
     runId: 'client-test-run',
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-1',
     steps: {},

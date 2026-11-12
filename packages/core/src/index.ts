@@ -10,6 +10,7 @@ export {
   MaxTotalTurnsExceededError,
 } from './errors/max-total-turns-exceeded-error.js'
 export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
+export { RunAlreadyExistsError } from './errors/run-already-exists-error.js'
 export { SandboxViolationError } from './errors/sandbox-violation-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepArtifactValidationError } from './errors/step-artifact-validation-error.js'

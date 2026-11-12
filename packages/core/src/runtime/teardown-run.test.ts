@@ -21,6 +21,7 @@ function createSnapshot(
     schemaVersion: 1,
     runId,
     harnessName: 'sample-harness',
+    workflowName: 'sample-harness',
     status,
     activeStepId: null,
     environments,

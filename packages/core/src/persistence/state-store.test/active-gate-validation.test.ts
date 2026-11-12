@@ -30,6 +30,7 @@ describe('readRunState activeGate valid states', () => {
       schemaVersion: 1,
       runId: 'run-gate',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'waiting_for_gate',
       activeStepId: 'step-clarify',
       activeGate: {
@@ -57,6 +58,7 @@ describe('readRunState activeGate valid states', () => {
       schemaVersion: 1,
       runId: 'run-gate-null',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-1',
       activeGate: null,
@@ -77,6 +79,7 @@ describe('readRunState activeGate invalid states', () => {
       schemaVersion: 1,
       runId: 'run-gate-invalid',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'waiting_for_gate',
       activeStepId: 'step-1',
       steps: {},

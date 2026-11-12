@@ -71,6 +71,7 @@ function createSnapshot(runId: string, workingDir: string): RunStateSnapshot {
     schemaVersion: 1,
     runId,
     harnessName: 'test-harness',
+    workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-1',
     environments: {

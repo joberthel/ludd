@@ -219,6 +219,28 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/cli:
+    dependencies:
+      '@ludd/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@ludd/core':
+        specifier: workspace:*
+        version: link:../core
+      '@ludd/environments':
+        specifier: workspace:*
+        version: link:../environments
+      '@ludd/guardrails':
+        specifier: workspace:*
+        version: link:../guardrails
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/core:
     dependencies:
       jiti:

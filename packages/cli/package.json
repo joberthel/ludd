@@ -1,0 +1,20 @@
+{
+  "name": "@ludd/cli",
+  "type": "module",
+  "version": "0.0.1",
+  "bin": { "ludd": "./dist/bin.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@ludd/agents": "workspace:*",
+    "@ludd/core": "workspace:*",
+    "@ludd/environments": "workspace:*",
+    "@ludd/guardrails": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^6.0.3"
+  }
+}

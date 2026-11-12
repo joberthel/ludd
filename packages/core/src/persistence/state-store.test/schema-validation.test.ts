@@ -31,6 +31,7 @@ describe('readRunState schema version numbers (AC 2.3.1)', () => {
       schemaVersion: 0,
       runId: 'run-0',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       steps: {},
@@ -55,6 +56,7 @@ describe('readRunState schema version numbers (AC 2.3.1)', () => {
       schemaVersion: 2,
       runId: 'run-2',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: null,
       steps: {},
@@ -121,6 +123,7 @@ describe('readRunState structural validation (AC 2.3.3)', () => {
       schemaVersion: 1,
       runId: 12345,
       harnessName: 'test',
+      workflowName: 'test',
       status: 'invalid-status',
       activeStepId: 999,
       steps: {
@@ -139,6 +142,7 @@ describe('readRunState structural validation (AC 2.3.3)', () => {
       schemaVersion: 1,
       runId: 'run-active-sess',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-agent',
       activeSessionId: 'session-xyz',
@@ -153,12 +157,30 @@ describe('readRunState structural validation (AC 2.3.3)', () => {
   })
 })
 
+describe('readRunState workflow identity compatibility', () => {
+  it('uses harnessName for workflowName when reading legacy snapshots', () => {
+    const runDir = writeRawState({
+      schemaVersion: 1,
+      runId: 'legacy-run',
+      harnessName: 'legacy-workflow',
+      workflowName: 'legacy-workflow',
+      status: 'running',
+      activeStepId: null,
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    })
+
+    expect(readRunState(runDir).workflowName).toBe('legacy-workflow')
+  })
+})
+
 describe('readRunState active matrix valid properties (AC 4.5.1 & AC 4.5.3)', () => {
   it('accepts valid activeMatrixIndex and activeMatrixOutputs properties', () => {
     const runDir = writeRawState({
       schemaVersion: 1,
       runId: 'run-active-matrix',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-matrix',
       activeMatrixIndex: 2,
@@ -181,6 +203,7 @@ describe('readRunState active matrix valid properties (AC 4.5.1 & AC 4.5.3)', ()
       schemaVersion: 1,
       runId: 'run-null-matrix',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-matrix',
       activeMatrixIndex: null,
@@ -200,6 +223,7 @@ describe('readRunState active matrix validation errors (AC 4.5.1)', () => {
       schemaVersion: 1,
       runId: 'run-invalid-matrix',
       harnessName: 'test',
+      workflowName: 'test',
       status: 'running',
       activeStepId: 'step-matrix',
       steps: {},
