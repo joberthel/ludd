@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf coverage packages/*/dist",
     "build": "pnpm clean && pnpm -r run build && tsc --noEmit",
+    "ludd": "node packages/cli/dist/bin.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
@@ -20,12 +21,17 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@commitlint/types": "^21.2.3",
+    "@ludd/agents": "workspace:*",
+    "@ludd/core": "workspace:*",
+    "@ludd/environments": "workspace:*",
+    "@ludd/guardrails": "workspace:*",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^10.14.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
     "typescript": "^6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "zod": "^4.6.7"
   }
 }
