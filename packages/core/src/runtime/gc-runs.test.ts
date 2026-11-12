@@ -71,65 +71,71 @@ describe('gc runner status & pid lock handling', () => {
   })
 })
 
-describe('gc status and duration filtering', () => {
-  it('filters by one or more run IDs before checking active-run status', async () => {
-    createRun('wanted', 'passed', new Date().toISOString())
-    createRun('unwanted-active', 'running', new Date().toISOString(), process.pid)
-    const result = await gc({
-      workspaceDir: tempDir,
-      runId: ['wanted'],
-    })
-    expect(result.cleanedRunIds).toEqual(['wanted'])
-    expect(result.skippedActiveRunIds).toEqual([])
-    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'unwanted-active'))).toBe(true)
+it('filters by one or more run IDs before checking active-run status', async () => {
+  createRun('wanted', 'passed', new Date().toISOString())
+  createRun('unwanted-active', 'running', new Date().toISOString(), process.pid)
+  const result = await gc({
+    workspaceDir: tempDir,
+    runId: ['wanted'],
   })
-  it('filters by run status correctly', async () => {
-    createRun('run-passed', 'passed', new Date().toISOString())
-    createRun('run-failed', 'failed', new Date().toISOString())
+  expect(result.cleanedRunIds).toEqual(['wanted'])
+  expect(result.skippedActiveRunIds).toEqual([])
+  expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'unwanted-active'))).toBe(true)
+})
 
-    const res = await gc({
-      workspaceDir: tempDir,
-      status: ['passed'],
-    })
-    expect(res.cleanedRunIds).toEqual(['run-passed'])
-    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'run-failed'))).toBe(true)
+it('accepts a single run ID as a string filter', async () => {
+  createRun('single-wanted', 'passed', new Date().toISOString())
+  createRun('single-unwanted', 'passed', new Date().toISOString())
+  const result = await gc({ workspaceDir: tempDir, runId: 'single-wanted' })
+  expect(result.cleanedRunIds).toEqual(['single-wanted'])
+  expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'single-unwanted'))).toBe(true)
+})
+it('filters by run status correctly', async () => {
+  createRun('run-passed', 'passed', new Date().toISOString())
+  createRun('run-failed', 'failed', new Date().toISOString())
+
+  const res = await gc({
+    workspaceDir: tempDir,
+    status: ['passed'],
   })
+  expect(res.cleanedRunIds).toEqual(['run-passed'])
+  expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'run-failed'))).toBe(true)
+})
 
-  it('filters by olderThan duration string', async () => {
-    const oldTime = new Date(Date.now() - 3600000).toISOString()
-    const newTime = new Date().toISOString()
-    createRun('run-old', 'passed', oldTime)
-    createRun('run-new', 'passed', newTime)
+it('filters by olderThan duration string', async () => {
+  const oldTime = new Date(Date.now() - 3600000).toISOString()
+  const newTime = new Date().toISOString()
+  createRun('run-old', 'passed', oldTime)
+  createRun('run-new', 'passed', newTime)
 
-    const res = await gc({ workspaceDir: tempDir, olderThan: '30m' })
-    expect(res.cleanedRunIds).toEqual(['run-old'])
-    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'run-new'))).toBe(true)
+  const res = await gc({ workspaceDir: tempDir, olderThan: '30m' })
+  expect(res.cleanedRunIds).toEqual(['run-old'])
+  expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'run-new'))).toBe(true)
+})
+
+it('filters by olderThanMs threshold', async () => {
+  createRun('run-old-ms', 'passed', new Date(Date.now() - 10000).toISOString())
+  createRun('run-new-ms', 'passed', new Date().toISOString())
+
+  const res = await gc({ workspaceDir: tempDir, olderThanMs: 5000 })
+  expect(res.cleanedRunIds).toEqual(['run-old-ms'])
+})
+
+it('skips runs missing state or valid updatedAt when filters apply', async () => {
+  const rawDir = path.join(tempDir, '.harness', 'runs', 'no-state')
+  fs.mkdirSync(rawDir, { recursive: true })
+  const corruptDir = path.join(tempDir, '.harness', 'runs', 'corrupt-state')
+  fs.mkdirSync(corruptDir, { recursive: true })
+  fs.writeFileSync(path.join(corruptDir, 'state.json'), 'not-json', 'utf-8')
+
+  const resStatus = await gc({
+    workspaceDir: tempDir,
+    status: ['passed'],
   })
+  expect(resStatus.cleanedRunIds).toEqual([])
 
-  it('filters by olderThanMs threshold', async () => {
-    createRun('run-old-ms', 'passed', new Date(Date.now() - 10000).toISOString())
-    createRun('run-new-ms', 'passed', new Date().toISOString())
-
-    const res = await gc({ workspaceDir: tempDir, olderThanMs: 5000 })
-    expect(res.cleanedRunIds).toEqual(['run-old-ms'])
-  })
-
-  it('skips runs missing state or valid updatedAt when filters apply', async () => {
-    const rawDir = path.join(tempDir, '.harness', 'runs', 'no-state')
-    fs.mkdirSync(rawDir, { recursive: true })
-    const corruptDir = path.join(tempDir, '.harness', 'runs', 'corrupt-state')
-    fs.mkdirSync(corruptDir, { recursive: true })
-    fs.writeFileSync(path.join(corruptDir, 'state.json'), 'not-json', 'utf-8')
-
-    const resStatus = await gc({
-      workspaceDir: tempDir,
-      status: ['passed'],
-    })
-    expect(resStatus.cleanedRunIds).toEqual([])
-
-    const resTime = await gc({ workspaceDir: tempDir, olderThanMs: 1000 })
-    expect(resTime.cleanedRunIds).toEqual([])
-  })
+  const resTime = await gc({ workspaceDir: tempDir, olderThanMs: 1000 })
+  expect(resTime.cleanedRunIds).toEqual([])
 })
 
 describe('gc dryRun mode & duration parsing', () => {

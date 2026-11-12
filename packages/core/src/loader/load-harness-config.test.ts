@@ -32,61 +32,75 @@ describe('loadHarnessConfig path and file access validation', () => {
   })
 })
 
-describe('loadHarnessConfig module evaluation and exports', () => {
-  let tempDir: string
+let tempDir: string
 
-  beforeAll(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-loader-test-'))
-  })
+beforeAll(async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-loader-test-'))
+})
 
-  afterAll(async () => {
-    await rm(tempDir, { recursive: true, force: true })
-  })
+afterAll(async () => {
+  await rm(tempDir, { recursive: true, force: true })
+})
 
-  it('loads valid TypeScript config with defineHarness and @ludd/core alias', async () => {
-    const filePath = path.join(tempDir, 'harness.config.ts')
-    await writeFile(
-      filePath,
-      `import { defineHarness } from '@ludd/core';
+it('loads valid TypeScript config with defineHarness and @ludd/core alias', async () => {
+  const filePath = path.join(tempDir, 'harness.config.ts')
+  await writeFile(
+    filePath,
+    `import { defineHarness } from '@ludd/core';
 export default defineHarness({
   name: 'ts-workflow',
   steps: [{ id: 'step-1', run: async () => ({ status: 'done' }) }]
 });`,
-    )
+  )
 
-    const loaded = await loadHarnessConfig(filePath)
-    expect(loaded.name).toBe('ts-workflow')
-    expect(loaded.steps).toHaveLength(1)
-  })
+  const loaded = await loadHarnessConfig(filePath)
+  expect(loaded.name).toBe('ts-workflow')
+  expect(loaded.steps).toHaveLength(1)
+})
 
-  it('loads valid config using relative file path', async () => {
-    const filePath = path.join(tempDir, 'relative.config.ts')
-    await writeFile(
-      filePath,
-      `export default {
+it('loads agents from the package entrypoint exposed to config files', async () => {
+  const filePath = path.join(tempDir, 'agents.config.ts')
+  await writeFile(
+    filePath,
+    `import { defineHarness } from '@ludd/core';
+import { mockAgent } from '@ludd/agents';
+export default defineHarness({
+  name: 'agents-workflow',
+  steps: [{ id: 'agent-step', run: mockAgent({ prompt: 'test', responses: [{ ok: true }] }) }]
+});`,
+  )
+
+  const loaded = await loadHarnessConfig(filePath)
+  expect(loaded.name).toBe('agents-workflow')
+})
+
+it('loads valid config using relative file path', async () => {
+  const filePath = path.join(tempDir, 'relative.config.ts')
+  await writeFile(
+    filePath,
+    `export default {
   name: 'relative-workflow',
   steps: [{ id: 's-1', run: async () => 42 }]
 };`,
-    )
+  )
 
-    const relativePath = path.relative(process.cwd(), filePath)
-    const loaded = await loadHarnessConfig(relativePath)
-    expect(loaded.name).toBe('relative-workflow')
-  })
+  const relativePath = path.relative(process.cwd(), filePath)
+  const loaded = await loadHarnessConfig(relativePath)
+  expect(loaded.name).toBe('relative-workflow')
+})
 
-  it('loads valid JavaScript/MJS config with plain default export', async () => {
-    const filePath = path.join(tempDir, 'plain.config.mjs')
-    await writeFile(
-      filePath,
-      `export default {
+it('loads valid JavaScript/MJS config with plain default export', async () => {
+  const filePath = path.join(tempDir, 'plain.config.mjs')
+  await writeFile(
+    filePath,
+    `export default {
   name: 'mjs-workflow',
   steps: [{ id: 'mjs-step', run: () => 'ok' }]
 };`,
-    )
+  )
 
-    const loaded = await loadHarnessConfig(filePath)
-    expect(loaded.name).toBe('mjs-workflow')
-  })
+  const loaded = await loadHarnessConfig(filePath)
+  expect(loaded.name).toBe('mjs-workflow')
 })
 
 describe('loadHarnessConfig error handling for syntax and runtime issues', () => {

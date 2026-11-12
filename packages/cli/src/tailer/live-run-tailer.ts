@@ -47,8 +47,13 @@ export class LiveRunTailer {
           ? ` ${event.stepId}`
           : ''
         console.log(`[${event.eventType ?? 'event'}]${stepSuffix}`)
-        if (this.stream && event.eventType === 'agent.stream.linked' && typeof event.payload?.sessionId === 'string')
-          this.streams.add(event.payload.sessionId)
+        if (!this.stream)
+          return
+        if (event.eventType !== 'agent.stream.linked')
+          return
+        const sessionId = event.payload?.sessionId
+        if (typeof sessionId === 'string')
+          this.streams.add(sessionId)
       }
       catch { /* Ignore incomplete JSONL records. */ }
     })

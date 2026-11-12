@@ -17,9 +17,7 @@ export interface ResumeCommandOptions {
 async function watchForGate(runDir: string, stateFile: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
   let gateKey = ''
   return (async () => {
-    while (true) {
-      if (isCompleted())
-        break
+    while (!isCompleted()) {
       await new Promise(resolve => setTimeout(resolve, 100))
       if (isCompleted())
         break

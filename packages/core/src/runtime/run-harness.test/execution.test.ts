@@ -1,6 +1,6 @@
 import type { StepContext } from '../../types/context.js'
 import type { AgentRunner, StepConfig, StepRunFn } from '../../types/harness.js'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,50 +14,61 @@ function s(
   return { id, run, if: ifCond }
 }
 
-describe('runHarness pipeline order and agent runner', () => {
-  let tempDir: string
+let tempDir: string
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-exec-pipe-'))
-  })
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true })
-  })
+beforeEach(async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-exec-pipe-'))
+})
+afterEach(async () => {
+  await rm(tempDir, { recursive: true, force: true })
+})
 
-  it('executes steps in declaration order with callbacks and agent runner', async () => {
-    const order: string[] = []
-    const agent: AgentRunner<number> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'double output',
-      executeTurn: async ({ ctx }) => {
-        order.push('s2')
-        return {
-          output: (ctx.steps.s1?.output as number) * 2,
-          sessionId: 's2-session',
-        }
-      },
-    }
-    const result = await runHarness({
-      name: 'pipeline',
-      steps: [
-        s('s1', () => {
-          order.push('s1')
-          return 10
-        }),
-        s('s2', agent),
-        s('s3', (ctx) => {
-          order.push('s3')
-          return ((ctx.steps.s2?.output as { value: number })?.value) + 5
-        }),
-      ],
-    }, { workspaceDir: tempDir })
-    expect(order).toEqual(['s1', 's2', 's3'])
-    expect(result.status).toBe('passed')
-    expect(result.steps.s1?.output).toBe(10)
-    expect(result.steps.s2?.output).toEqual({ value: 20, sessionId: 's2-session' })
-    expect(result.steps.s3?.output).toBe(25)
-  })
+it('executes steps in declaration order with callbacks and agent runner', async () => {
+  const order: string[] = []
+  const agent: AgentRunner<number> = {
+    __kind: 'agent',
+    mode: 'read-only',
+    prompt: 'double output',
+    executeTurn: async ({ ctx }) => {
+      order.push('s2')
+      return {
+        output: (ctx.steps.s1?.output as number) * 2,
+        sessionId: 's2-session',
+      }
+    },
+  }
+  const result = await runHarness({
+    name: 'pipeline',
+    steps: [
+      s('s1', () => {
+        order.push('s1')
+        return 10
+      }),
+      s('s2', agent),
+      s('s3', (ctx) => {
+        order.push('s3')
+        return ((ctx.steps.s2?.output as { value: number })?.value) + 5
+      }),
+    ],
+  }, { workspaceDir: tempDir })
+  expect(order).toEqual(['s1', 's2', 's3'])
+  expect(result.status).toBe('passed')
+  expect(result.steps.s1?.output).toBe(10)
+  expect(result.steps.s2?.output).toEqual({ value: 20, sessionId: 's2-session' })
+  expect(result.steps.s3?.output).toBe(25)
+})
+
+it('keeps a previous config path when the resumed invocation omits it', async () => {
+  const config = {
+    name: 'config-identity',
+    steps: [
+      s('step', () => 'done'),
+    ],
+  }
+  await runHarness(config, { workspaceDir: tempDir, runId: 'config-identity', configPath: 'saved.config.ts' })
+  const resumed = await runHarness(config, { workspaceDir: tempDir, runId: 'config-identity' })
+  expect(resumed.status).toBe('passed')
+  expect(JSON.parse(await readFile(path.join(tempDir, '.harness/runs/config-identity/state.json'), 'utf8')).configPath).toBe('saved.config.ts')
 })
 
 describe('runHarness conditional execution', () => {

@@ -72,8 +72,21 @@ function createCoreModule(): Record<string, unknown> {
 
 async function loadAgentsModule(): Promise<Record<string, unknown>> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url))
-  const candidateSrc = path.resolve(currentDir, '../../../agents/src/index.ts')
-  return import(candidateSrc) as Promise<Record<string, unknown>>
+  const packageDir = path.resolve(currentDir, '../../../agents')
+  const builtEntry = path.join(packageDir, 'dist/index.js')
+  try {
+    await access(builtEntry)
+    return await import(builtEntry) as Record<string, unknown>
+  }
+  catch (cause: unknown) {
+    if ((cause as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw cause
+  }
+
+  // Source tests can run before packages have been built; production uses the
+  // agents package's compiled entrypoint above.
+  const sourceEntry = path.join(packageDir, 'src/index.ts')
+  return import(sourceEntry) as Promise<Record<string, unknown>>
 }
 
 export async function loadHarnessConfig(configPath: string): Promise<HarnessConfig> {

@@ -163,7 +163,6 @@ describe('readRunState workflow identity compatibility', () => {
       schemaVersion: 1,
       runId: 'legacy-run',
       harnessName: 'legacy-workflow',
-      workflowName: 'legacy-workflow',
       status: 'running',
       activeStepId: null,
       steps: {},

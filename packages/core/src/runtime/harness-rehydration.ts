@@ -49,6 +49,32 @@ function resolvePreviousRehydration(
   }
 }
 
+function preservedSnapshotFields(
+  previous: RunStateSnapshot | undefined,
+  rehydration: RehydrationInfo | undefined,
+) {
+  return {
+    activeGuardrailRetries: rehydration?.guardrailRetries
+      ? { ...rehydration.guardrailRetries }
+      : undefined,
+    grantedExtraRetries: previous?.grantedExtraRetries
+      ? { ...previous.grantedExtraRetries }
+      : undefined,
+    grantedExtraTurns: previous?.grantedExtraTurns
+      ? { ...previous.grantedExtraTurns }
+      : undefined,
+    environments: previous?.environments
+      ? { ...previous.environments }
+      : undefined,
+    artifacts: previous?.artifacts
+      ? [...previous.artifacts]
+      : undefined,
+    logs: previous?.logs
+      ? { ...previous.logs }
+      : undefined,
+  }
+}
+
 function buildSnapshot(
   runId: string,
   harnessName: string,
@@ -61,18 +87,6 @@ function buildSnapshot(
   const matrixOutputs = rehydration?.matrixOutputs
     ? [...rehydration.matrixOutputs]
     : []
-  const guardrailRetries = rehydration?.guardrailRetries
-    ? { ...rehydration.guardrailRetries }
-    : undefined
-  const environments = previous?.environments
-    ? { ...previous.environments }
-    : undefined
-  const artifacts = previous?.artifacts
-    ? [...previous.artifacts]
-    : undefined
-  const logs = previous?.logs
-    ? { ...previous.logs }
-    : undefined
   const isWaiting = Boolean(rehydration?.activeGate) || previous?.status === 'waiting_for_gate'
 
   return {
@@ -91,17 +105,8 @@ function buildSnapshot(
     activeStepAttempt: rehydration?.attempt ?? 1,
     activeMatrixIndex: rehydration?.matrixIndex ?? null,
     activeMatrixOutputs: matrixOutputs,
-    activeGuardrailRetries: guardrailRetries,
-    grantedExtraRetries: previous?.grantedExtraRetries
-      ? { ...previous.grantedExtraRetries }
-      : undefined,
-    grantedExtraTurns: previous?.grantedExtraTurns
-      ? { ...previous.grantedExtraTurns }
-      : undefined,
-    environments,
+    ...preservedSnapshotFields(previous, rehydration),
     steps: ctxSteps,
-    artifacts,
-    logs,
     updatedAt: new Date().toISOString(),
   }
 }

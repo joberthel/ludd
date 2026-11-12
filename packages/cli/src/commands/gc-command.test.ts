@@ -31,4 +31,15 @@ describe('gcCommand', () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Would clean'))
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Skipped active'))
   })
+
+  it('uses defaults and reports empty cleanup results', async () => {
+    vi.mocked(gc).mockResolvedValueOnce({ cleanedRunIds: [], skippedActiveRunIds: [] })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await expect(gcCommand({})).resolves.toBe(0)
+    expect(gc).toHaveBeenCalledWith({
+      workspaceDir: process.cwd(),
+    })
+    expect(log).toHaveBeenCalledWith('Cleaned 0 run(s): none')
+    expect(log).toHaveBeenCalledWith('Skipped active 0 run(s): none')
+  })
 })

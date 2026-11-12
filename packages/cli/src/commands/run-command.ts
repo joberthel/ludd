@@ -15,6 +15,36 @@ export interface RunCommandOptions {
   worker?: boolean
 }
 
+async function watchForGate(runDir: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
+  let gateKey = ''
+  while (!isCompleted()) {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    if (isCompleted())
+      break
+    const stateFile = path.join(runDir, 'state.json')
+    if (!fs.existsSync(stateFile))
+      continue
+    const state = readRunState(runDir)
+    const gate = state.activeGate
+    if (state.status !== 'waiting_for_gate' || !gate) {
+      gateKey = ''
+      continue
+    }
+    const key = `${gate.stepId}:${gate.guardrailIndex}:${gate.createdAt}`
+    if (gateKey === key)
+      continue
+    gateKey = key
+    const client = await createControlClient(runDir)
+    try {
+      if (!worker)
+        await promptForGate(state, client)
+    }
+    finally {
+      await client.close()
+    }
+  }
+}
+
 export async function runCommand(options: RunCommandOptions): Promise<number> {
   const workspaceDir = path.resolve(options.workspace ?? process.cwd())
   const configPath = options.configPath ?? 'harness.config.ts'
@@ -33,37 +63,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()
   let completed = false
-  let gateKey = ''
-  const gateWatcher = (async () => {
-    while (true) {
-      if (completed)
-        break
-      await new Promise(resolve => setTimeout(resolve, 100))
-      if (completed)
-        break
-      const stateFile = path.join(runDir, 'state.json')
-      if (!fs.existsSync(stateFile))
-        continue
-      const state = readRunState(runDir)
-      const gate = state.activeGate
-      if (state.status !== 'waiting_for_gate' || !gate) {
-        gateKey = ''
-        continue
-      }
-      const key = `${gate.stepId}:${gate.guardrailIndex}:${gate.createdAt}`
-      if (gateKey === key)
-        continue
-      gateKey = key
-      const client = await createControlClient(runDir)
-      try {
-        if (!options.worker)
-          await promptForGate(state, client)
-      }
-      finally {
-        await client.close()
-      }
-    }
-  })()
+  const gateWatcher = watchForGate(runDir, () => completed, options.worker ?? false)
   try {
     const result = await runHarness(config, { runId: id, workspaceDir, configPath })
     return result.status === 'passed'
