@@ -217,12 +217,17 @@ async function executePiTurn<TOutput>(
       ? {}
       : { customTools }),
   })
-  await runTurn(session, submit === undefined
-    ? input
-    : {
-        ...input,
-        prompt: promptWithOutputSubmission(input.prompt),
-      })
+  try {
+    await runTurn(session, submit === undefined
+      ? input
+      : {
+          ...input,
+          prompt: promptWithOutputSubmission(input.prompt),
+        })
+  }
+  finally {
+    session.dispose?.()
+  }
   if (submit === undefined) {
     return {
       output: (session.getLastAssistantText() ?? '') as TOutput,

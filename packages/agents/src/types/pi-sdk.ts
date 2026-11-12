@@ -23,6 +23,7 @@ export interface PiSession {
   prompt: (text: string) => Promise<void>
   abort: () => Promise<void>
   getLastAssistantText: () => string | undefined
+  dispose?: () => void
 }
 
 export interface PiSessionFactoryOptions {

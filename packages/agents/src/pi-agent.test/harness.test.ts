@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { runHarness } from '@ludd/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { piAgent } from '../pi-agent.js'
 import { fakeSession } from './fake-session.js'
 
@@ -17,11 +17,12 @@ describe('piAgent inside runHarness (AC 2, AC 4)', () => {
 
   it('resumes the earlier session via ctx.steps[...].output.sessionId', async () => {
     const files: string[] = []
+    const dispose = vi.fn()
     const factory = async (o: { sessionFile: string }): Promise<ReturnType<typeof fakeSession>> => {
       files.push(o.sessionFile)
-      return fakeSession([
+      return Object.assign(fakeSession([
         { type: 'agent_settled' },
-      ], 'ok')
+      ], 'ok'), { dispose })
     }
     const result = await runHarness({
       name: 'pi',
@@ -46,5 +47,6 @@ describe('piAgent inside runHarness (AC 2, AC 4)', () => {
     expect((a as { value?: string }).value).toBe('ok')
     expect(files[1]).toBe(files[0])
     expect(files[0]).toContain(`${a.sessionId}.jsonl`)
+    expect(dispose).toHaveBeenCalledTimes(2)
   })
 })
