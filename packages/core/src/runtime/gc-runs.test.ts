@@ -72,6 +72,17 @@ describe('gc runner status & pid lock handling', () => {
 })
 
 describe('gc status and duration filtering', () => {
+  it('filters by one or more run IDs before checking active-run status', async () => {
+    createRun('wanted', 'passed', new Date().toISOString())
+    createRun('unwanted-active', 'running', new Date().toISOString(), process.pid)
+    const result = await gc({
+      workspaceDir: tempDir,
+      runId: ['wanted'],
+    })
+    expect(result.cleanedRunIds).toEqual(['wanted'])
+    expect(result.skippedActiveRunIds).toEqual([])
+    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'unwanted-active'))).toBe(true)
+  })
   it('filters by run status correctly', async () => {
     createRun('run-passed', 'passed', new Date().toISOString())
     createRun('run-failed', 'failed', new Date().toISOString())

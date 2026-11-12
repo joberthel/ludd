@@ -4,10 +4,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
+import { abortCommand } from './commands/abort-command.js'
 import { gateCommand } from './commands/gate-command.js'
+import { gcCommand } from './commands/gc-command.js'
 import { resumeCommand } from './commands/resume-command.js'
 import { runCommand } from './commands/run-command.js'
 import { statusCommand } from './commands/status-command.js'
+import { teardownCommand } from './commands/teardown-command.js'
 
 function parse(args: string[], options: ParseArgsConfig['options']): { values: Record<string, string | boolean | undefined>, positionals: string[] } {
   return parseArgs({
@@ -132,6 +135,96 @@ async function main(): Promise<void> {
     })
     return
   }
+  if (command === 'abort') {
+    const { values, positionals } = parse(args, {
+      workspace: { type: 'string', short: 'w' },
+      reason: { type: 'string' },
+      teardown: { type: 'boolean' },
+    })
+    if (positionals.length !== 1)
+      throw new Error('Usage: ludd abort <runId> [--reason text] [--teardown] [-w|--workspace dir]')
+    process.exitCode = await abortCommand({
+      runId: positionals[0],
+      ...(text(values, 'workspace') !== undefined
+        ? {
+            workspace: text(values, 'workspace'),
+          }
+        : {}),
+      ...(text(values, 'reason') !== undefined
+        ? {
+            reason: text(values, 'reason'),
+          }
+        : {}),
+      ...(flag(values, 'teardown')
+        ? { teardown: true }
+        : {}),
+    })
+    return
+  }
+  if (command === 'teardown') {
+    const { values, positionals } = parse(args, {
+      workspace: { type: 'string', short: 'w' },
+      force: { type: 'boolean' },
+    })
+    if (positionals.length !== 1)
+      throw new Error('Usage: ludd teardown <runId> [--force] [-w|--workspace dir]')
+    process.exitCode = await teardownCommand({
+      runId: positionals[0],
+      ...(text(values, 'workspace') !== undefined
+        ? {
+            workspace: text(values, 'workspace'),
+          }
+        : {}),
+      ...(flag(values, 'force')
+        ? { force: true }
+        : {}),
+    })
+    return
+  }
+  if (command === 'gc') {
+    const { values, positionals } = parse(args, {
+      'workspace': { type: 'string', short: 'w' },
+      'run-id': { type: 'string', multiple: true },
+      'older-than': { type: 'string' },
+      'status': { type: 'string', multiple: true },
+      'dry-run': { type: 'boolean' },
+    })
+    const ids = values['run-id']
+    const runIds = [
+      ...(positionals),
+      ...(Array.isArray(ids)
+        ? ids
+        : (typeof ids === 'string'
+            ? [ids]
+            : [])),
+    ]
+    process.exitCode = await gcCommand({
+      ...(runIds.length
+        ? { runId: runIds }
+        : {}),
+      ...(text(values, 'workspace') !== undefined
+        ? {
+            workspace: text(values, 'workspace'),
+          }
+        : {}),
+      ...(text(values, 'older-than') !== undefined
+        ? {
+            olderThan: text(values, 'older-than'),
+          }
+        : {}),
+      ...(Array.isArray(values.status)
+        ? { status: values.status }
+        : (typeof values.status === 'string'
+            ? {
+                status: [values.status],
+              }
+            : {})),
+      ...(flag(values, 'dry-run')
+        ? { dryRun: true }
+        : {}),
+    })
+    return
+  }
   if (command === 'gate') {
     const { values, positionals } = parse(args, {
       'workspace': { type: 'string', short: 'w' },
@@ -176,7 +269,7 @@ async function main(): Promise<void> {
     })
     return
   }
-  throw new Error('Usage: ludd run ... | ludd resume <run-id> ... | ludd status [runId] [--json] | ludd gate <runId> ...')
+  throw new Error('Usage: ludd run ... | ludd resume <run-id> ... | ludd status [runId] [--json] | ludd abort <runId> ... | ludd teardown <runId> ... | ludd gc [runId ...] ... | ludd gate <runId> ...')
 }
 
 main().catch((error: unknown) => {

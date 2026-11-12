@@ -104,6 +104,7 @@ export {
   gc,
   type GcOptions,
   type GcResult,
+  parseDurationToMs,
 } from './runtime/gc-runs.js'
 export {
   formatGuardrailRetryPrompt,

@@ -11,6 +11,7 @@ export interface GcOptions {
   olderThanMs?: number
   olderThan?: number | string
   status?: RunStatus[]
+  runId?: string | string[]
   dryRun?: boolean
 }
 
@@ -108,11 +109,20 @@ export async function gc(options?: GcOptions): Promise<GcResult> {
   const skippedActiveRunIds: string[] = []
   const entries = fs.readdirSync(runsDir, { withFileTypes: true })
 
+  const runIdFilter = options?.runId === undefined
+    ? undefined
+    : new Set(Array.isArray(options.runId)
+        ? options.runId
+        : [options.runId])
+
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue
     }
     const runId = entry.name
+    if (runIdFilter !== undefined && !runIdFilter.has(runId)) {
+      continue
+    }
     const runDir = path.join(runsDir, runId)
     if (isRunnerAlive(runDir)) {
       skippedActiveRunIds.push(runId)
