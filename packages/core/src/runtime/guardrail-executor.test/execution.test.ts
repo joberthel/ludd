@@ -76,6 +76,76 @@ describe('runAfterStepGuardrails empty afterStep', () => {
   })
 })
 
+describe('runAfterStepGuardrails factory validation', () => {
+  it('rejects a factory that returns an invalid guardrail', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const step: StepConfig = {
+        id: 's-1',
+        afterStep: (() => ['invalid']) as any,
+        run: async () => ({}),
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-1', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await expect(runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        maxTotalTurns: 5,
+        initialPrompt: '',
+      })).rejects.toThrow('afterStep factory returned an invalid Guardrail at index 0.')
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('runAfterStepGuardrails factory shape validation', () => {
+  it('rejects a factory that does not return an array', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const step: StepConfig = {
+        id: 's-1',
+        afterStep: (() => 123) as any,
+        run: async () => ({}),
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-1', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await expect(runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        maxTotalTurns: 5,
+        initialPrompt: '',
+      })).rejects.toThrow('afterStep factory must return an array.')
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('runAfterStepGuardrails passing and skipped runs', () => {
   it('runs passing and skipped guardrails, recording ledger events', async () => {
     const runDir = makeTempDir()

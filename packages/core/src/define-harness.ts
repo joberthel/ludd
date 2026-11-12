@@ -234,7 +234,24 @@ export function defineHarness<
   ]
 }
 
-// 6. Fallback overload preserving step configuration
+// 6. 1-step pipeline: Plain step. Keep this overload before the broad fallback
+// so the step's output schema contextually types its afterStep factory.
+export function defineHarness<
+  S0Id extends string = string,
+  S0Out = any,
+  S0Art = any,
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art>]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art>]
+}
+
+// Fallback overload preserving step configuration
 export function defineHarness<const TConfig extends HarnessConfig = HarnessConfig>(
   config: TConfig,
 ): TConfig

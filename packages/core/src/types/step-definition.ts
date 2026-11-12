@@ -2,7 +2,7 @@ import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
 import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
-import type { StepRunFn } from './harness.js'
+import type { AfterStepGuardrails, StepRunFn } from './harness.js'
 import type {
   AccumulateArtifactItemMap,
   AccumulatePriorSteps,
@@ -28,15 +28,14 @@ export interface PlainStepDef<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>[]
-  afterStep?: readonly Guardrail<
-    any,
+  afterStep?: AfterStepGuardrails<
     StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
       AccumulatePriorSteps<TPriorSteps>,
       unknown,
       false
     >
-  >[]
+  >
   run:
     | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
     | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
@@ -64,15 +63,14 @@ export interface ItemsMatrixStepDef<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>[]
-  afterStep?: readonly Guardrail<
-    any,
+  afterStep?: AfterStepGuardrails<
     StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
       AccumulatePriorSteps<TPriorSteps>,
       TItem,
       true
     >
-  >[]
+  >
   run:
     | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
     | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
@@ -116,15 +114,14 @@ export interface ArtifactMatrixStepDef<
       true
     >
   >[]
-  afterStep?: readonly Guardrail<
-    any,
+  afterStep?: AfterStepGuardrails<
     StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
       AccumulatePriorSteps<TPriorSteps>,
       InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
       true
     >
-  >[]
+  >
   run:
     | StepRunFn<
       any,

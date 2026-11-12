@@ -9,6 +9,7 @@ import type { GateWaiter } from './gate-waiter.js'
 import process from 'node:process'
 import { offloadGuardrailLog } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
+import { isGuardrail } from '../types/guardrail.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
@@ -206,14 +207,24 @@ export async function runAfterStepGuardrails(
   params: RunAfterStepGuardrailsParams,
 ): Promise<void> {
   const { step, snapshot, runDir } = params
-  if (!step.afterStep || step.afterStep.length === 0) {
+  const afterStep = typeof step.afterStep === 'function'
+    ? step.afterStep(params.ctx)
+    : step.afterStep
+  if (afterStep !== undefined && !Array.isArray(afterStep)) {
+    throw new TypeError(`Step "${step.id}" afterStep factory must return an array.`)
+  }
+  if (!afterStep || afterStep.length === 0) {
     clearActiveGuardrailRetries(runDir, snapshot)
     return
   }
 
   const startIndex = params.startGuardrailIndex ?? 0
-  for (let k = startIndex; k < step.afterStep.length; k++) {
-    await processGuardrailResult(step.afterStep[k], k, params)
+  for (let k = startIndex; k < afterStep.length; k++) {
+    const guardrail: unknown = afterStep[k]
+    if (!isGuardrail(guardrail)) {
+      throw new TypeError(`Step "${step.id}" afterStep factory returned an invalid Guardrail at index ${k}.`)
+    }
+    await processGuardrailResult(guardrail, k, params)
   }
 
   clearActiveGuardrailRetries(runDir, snapshot)

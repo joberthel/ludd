@@ -119,6 +119,36 @@ describe('afterStep guardrails matrix reset (AC 5.1.3)', () => {
   })
 })
 
+describe('afterStep guardrail factories', () => {
+  it('evaluates an afterStep factory with the completed step context', async () => {
+    let capturedOutput: unknown
+    const rail: Guardrail = {
+      __kind: 'guardrail',
+      type: 'fn',
+      execute: async () => ({ status: 'pass' }),
+    }
+    const result = await runHarness({
+      name: 'context-aware-after-step-test',
+      steps: [
+        {
+          id: 'step-with-factory',
+          run: async () => ({ guess: 7 }),
+          outputSchema: z.object({
+            guess: z.number(),
+          }),
+          afterStep: (ctx: any) => {
+            capturedOutput = ctx.step.output
+            return [rail]
+          },
+        },
+      ],
+    }, { workspaceDir: tempDir })
+
+    expect(result.status).toBe('passed')
+    expect(capturedOutput).toEqual({ guess: 7 })
+  })
+})
+
 describe('afterStep guardrails context output (AC 5.1.4)', () => {
   it('exposes validated step output and sessionId inside afterStep ctx', async () => {
     let capturedOutputInGuardrail: any

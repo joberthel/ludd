@@ -54,6 +54,11 @@ export interface StepRunFn<
   readonly __context?: TContext
 }
 
+/** Static after-step guardrails, or a factory that receives the typed completed-step context. */
+export type AfterStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>
+  = | readonly Guardrail<any, any>[]
+    | ((ctx: TContext) => readonly Guardrail<any, any>[])
+
 export function isAgentRunner(value: unknown): value is AgentRunner {
   if (typeof value !== 'object' || value === null) {
     return false
@@ -102,7 +107,7 @@ export interface StepConfig<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: readonly Guardrail<any, any>[]
-  afterStep?: readonly Guardrail<any, any>[]
+  afterStep?: AfterStepGuardrails<TContext>
   run: StepRunFn<TOutput, TContext> | AgentRunner<TOutput, TContext>
 }
 

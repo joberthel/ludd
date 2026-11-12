@@ -39,7 +39,6 @@ describe('validateHarnessConfig beforeStep validation', () => {
     })).toThrow('Step "s1" beforeStep at index 0 must be a valid Guardrail instance.')
   })
 })
-
 describe('validateHarnessConfig afterStep validation', () => {
   it('rejects step with non-array afterStep', () => {
     expect(() => validateHarnessConfig({
@@ -89,4 +88,20 @@ describe('validateHarnessConfig afterStep validation', () => {
     expect(config.steps[0].beforeStep).toHaveLength(1)
     expect(config.steps[0].afterStep).toHaveLength(1)
   })
+})
+
+it('accepts a context-aware afterStep factory', () => {
+  const config = validateHarnessConfig({
+    name: 'test',
+    steps: [
+      {
+        id: 's1',
+        afterStep: () => [
+          makeValidGuardrail(),
+        ],
+        run: () => ({ ok: true }),
+      },
+    ],
+  })
+  expect(config.steps[0].afterStep).toBeTypeOf('function')
 })

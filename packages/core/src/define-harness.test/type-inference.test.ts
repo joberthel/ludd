@@ -29,6 +29,30 @@ describe('defineHarness outputSchema type inference', () => {
     expectTypeOf<DefaultOutput>().toEqualTypeOf<{ status: string }>()
     expectTypeOf<TransformOutput>().toEqualTypeOf<number>()
   })
+
+  it('contextually types afterStep factories from the step output schema', () => {
+    const outputSchema = z.object({
+      guess: z.number(),
+    })
+    const harness = defineHarness({
+      name: 'typed-after-step-factory',
+      steps: [
+        {
+          id: 'guess',
+          run: () => ({ guess: 7 }),
+          outputSchema,
+          afterStep: (ctx) => {
+            expectTypeOf(ctx.step.output).toEqualTypeOf<{ guess: number }>()
+            const guess: number = ctx.step.output.guess
+            expectTypeOf(guess).toEqualTypeOf<number>()
+            return []
+          },
+        },
+      ],
+    })
+
+    expect(harness.steps[0].id).toBe('guess')
+  })
 })
 
 describe('agentStepOutput type inference', () => {
