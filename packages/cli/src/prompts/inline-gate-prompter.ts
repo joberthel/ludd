@@ -9,7 +9,9 @@ async function resolveHumanReview(gate: NonNullable<RunStateSnapshot['activeGate
     : actionInput === 'a' || actionInput === 'abort'
       ? 'abort'
       : 'pass'
-  const feedback = await rl.question('Feedback (required on fail): ')
+  const feedback = action === 'fail'
+    ? await rl.question('Feedback (required on fail): ')
+    : ''
   if (action === 'fail' && !feedback.trim())
     throw new Error('Feedback is required when failing a human review gate.')
   return {

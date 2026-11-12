@@ -168,6 +168,10 @@ async function runTurn(session: PiSession, input: AgentTurnInput<any>): Promise<
   }
 }
 
+function promptWithOutputSubmission(prompt: string): string {
+  return `${prompt}\n\nThe harness requires structured output for this step. Submit the result by calling the available submit_step_output tool with a value matching its parameters. Do not return the result as plain text. If validation reports an issue, correct the value and submit it again.`
+}
+
 /**
  * Production agent adapter wrapping the Pi coding-agent SDK. Sessions are
  * persisted at `<runDir>/pi-sessions/<sessionId>.jsonl` and resumed when the
@@ -183,40 +187,51 @@ export function piAgent<
     mode: config.mode ?? 'read-only',
     prompt: config.prompt,
     sessionId: config.sessionId,
-    executeTurn: async (input: AgentTurnInput<any>): Promise<AgentTurnResult<TOutput>> => {
-      const submit = input.outputSchema === undefined
-        ? undefined
-        : createSubmitStepOutputTool(input.outputSchema)
-      const customTools = [
-        ...(input.mcpServerUrl === ''
-          ? []
-          : createMcpBridgeTools({ url: input.mcpServerUrl, authToken: input.mcpAuthToken })),
-        ...(submit === undefined
-          ? []
-          : [submit.tool]),
-      ]
-      const session = await factory({
-        cwd: input.environment.workingDir,
-        sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
-        mode: input.mode,
-        model: config.model,
-        environment: input.environment,
-        ...(customTools.length === 0
-          ? {}
-          : { customTools }),
-      })
-      await runTurn(session, input)
-      if (submit !== undefined) {
-        const submission = submit.getSubmission()
-        if (submission === undefined) {
-          throw new StepOutputValidationError(input.stepId, session.getLastAssistantText(), [MISSING_SUBMISSION_ISSUE])
-        }
-        return { output: submission.value as TOutput, sessionId: input.sessionId }
-      }
-      return {
-        output: (session.getLastAssistantText() ?? '') as TOutput,
-        sessionId: input.sessionId,
-      }
-    },
+    executeTurn: async input => executePiTurn<TOutput>(config, factory, input),
   }
+}
+
+async function executePiTurn<TOutput>(
+  config: PiAgentConfig<any>,
+  factory: PiSessionFactory,
+  input: AgentTurnInput<any>,
+): Promise<AgentTurnResult<TOutput>> {
+  const submit = input.outputSchema === undefined
+    ? undefined
+    : createSubmitStepOutputTool(input.outputSchema)
+  const customTools = [
+    ...(input.mcpServerUrl === ''
+      ? []
+      : createMcpBridgeTools({ url: input.mcpServerUrl, authToken: input.mcpAuthToken })),
+    ...(submit === undefined
+      ? []
+      : [submit.tool]),
+  ]
+  const session = await factory({
+    cwd: input.environment.workingDir,
+    sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
+    mode: input.mode,
+    model: config.model,
+    environment: input.environment,
+    ...(customTools.length === 0
+      ? {}
+      : { customTools }),
+  })
+  await runTurn(session, submit === undefined
+    ? input
+    : {
+        ...input,
+        prompt: promptWithOutputSubmission(input.prompt),
+      })
+  if (submit === undefined) {
+    return {
+      output: (session.getLastAssistantText() ?? '') as TOutput,
+      sessionId: input.sessionId,
+    }
+  }
+  const submission = submit.getSubmission()
+  if (submission === undefined) {
+    throw new StepOutputValidationError(input.stepId, session.getLastAssistantText(), [MISSING_SUBMISSION_ISSUE])
+  }
+  return { output: submission.value as TOutput, sessionId: input.sessionId }
 }

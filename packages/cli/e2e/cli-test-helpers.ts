@@ -34,11 +34,8 @@ export async function launchWithHumanReview(args: string[], cwd: string): Promis
   child.stderr.setEncoding('utf8').on('data', data => stderr += data)
   for (let gateNumber = 1; gateNumber <= 2; gateNumber++) {
     const actionPromptCount = () => stdout.split('Action [p]ass').length - 1
-    const feedbackPromptCount = () => stdout.split('Feedback (required on fail):').length - 1
     await until(() => actionPromptCount() >= gateNumber || child.exitCode !== null, 10_000, stdout + stderr)
     child.stdin.write('p\n')
-    await until(() => feedbackPromptCount() >= gateNumber || child.exitCode !== null, 10_000, stdout + stderr)
-    child.stdin.write('Approved\n')
   }
   child.stdin.end()
   const code = await new Promise<number | null>((resolve, reject) => {

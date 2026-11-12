@@ -53,16 +53,16 @@ it('returns immediately if there is no active gate', async () => {
   expect(createInterface).not.toHaveBeenCalled()
 })
 
-it('resolves a human review pass with feedback', async () => {
+it('resolves a human review pass without asking for feedback', async () => {
   const control = client()
-  question.mockResolvedValueOnce('').mockResolvedValueOnce('Looks good')
+  question.mockResolvedValueOnce('p')
   await promptForGate(snapshot(), control)
   expect(control.resolveGate).toHaveBeenCalledWith({
     stepId: 'step-a',
     guardrailIndex: 1,
     action: 'pass',
-    feedback: 'Looks good',
   })
+  expect(question).toHaveBeenCalledOnce()
   expect(close).toHaveBeenCalledOnce()
 })
 
@@ -99,14 +99,14 @@ it('resolves a human review failure with feedback', async () => {
 
 it.each(['a', 'abort'])('resolves a human review abort action (%s)', async (action) => {
   const control = client()
-  question.mockResolvedValueOnce(action).mockResolvedValueOnce('Stop')
+  question.mockResolvedValueOnce(action)
   await promptForGate(snapshot(), control)
   expect(control.resolveGate).toHaveBeenCalledWith({
     stepId: 'step-a',
     guardrailIndex: 1,
     action: 'abort',
-    feedback: 'Stop',
   })
+  expect(question).toHaveBeenCalledOnce()
 })
 
 it('resolves max-retry retry with default retry count and feedback', async () => {
