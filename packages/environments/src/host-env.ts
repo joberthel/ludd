@@ -1,6 +1,7 @@
 import type {
   DynamicProperty,
   EnvironmentAdapter,
+  EnvironmentDescriptor,
   ProvisionContext,
   ProvisionedEnvironment,
 } from '@ludd/core'
@@ -20,6 +21,43 @@ export interface HostEnvOptions {
   cwd?: string
   env?: DynamicProperty<Record<string, string>>
   ephemeralPorts?: readonly string[]
+}
+
+function createHostProvisionedEnv(
+  id: string,
+  type: string,
+  workingDir: string,
+  ephemeralPorts?: Record<string, number>,
+  injectedEnv?: Record<string, string>,
+  defaultSignal?: AbortSignal,
+): ProvisionedEnvironment {
+  return {
+    __kind: 'environment',
+    id,
+    type,
+    workingDir,
+    ...(ephemeralPorts !== undefined
+      ? { ephemeralPorts }
+      : {}),
+    ...(injectedEnv !== undefined
+      ? { injectedEnv }
+      : {}),
+    exec: async (command, execOptions) => {
+      const mergedEnv = injectedEnv !== undefined
+        ? {
+            ...injectedEnv,
+            ...execOptions?.env,
+          }
+        : execOptions?.env
+      return execHostEnvCommand(workingDir, command, {
+        ...execOptions,
+        signal: execOptions?.signal ?? defaultSignal,
+        env: mergedEnv,
+      })
+    },
+    ping: async () => fs.existsSync(workingDir),
+    teardown: async () => {},
+  }
 }
 
 export function hostEnv(
@@ -43,28 +81,28 @@ export function hostEnv(
         workspaceDir: workingDir,
       })
 
-      return {
-        __kind: 'environment',
+      return createHostProvisionedEnv(
         id,
-        type: 'host',
+        'host',
         workingDir,
-        ephemeralPorts: resolved.ephemeralPorts,
-        injectedEnv: resolved.injectedEnv,
-        exec: async (command, execOptions) => {
-          const mergedEnv = resolved.injectedEnv !== undefined
-            ? {
-                ...resolved.injectedEnv,
-                ...execOptions?.env,
-              }
-            : execOptions?.env
-          return execHostEnvCommand(workingDir, command, {
-            ...execOptions,
-            env: mergedEnv,
-          })
-        },
-        ping: async () => fs.existsSync(workingDir),
-        teardown: async () => {},
-      }
+        resolved.ephemeralPorts,
+        resolved.injectedEnv,
+        provisionContext.defaultSignal,
+      )
+    },
+    rehydrate: (
+      descriptor: EnvironmentDescriptor,
+      provisionContext: ProvisionContext,
+    ): ProvisionedEnvironment => {
+      const workingDir = path.resolve(descriptor.workingDir)
+      return createHostProvisionedEnv(
+        descriptor.id,
+        descriptor.type,
+        workingDir,
+        descriptor.ephemeralPorts,
+        descriptor.injectedEnv,
+        provisionContext.defaultSignal,
+      )
     },
   }
 }

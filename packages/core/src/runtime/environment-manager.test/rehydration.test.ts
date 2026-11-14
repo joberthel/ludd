@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentUnreachableError } from '../../errors/environment-unreachable-error.js'
 import { readRunState } from '../../persistence/state-store.js'
 import {
@@ -290,5 +290,108 @@ describe('recordEnvironment metadata persistence (#78)', () => {
       bridgeHost: '172.17.0.1',
       whitelistEnv: ['FOO', 'MISSING_KEY'],
     }))
+  })
+
+  it('delegates descriptor rehydration to matching EnvironmentAdapter.rehydrate when available', async () => {
+    const ctx = createMockContext()
+    const rehydratedEnv = {
+      __kind: 'environment' as const,
+      id: 'custom-env',
+      type: 'custom-type',
+      workingDir: '/tmp/custom',
+      exec: async () => ({
+        exitCode: 0,
+        stdout: 'delegated',
+        stderr: '',
+        timedOut: false,
+      }),
+      ping: async () => true,
+      teardown: async () => {},
+    }
+    const rehydrateMock = vi.fn().mockResolvedValue(rehydratedEnv)
+    const adapter = {
+      __kind: 'environment-adapter' as const,
+      id: 'custom-env',
+      type: 'custom-type',
+      provision: vi.fn(),
+      rehydrate: rehydrateMock,
+    }
+
+    await rehydrateEnvironmentsAndCheckHealth({
+      previousEnvironments: {
+        'custom-env': {
+          id: 'custom-env',
+          type: 'custom-type',
+          workingDir: '/tmp/custom',
+          tornDown: false,
+        },
+      },
+      ctx,
+      adapters: [adapter],
+      workspaceDir: '/tmp',
+    })
+
+    expect(rehydrateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'custom-env',
+        type: 'custom-type',
+        workingDir: '/tmp/custom',
+      }),
+      expect.objectContaining({
+        runId: ctx.runId,
+        workspaceDir: '/tmp',
+        ctx,
+      }),
+    )
+    expect(ctx.environments['custom-env']).toBe(rehydratedEnv)
+  })
+
+  it('delegates descriptor rehydration by type match when activeStep provides an EnvironmentAdapter', async () => {
+    const ctx = createMockContext()
+    const rehydratedEnv = {
+      __kind: 'environment' as const,
+      id: 'prev-env',
+      type: 'custom-type',
+      workingDir: '/tmp/prev',
+      exec: async () => ({
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+      }),
+      ping: async () => true,
+      teardown: async () => {},
+    }
+    const rehydrateMock = vi.fn().mockResolvedValue(rehydratedEnv)
+    const stepAdapter = {
+      __kind: 'environment-adapter' as const,
+      id: 'step-env',
+      type: 'custom-type',
+      provision: vi.fn().mockResolvedValue({
+        ...rehydratedEnv,
+        id: 'step-env',
+      }),
+      rehydrate: rehydrateMock,
+    }
+
+    await rehydrateEnvironmentsAndCheckHealth({
+      previousEnvironments: {
+        'prev-env': {
+          id: 'prev-env',
+          type: 'custom-type',
+          workingDir: '/tmp/prev',
+          tornDown: false,
+        },
+      },
+      activeStep: {
+        id: 'step-1',
+        environment: stepAdapter,
+      } as any,
+      ctx,
+      workspaceDir: '/tmp',
+    })
+
+    expect(rehydrateMock).toHaveBeenCalledTimes(1)
+    expect(ctx.environments['prev-env']).toBe(rehydratedEnv)
   })
 })

@@ -1,5 +1,5 @@
 import type { StepContext } from '../types/context.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
+import type { EnvironmentAdapter, ProvisionedEnvironment } from '../types/environment.js'
 import type { Guardrail } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { EnvironmentDescriptor, RunStateSnapshot } from '../types/state.js'
@@ -177,19 +177,46 @@ export interface RehydrateEnvironmentsParams {
   previousEnvironments?: Record<string, EnvironmentDescriptor>
   ctx: StepContext
   activeStep?: StepConfig
+  adapters?: readonly EnvironmentAdapter[]
   workspaceDir: string
   snapshot?: RunStateSnapshot
   runDir?: string
   defaultSignal?: AbortSignal
 }
 
-function rehydrateEnvironmentDescriptor(
+function findMatchingRehydrateAdapter(
+  desc: EnvironmentDescriptor,
+  adapters: readonly EnvironmentAdapter[],
+): EnvironmentAdapter | undefined {
+  const byId = adapters.find(
+    adapter => adapter.id === desc.id && typeof adapter.rehydrate === 'function',
+  )
+  if (byId !== undefined) {
+    return byId
+  }
+  return adapters.find(
+    adapter => adapter.type === desc.type && typeof adapter.rehydrate === 'function',
+  )
+}
+
+async function rehydrateEnvironmentDescriptor(
   desc: EnvironmentDescriptor,
   ctx: StepContext,
   workspaceDir: string,
   defaultSignal?: AbortSignal,
-): void {
+  adapters: readonly EnvironmentAdapter[] = [],
+): Promise<void> {
   if (desc.tornDown || ctx.environments[desc.id] !== undefined) {
+    return
+  }
+  const matchingAdapter = findMatchingRehydrateAdapter(desc, adapters)
+  if (matchingAdapter?.rehydrate !== undefined) {
+    ctx.environments[desc.id] = await matchingAdapter.rehydrate(desc, {
+      runId: ctx.runId,
+      workspaceDir,
+      defaultSignal,
+      ctx,
+    })
     return
   }
   if (desc.type === 'docker-worktree') {
@@ -204,11 +231,19 @@ function rehydrateEnvironmentDescriptor(
 export async function rehydrateEnvironmentsAndCheckHealth(
   params: RehydrateEnvironmentsParams,
 ): Promise<void> {
-  const { previousEnvironments, ctx, activeStep, workspaceDir, snapshot, runDir, defaultSignal } = params
+  const { previousEnvironments, ctx, activeStep, adapters = [], workspaceDir, snapshot, runDir, defaultSignal } = params
+
+  const candidateAdapters: EnvironmentAdapter[] = [...adapters]
+  if (activeStep?.environment !== undefined) {
+    const resolvedStepEnv = await resolveDynamicProperty(activeStep.environment, ctx)
+    if (isEnvironmentAdapter(resolvedStepEnv)) {
+      candidateAdapters.unshift(resolvedStepEnv)
+    }
+  }
 
   if (previousEnvironments !== undefined) {
     for (const desc of Object.values(previousEnvironments)) {
-      rehydrateEnvironmentDescriptor(desc, ctx, workspaceDir, defaultSignal)
+      await rehydrateEnvironmentDescriptor(desc, ctx, workspaceDir, defaultSignal, candidateAdapters)
     }
   }
 

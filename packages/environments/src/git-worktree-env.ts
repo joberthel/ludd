@@ -1,6 +1,7 @@
 import type {
   DynamicProperty,
   EnvironmentAdapter,
+  EnvironmentDescriptor,
   EnvironmentExecOptions,
   EnvironmentExecResult,
   ProvisionContext,
@@ -61,7 +62,7 @@ async function pingGitWorktree(
 
 function createProvisionedWorktree(
   options: GitWorktreeEnvOptions,
-  branchName: string,
+  branchName: string | undefined,
   worktreePath: string,
   workspaceDir: string,
   defaultSignal?: AbortSignal,
@@ -73,7 +74,9 @@ function createProvisionedWorktree(
     id: options.id,
     type: 'git-worktree',
     workingDir: worktreePath,
-    branchName,
+    ...(branchName !== undefined
+      ? { branchName }
+      : {}),
     ...(ephemeralPorts !== undefined
       ? { ephemeralPorts }
       : {}),
@@ -127,6 +130,28 @@ export function gitWorktreeEnv(options: GitWorktreeEnvOptions): EnvironmentAdapt
         defaultSignal,
         ephemeralPorts,
         injectedEnv,
+      )
+    },
+    rehydrate: (
+      descriptor: EnvironmentDescriptor,
+      context: ProvisionContext,
+    ): ProvisionedEnvironment => {
+      const workingDir = path.resolve(descriptor.workingDir)
+      const workspace = path.resolve(context.workspaceDir)
+      return createProvisionedWorktree(
+        {
+          ...options,
+          id: descriptor.id,
+          ...(descriptor.whitelistEnv !== undefined
+            ? { whitelistEnv: descriptor.whitelistEnv }
+            : {}),
+        },
+        descriptor.branchName,
+        workingDir,
+        workspace,
+        context.defaultSignal,
+        descriptor.ephemeralPorts,
+        descriptor.injectedEnv,
       )
     },
   }

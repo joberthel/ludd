@@ -1,4 +1,5 @@
 import type { StepContext } from './context.js'
+import type { EnvironmentDescriptor } from './state.js'
 
 export interface EnvironmentExecOptions {
   cwd?: string
@@ -47,6 +48,10 @@ export interface EnvironmentAdapter {
   readonly type: string
   readonly supportsDangerMode?: boolean
   provision: (context: ProvisionContext) => Promise<ProvisionedEnvironment>
+  rehydrate?: (
+    descriptor: EnvironmentDescriptor,
+    context: ProvisionContext,
+  ) => Promise<ProvisionedEnvironment> | ProvisionedEnvironment
 }
 
 export function isProvisionedEnvironment(value: unknown): value is ProvisionedEnvironment {

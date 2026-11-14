@@ -1,6 +1,7 @@
 import type {
   DynamicProperty,
   EnvironmentAdapter,
+  EnvironmentDescriptor,
   EnvironmentExecOptions,
   EnvironmentExecResult,
   ProvisionContext,
@@ -118,7 +119,7 @@ async function spawnContainer(
 
 async function execDockerEnv(
   worktreePath: string,
-  containerId: string,
+  containerId: string | undefined,
   command: string | readonly string[],
   options: DockerWorktreeEnvOptions,
   bridgeHost: string,
@@ -126,13 +127,22 @@ async function execDockerEnv(
   execOptions?: EnvironmentExecOptions,
   defaultSignal?: AbortSignal,
 ): Promise<EnvironmentExecResult> {
-  const cmdArgs = parseContainerCommand(command)
+  const signal = execOptions?.signal ?? defaultSignal
   const isolatedEnv = buildIsolatedEnvironmentVars({
     hostProcessEnv: process.env,
     whitelistEnv: options.whitelistEnv,
     staticEnv: injectedEnv,
     injectedEnv: execOptions?.env,
   })
+  if (containerId === undefined || containerId === '') {
+    return execHostEnvCommand(worktreePath, command, {
+      ...execOptions,
+      signal,
+      env: isolatedEnv,
+      inheritEnv: false,
+    })
+  }
+  const cmdArgs = parseContainerCommand(command)
   const envFlags = buildDockerEnvFlags(isolatedEnv, bridgeHost)
   const userFlags = execOptions?.dangerMode
     ? ['-u', '0:0']
@@ -160,9 +170,9 @@ async function execDockerEnv(
 
 function createProvisionedDockerEnv(
   options: DockerWorktreeEnvOptions,
-  containerId: string,
+  containerId: string | undefined,
   worktreePath: string,
-  branchName: string,
+  branchName: string | undefined,
   workspaceDir: string,
   defaultSignal?: AbortSignal,
   ephemeralPorts?: Record<string, number>,
@@ -180,8 +190,12 @@ function createProvisionedDockerEnv(
     ...(options.whitelistEnv !== undefined
       ? { whitelistEnv: options.whitelistEnv }
       : {}),
-    containerId,
-    branchName,
+    ...(containerId !== undefined
+      ? { containerId }
+      : {}),
+    ...(branchName !== undefined
+      ? { branchName }
+      : {}),
     ...(ephemeralPorts !== undefined
       ? { ephemeralPorts }
       : {}),
@@ -198,9 +212,13 @@ function createProvisionedDockerEnv(
       execOptions,
       defaultSignal,
     ),
-    ping: async (): Promise<boolean> => pingDockerWorktree(worktreePath, containerId, defaultSignal),
+    ping: async (): Promise<boolean> => (containerId !== undefined && containerId !== ''
+      ? pingDockerWorktree(worktreePath, containerId, defaultSignal)
+      : false),
     teardown: async (): Promise<void> => {
-      await removeContainer(workspaceDir, containerId, defaultSignal)
+      if (containerId !== undefined && containerId !== '') {
+        await removeContainer(workspaceDir, containerId, defaultSignal)
+      }
       await removeGitWorktree(workspaceDir, worktreePath, defaultSignal)
     },
   }
@@ -236,6 +254,35 @@ export function dockerWorktreeEnv(options: DockerWorktreeEnvOptions): Environmen
         defaultSignal,
         ephemeralPorts,
         injectedEnv,
+      )
+    },
+    rehydrate: (
+      descriptor: EnvironmentDescriptor,
+      context: ProvisionContext,
+    ): ProvisionedEnvironment => {
+      const workingDir = path.resolve(descriptor.workingDir)
+      const workspace = path.resolve(context.workspaceDir)
+      return createProvisionedDockerEnv(
+        {
+          ...options,
+          id: descriptor.id,
+          ...(descriptor.containerWorkingDir !== undefined
+            ? { containerWorkdir: descriptor.containerWorkingDir }
+            : {}),
+          ...(descriptor.bridgeHost !== undefined
+            ? { bridgeHost: descriptor.bridgeHost }
+            : {}),
+          ...(descriptor.whitelistEnv !== undefined
+            ? { whitelistEnv: descriptor.whitelistEnv }
+            : {}),
+        },
+        descriptor.containerId,
+        workingDir,
+        descriptor.branchName,
+        workspace,
+        context.defaultSignal,
+        descriptor.ephemeralPorts,
+        descriptor.injectedEnv,
       )
     },
   }
