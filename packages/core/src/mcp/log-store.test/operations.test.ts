@@ -36,10 +36,9 @@ describe('createLogStore text pages', () => {
     expect(meta.totalLines).toBe(250)
     expect(persisted).toEqual([
       'step-a-1-afterStep-0',
-      'step-a-1',
     ])
 
-    const page1 = await store.readPage('step-a-1', 1, 100)
+    const page1 = await store.readPage('step-a-1-afterStep-0', 1, 100)
     if (page1?.format === 'text') {
       expect(page1.lines).toHaveLength(100)
       expect(page1.totalPages).toBe(3)
@@ -75,13 +74,13 @@ describe('createLogStore line ranges', () => {
       content: 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5',
     })
 
-    const slice = await store.readLines('step-lines-1', 2, 4)
+    const slice = await store.readLines('step-lines-1-afterStep-0', 2, 4)
     expect(slice?.lines).toEqual(['Line 2', 'Line 3', 'Line 4'])
 
-    const clamped = await store.readLines('step-lines-1', 0, 2)
+    const clamped = await store.readLines('step-lines-1-afterStep-0', 0, 2)
     expect(clamped?.lines).toHaveLength(2)
 
-    const outOfOrder = await store.readLines('step-lines-1', 5, 2)
+    const outOfOrder = await store.readLines('step-lines-1-afterStep-0', 5, 2)
     expect(outOfOrder?.lines).toEqual([])
   })
 })
@@ -107,17 +106,17 @@ describe('createLogStore search operations', () => {
       content: 'Hello World\nLine 2: error found\nLine 3: ERROR critical\nLine 4: fine',
     })
 
-    const searchRes = await store.search('step-search-1', 'error', 1)
+    const searchRes = await store.search('step-search-1-afterStep-0', 'error', 1)
     expect(searchRes?.totalMatches).toBe(2)
     expect(searchRes?.matches).toHaveLength(1)
 
-    const searchDefault = await store.search('step-search-1', 'hello')
+    const searchDefault = await store.search('step-search-1-afterStep-0', 'hello')
     expect(searchDefault?.totalMatches).toBe(1)
 
-    const emptyQueryRes = await store.search('step-search-1', '')
+    const emptyQueryRes = await store.search('step-search-1-afterStep-0', '')
     expect(emptyQueryRes?.totalMatches).toBe(0)
 
-    expect(await store.has('step-search-1')).toBe(true)
+    expect(await store.has('step-search-1-afterStep-0')).toBe(true)
     expect(await store.has('non-existent')).toBe(false)
   })
 })
@@ -230,17 +229,17 @@ describe('createLogStore disk rehydration', () => {
     })
 
     const store2 = createLogStore(tempDir)
-    const page = await store2.readPage('step-rehydrate-1', 1, 2)
+    const page = await store2.readPage('step-rehydrate-1-afterStep-0', 1, 2)
     if (page?.format === 'json') {
       expect(page.totalItems).toBe(3)
       expect(page.items).toEqual(['item1', 'item2'])
     }
 
-    const metaText = await store2.getMetadata('step-rehydrate-text-1')
+    const metaText = await store2.getMetadata('step-rehydrate-text-1-afterStep-0')
     expect(metaText?.format).toBe('text')
     expect(metaText?.totalLines).toBe(3)
 
-    const pageText = await store2.readPage('step-rehydrate-text-1', 1, 2)
+    const pageText = await store2.readPage('step-rehydrate-text-1-afterStep-0', 1, 2)
     if (pageText?.format === 'text') {
       expect(pageText.totalLines).toBe(3)
     }

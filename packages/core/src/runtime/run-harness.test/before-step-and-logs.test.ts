@@ -51,17 +51,17 @@ function make10kLines(): string {
 
 async function queryMcpLogs(input: AgentTurnInput): Promise<{ page: any, lines: any, search: any }> {
   const page = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
-    logKey: 's1-1',
+    logKey: 's1-1-afterStep-0',
     page: 1,
     pageSize: 50,
   })
   const lines = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_lines', {
-    logKey: 's1-1',
+    logKey: 's1-1-afterStep-0',
     startLine: 5430,
     endLine: 5435,
   })
   const search = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'search_log', {
-    logKey: 's1-1',
+    logKey: 's1-1-afterStep-0',
     query: 'assertion failed',
   })
   return { page, lines, search }
@@ -132,16 +132,16 @@ describe('afterStep 10k failure log offload and MCP pagination (AC 5.3.1 & 5.3.2
 
     expect(result.status).toBe('passed')
     expect(capturedPrompt).toContain('The step failed afterStep guardrail #0.')
-    expect(capturedPrompt).toContain('Detailed failure log has been offloaded to MCP logKey "s1-1"')
+    expect(capturedPrompt).toContain('Detailed failure log has been offloaded to MCP logKey "s1-1-afterStep-0"')
     expect(capturedPrompt).toContain('read_log_page, read_log_lines, search_log')
     expect(capturedPrompt).not.toContain('log output line 100')
     expect(capturedPrompt.length).toBeLessThan(600)
 
     const runDir = resolveRunDir(tempDir, result.runId)
-    const logPath = path.join(runDir, 'logs', 's1-1.log')
+    const logPath = path.join(runDir, 'logs', 's1-1-afterStep-0.log')
     expect(fs.existsSync(logPath)).toBe(true)
     expect(fs.readFileSync(logPath, 'utf8')).toBe(lines10k)
-    expect(readRunState(runDir).logs?.['s1-1']?.totalLines).toBe(10000)
+    expect(readRunState(runDir).logs?.['s1-1-afterStep-0']?.totalLines).toBe(10000)
 
     verifyMcpLogResults(mcpResponses?.page, mcpResponses?.lines, mcpResponses?.search)
   })
@@ -178,7 +178,7 @@ describe('structured JSON pagination over MCP (AC 5.3.3)', () => {
       executeTurn: async (input: AgentTurnInput) => {
         if (input.attempt === 2) {
           capturedPageResult = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
-            logKey: 'json-step-1',
+            logKey: 'json-step-1-afterStep-0',
             page: 2,
             pageSize: 5,
           })

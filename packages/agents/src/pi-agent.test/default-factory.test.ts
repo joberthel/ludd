@@ -82,9 +82,15 @@ describe('defaultPiSessionFactory', () => {
 
   it('forwards dangerMode from executeTurn to sessionFactory', async () => {
     const { piAgent } = await import('../pi-agent.js')
+    let listener: ((event: { type: string }) => void) | undefined
     const factory = vi.fn(async () => ({
-      subscribe: () => () => {},
-      prompt: async () => {},
+      subscribe: (cb: (event: { type: string }) => void) => {
+        listener = cb
+        return () => {}
+      },
+      prompt: async () => {
+        listener?.({ type: 'agent_settled' })
+      },
       abort: async () => {},
       getLastAssistantText: () => 'ok',
     }))

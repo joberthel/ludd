@@ -52,12 +52,12 @@ async function executeTurn2(
   captured: CapturedMcpData,
 ): Promise<{ commitMessage: string }> {
   const pageRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
-    logKey: 'implement-slices-1',
+    logKey: 'implement-slices-m0-1-afterStep-1',
     page: 1,
     pageSize: 5,
   })
   const searchRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'search_log', {
-    logKey: 'implement-slices-1',
+    logKey: 'implement-slices-m0-1-afterStep-1',
     query: 'FAILURES',
   })
   const parsedPage = JSON.parse(pageRes.result.content[0].text) as { lines: string[] }
@@ -74,7 +74,7 @@ async function executeTurn3(
   captured: CapturedMcpData,
 ): Promise<{ commitMessage: string }> {
   const jsonRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
-    logKey: 'implement-slices-2',
+    logKey: 'implement-slices-m0-2-afterStep-0',
     page: 1,
     pageSize: 5,
   })

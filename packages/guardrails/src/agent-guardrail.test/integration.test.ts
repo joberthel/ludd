@@ -64,7 +64,7 @@ function createReviewAgent(tracking: { modes: string[], sessionIds: string[] }):
 }
 
 async function verifyOffloadedLogs(runDir: string): Promise<void> {
-  const logFilePath = path.join(runDir, 'logs', 'implement-slice-1.log')
+  const logFilePath = path.join(runDir, 'logs', 'implement-slice-1-afterStep-0.log')
   const logContent = await readFile(logFilePath, 'utf-8')
   expect(JSON.parse(logContent)).toEqual({
     findings: ['Security vulnerability: SQL injection detected'],
@@ -135,7 +135,7 @@ describe('agentGuardrail integration: self-healing workflow (AC 5.4.1 - 5.4.3)',
     expect(tracking.sessionIds[0]).not.toBe(tracking.sessionIds[1])
 
     expect(prompts.length).toBe(2)
-    expect(prompts[1]).toContain('Detailed failure log has been offloaded to MCP logKey "implement-slice-1"')
+    expect(prompts[1]).toContain('Detailed failure log has been offloaded to MCP logKey "implement-slice-1-afterStep-0"')
 
     const runDir = resolveRunDir(tempDir, result.runId)
     await verifyOffloadedLogs(runDir)

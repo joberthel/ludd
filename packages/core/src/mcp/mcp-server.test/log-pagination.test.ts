@@ -30,7 +30,7 @@ async function verifyPageAndLines(url: string, token: string): Promise<void> {
     method: 'tools/call',
     params: {
       name: 'read_log_page',
-      arguments: { logKey: 'step-test-1', page: 2, pageSize: 50 },
+      arguments: { logKey: 'step-test-1-afterStep-0', page: 2, pageSize: 50 },
     },
   })
   expect(pageRes.result.isError).toBeUndefined()
@@ -46,7 +46,7 @@ async function verifyPageAndLines(url: string, token: string): Promise<void> {
     method: 'tools/call',
     params: {
       name: 'read_log_lines',
-      arguments: { logKey: 'step-test-1', startLine: 120, endLine: 122 },
+      arguments: { logKey: 'step-test-1-afterStep-0', startLine: 120, endLine: 122 },
     },
   })
   const linesData = JSON.parse(linesRes.result.content[0].text)
@@ -61,7 +61,7 @@ async function verifySearch(url: string, token: string): Promise<void> {
     method: 'tools/call',
     params: {
       name: 'search_log',
-      arguments: { logKey: 'step-test-1', query: 'critical' },
+      arguments: { logKey: 'step-test-1-afterStep-0', query: 'critical' },
     },
   })
   const searchData = JSON.parse(searchRes.result.content[0].text)
@@ -135,7 +135,7 @@ describe('embedded MCP server JSON log tools (AC 5.3.3)', () => {
         method: 'tools/call',
         params: {
           name: 'read_log_page',
-          arguments: { logKey: 'step-phpstan-1', page: 1, pageSize: 10 },
+          arguments: { logKey: 'step-phpstan-1-afterStep-0', page: 1, pageSize: 10 },
         },
       })
       expect(pageRes.result.isError).toBeUndefined()
