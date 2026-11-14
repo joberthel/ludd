@@ -220,13 +220,7 @@ function reconstructPriorBeforeStepResults(
     return []
   }
   const { step, ctx, snapshot, runDir } = params
-  let events: LedgerEvent[] = []
-  try {
-    events = readLedgerEvents(runDir)
-  }
-  catch {
-    events = []
-  }
+  const events = readLedgerEvents(runDir)
 
   const logEntries = Object.values(snapshot.logs ?? {})
   const reconstructed: BeforeStepExecutionResult[] = []

@@ -166,9 +166,9 @@ describe('readLedgerEvents whitespace and error handling', () => {
     expect(read).toEqual([])
   })
 
-  it('throws when ledger.jsonl does not exist', () => {
+  it('returns empty array when ledger.jsonl does not exist', () => {
     const nonExistentDir = path.join(tempDir, 'no-ledger')
-    expect(() => readLedgerEvents(nonExistentDir)).toThrow()
+    expect(readLedgerEvents(nonExistentDir)).toEqual([])
   })
 
   it('throws SyntaxError when a line has invalid JSON syntax', () => {

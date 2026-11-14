@@ -43,6 +43,9 @@ export function appendLedgerEvent(runDir: string, event: LedgerEvent): void {
 
 export function readLedgerEvents(runDir: string): LedgerEvent[] {
   const ledgerPath = path.join(runDir, 'ledger.jsonl')
+  if (!fs.existsSync(ledgerPath)) {
+    return []
+  }
   const content = fs.readFileSync(ledgerPath, 'utf8')
   const lines = content.split('\n').filter(line => line.trim() !== '')
 

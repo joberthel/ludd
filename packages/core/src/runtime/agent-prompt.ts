@@ -1,8 +1,6 @@
 import type { ArtifactValidationIssue } from '../types/artifact.js'
 import type { GuardrailVerdict } from '../types/guardrail.js'
 import type { ActiveGateState } from '../types/state.js'
-import fs from 'node:fs'
-import path from 'node:path'
 import { readLedgerEvents } from '../persistence/ledger-writer.js'
 import { formatArtifactRetryPrompt } from './artifact-validator.js'
 import { formatGuardrailRetryPrompt } from './guardrail-executor.js'
@@ -42,12 +40,8 @@ export function resolveInitialPrompt(
   if (rehydration?.attempt === undefined || rehydration.attempt <= 1) {
     return initialPrompt
   }
-  const ledgerPath = path.join(runDir, 'ledger.jsonl')
-  if (!fs.existsSync(ledgerPath)) {
-    return initialPrompt
-  }
   const events = readLedgerEvents(runDir)
-  const lastRetry = events.reverse().find(e =>
+  const lastRetry = [...events].reverse().find(e =>
     e.eventType === 'step.retry' && e.stepId === stepId && e.matrixIndex === matrixIndex,
   )
   if (!lastRetry) {
