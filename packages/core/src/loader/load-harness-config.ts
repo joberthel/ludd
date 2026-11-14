@@ -3,6 +3,7 @@ import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createJiti } from 'jiti'
+import * as zodModule from 'zod'
 import { defineHarness, validateHarnessConfig } from '../define-harness.js'
 import { HarnessConfigError } from '../errors/harness-config-error.js'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
@@ -108,6 +109,7 @@ export async function loadHarnessConfig(configPath: string): Promise<HarnessConf
   const virtualModules: Record<string, unknown> = {
     '@ludd/core': createCoreModule(),
     '@ludd/agents': agentsModule,
+    'zod': zodModule,
   }
 
   const jiti = createJiti(import.meta.url, {
