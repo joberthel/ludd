@@ -38,31 +38,6 @@ export function validateHarnessConfig(config: unknown): HarnessConfig {
   return config as HarnessConfig
 }
 
-// Two plain steps, with the second step's beforeStep result inferred in its run context.
-export function defineHarness<
-  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
-  S1Id extends string = string,
-  S1Out = any,
-  S1Art = any,
-  const S1BeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
-    | ((ctx: import('./types/inference.js').PriorStepContext<[TStep0]>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
-  TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
-    TStep0,
-    PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
-  ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
-    TStep0,
-    PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
-  ]
-}
-
 // 1. 4-step workflow: Plain -> Plain -> ArtifactMatrix -> Plain (TDD Section 9.2)
 export function defineHarness<
   S0Id extends string = string,
@@ -187,6 +162,31 @@ export function defineHarness<
       S2Out,
       S2Art
     >,
+  ]
+}
+
+// Two plain steps, with the second step's beforeStep result inferred in its run context.
+export function defineHarness<
+  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  S1Id extends string = string,
+  S1Out = any,
+  S1Art = any,
+  const S1BeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
+    | ((ctx: import('./types/inference.js').PriorStepContext<[TStep0]>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+  TName extends string = string,
+>(config: {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
+  ]
+}): {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: readonly [
+    TStep0,
+    PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
   ]
 }
 

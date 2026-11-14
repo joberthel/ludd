@@ -53,8 +53,8 @@ describe('itemsFromArtifact agent matrix (AC 4.4.1 & AC 4.4.4)', () => {
           id: 'implement-slices',
           matrix: { itemsFromArtifact: 'todos.json' },
           outputSchema: commitSchema,
-          run: mockAgent({
-            prompt: (ctx) => {
+          run: ctx => mockAgent({
+            prompt: () => {
               expectTypeOf(ctx.matrix).toEqualTypeOf<MatrixCursor<TodoSlice>>()
               return `Implement: ${ctx.matrix.item.title}`
             },
@@ -195,8 +195,8 @@ describe('4-step pipeline matching TDD Section 9.2 (Issue #25 readiness)', () =>
           id: 'implement-slices',
           matrix: { itemsFromArtifact: 'todos.json' },
           outputSchema: commitSchema,
-          run: mockAgent({
-            prompt: (ctx) => {
+          run: ctx => mockAgent({
+            prompt: () => {
               expectTypeOf(ctx.matrix).toEqualTypeOf<MatrixCursor<TodoSlice>>()
               return `Implement slice: ${ctx.matrix.item.title}`
             },
