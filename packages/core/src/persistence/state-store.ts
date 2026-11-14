@@ -80,7 +80,22 @@ export const runStateSnapshotSchema = z.object({
 }))
 
 export function resolveRunDir(workspaceDir: string, runId: string): string {
-  return path.resolve(workspaceDir, '.harness', 'runs', runId)
+  if (typeof runId !== 'string' || runId.trim() === '') {
+    throw new Error('Run ID must be a non-empty string.')
+  }
+  if (runId === '.' || runId === '..' || !/^[\w.-]+$/.test(runId)) {
+    throw new Error(`Invalid run ID: "${runId}".`)
+  }
+
+  const runsDir = path.resolve(workspaceDir, '.harness', 'runs')
+  const resolvedPath = path.resolve(runsDir, runId)
+  const relative = path.relative(runsDir, resolvedPath)
+
+  if (relative.startsWith('..') || path.isAbsolute(relative) || relative === '') {
+    throw new Error(`Run ID escapes runs directory: "${runId}".`)
+  }
+
+  return resolvedPath
 }
 
 export function writeRunStateAtomic(runDir: string, state: RunStateSnapshot): void {

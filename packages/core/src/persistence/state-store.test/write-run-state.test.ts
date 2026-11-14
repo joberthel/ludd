@@ -21,6 +21,29 @@ describe('resolveRunDir', () => {
     const expected = path.resolve(process.cwd(), relative, '.harness', 'runs', runId)
     expect(resolveRunDir(relative, runId)).toBe(expected)
   })
+
+  it('rejects empty, whitespace, or non-string runIds', () => {
+    expect(() => resolveRunDir('/workspace', '')).toThrow()
+    expect(() => resolveRunDir('/workspace', '   ')).toThrow()
+    expect(() => resolveRunDir('/workspace', null as unknown as string)).toThrow()
+  })
+
+  it('rejects path traversal and invalid characters in runId', () => {
+    const invalidIds = [
+      '.',
+      '..',
+      '../other',
+      '../../some-dir',
+      'foo/bar',
+      'foo\\bar',
+      '/abs/path',
+      'run\0id',
+      'run id',
+    ]
+    for (const badId of invalidIds) {
+      expect(() => resolveRunDir('/workspace', badId)).toThrow()
+    }
+  })
 })
 
 describe('writeRunStateAtomic initialization', () => {
