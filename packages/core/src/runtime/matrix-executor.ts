@@ -25,7 +25,17 @@ async function resolveBeforeStepContext(
   gateWaiter?: GateWaiter,
 ): Promise<string> {
   if (rehydration?.activeGate?.phase === 'afterStep') {
+    if (snapshot.activeBeforeStepResults !== undefined) {
+      ;(ctx as StepContext & { beforeStep: unknown }).beforeStep = snapshot.activeBeforeStepResults
+    }
     return ''
+  }
+  if (!rehydration) {
+    ;(ctx as StepContext & { beforeStep: unknown }).beforeStep = {}
+    snapshot.activeBeforeStepResults = undefined
+  }
+  else if (rehydration.activeGate?.phase !== 'beforeStep' && snapshot.activeBeforeStepResults !== undefined) {
+    ;(ctx as StepContext & { beforeStep: unknown }).beforeStep = snapshot.activeBeforeStepResults
   }
   const isInitial = !rehydration || (rehydration.attempt ?? 1) <= 1
   if (!isInitial || !step.beforeStep) {

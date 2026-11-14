@@ -117,15 +117,24 @@ export function validateStepGuardrailsConfig(
   if (typeof guardrails === 'function') {
     return
   }
-  if (!Array.isArray(guardrails)) {
+  if (!Array.isArray(guardrails) && !(phase === 'beforeStep' && typeof guardrails === 'object' && guardrails !== null)) {
     throw new HarnessConfigError(
       `Step "${id}" "${phase}" property must be an array when provided.`,
     )
   }
-  for (let i = 0; i < guardrails.length; i++) {
-    if (!isGuardrail(guardrails[i])) {
+  const entries: Array<[string, unknown]> = Array.isArray(guardrails)
+    ? guardrails.map((value, index) => [
+        String(index),
+        value,
+      ])
+    : Object.entries(guardrails as Record<string, unknown>)
+  for (const [key, value] of entries) {
+    if (!isGuardrail(value)) {
+      const location = Array.isArray(guardrails)
+        ? `index ${key}`
+        : `key "${key}"`
       throw new HarnessConfigError(
-        `Step "${id}" ${phase} at index ${i} must be a valid Guardrail instance.`,
+        `Step "${id}" ${phase} at ${location} must be a valid Guardrail instance.`,
       )
     }
   }

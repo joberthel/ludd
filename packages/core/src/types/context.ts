@@ -34,6 +34,9 @@ export interface StepContext<
   artifacts: ArtifactClient
 }
 
+/** Context passed after this step's beforeStep guardrails have completed. */
+export type StepContextWithBeforeStep<TContext, TBeforeStep> = TContext & { beforeStep: TBeforeStep }
+
 export type DynamicProperty<T, TContext = StepContext>
   = | T
     | ((ctx: TContext) => T | Promise<T>)

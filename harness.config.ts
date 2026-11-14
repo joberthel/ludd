@@ -8,13 +8,13 @@ export default defineHarness({
   steps: [
     {
       id: 'step',
-      beforeStep: () => [
-        humanReviewGuardrail({
+      beforeStep: () => ({
+        max: humanReviewGuardrail({
           prompt: `Input a number between 1 and 10.`,
         }),
-      ],
-      run: () => piAgent({
-        prompt: `Choose a random number between 1 and 10.`,
+      }),
+      run: ctx => piAgent({
+        prompt: `Choose a random number between 1 and ${ctx.beforeStep.max}.`,
       }),
       outputSchema: z.object({
         guess: z.number().min(1).max(10),

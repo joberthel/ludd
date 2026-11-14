@@ -64,7 +64,7 @@ describe('beforeStep factories', () => {
       ],
     }, { workspaceDir: tempDir })
     expect(result.status).toBe('failed')
-    expect((result.error as Error).message).toContain('beforeStep factory must return an array.')
+    expect((result.error as Error).message).toContain('beforeStep factory must return an array or an object map.')
   })
 
   it('rejects an invalid guardrail returned by a beforeStep factory', async () => {
@@ -84,6 +84,62 @@ describe('beforeStep factories', () => {
 })
 
 describe('context-aware step factories', () => {
+  it('exposes named beforeStep verdict bodies on the run context', async () => {
+    let observed: unknown
+    const result = await runHarness({
+      name: 'named-before-step-result-test',
+      steps: [
+        {
+          id: 'step',
+          beforeStep: {
+            answer: {
+              __kind: 'guardrail',
+              type: 'fn',
+              execute: async () => ({ status: 'pass', body: '7' }),
+            },
+          },
+          run: (ctx) => {
+            observed = (ctx as typeof ctx & { beforeStep: { answer: string } }).beforeStep.answer
+            return {
+              guess: Number(observed),
+            }
+          },
+        },
+      ],
+    }, { workspaceDir: tempDir })
+
+    expect(result.status).toBe('passed')
+    expect(observed).toBe('7')
+  })
+
+  it('exposes array beforeStep verdict bodies by guardrail index', async () => {
+    let observed: unknown
+    const result = await runHarness({
+      name: 'array-before-step-result-test',
+      steps: [
+        {
+          id: 'step',
+          beforeStep: [
+            {
+              __kind: 'guardrail',
+              type: 'fn',
+              execute: async () => ({ status: 'pass', body: '7' }),
+            },
+          ],
+          run: (ctx) => {
+            observed = (ctx as typeof ctx & { beforeStep: [string] }).beforeStep[0]
+            return {
+              guess: Number(observed),
+            }
+          },
+        },
+      ],
+    }, { workspaceDir: tempDir })
+
+    expect(result.status).toBe('passed')
+    expect(observed).toBe('7')
+  })
+
   it('builds beforeStep guardrails and an agent from the typed step context', async () => {
     let seenGuess: number | undefined
     const rail: Guardrail = {

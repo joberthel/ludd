@@ -34,6 +34,7 @@ export interface RunStateSnapshot {
   activeStepId: string | null
   activeGate?: ActiveGateState | null
   activeStepOutput?: unknown
+  activeBeforeStepResults?: unknown
   activeSessionId?: string | null
   activeStepAttempt?: number
   activeMatrixIndex?: number | null

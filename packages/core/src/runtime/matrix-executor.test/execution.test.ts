@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { executeMatrixStep } from '../matrix-executor.js'
+import { executeMatrixStep, executeSingleSlice } from '../matrix-executor.js'
 import { createDummyContext, createDummySnapshot } from './helpers.js'
 
 describe('executeMatrixStep sequential execution', () => {
@@ -51,6 +51,84 @@ describe('executeMatrixStep sequential execution', () => {
       { index: 2, total: 3, item: 30 },
     ])
     expect(ctx.matrix).toBeUndefined()
+  })
+})
+
+describe('executeSingleSlice after-step gate recovery', () => {
+  it('restores beforeStep results before running resumed afterStep guardrails', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-slice-resume-'))
+    try {
+      const ctx = createDummyContext()
+      const snapshot = createDummySnapshot()
+      snapshot.activeBeforeStepResults = { answer: 'saved' }
+      let seen: unknown
+      const step: StepConfig = {
+        id: 'step-resume',
+        run: () => { throw new Error('The run callback must not rerun after an afterStep gate') },
+        afterStep: [
+          {
+            __kind: 'guardrail',
+            type: 'fn',
+            execute: async ({ ctx: gateCtx }) => {
+              seen = (gateCtx).beforeStep.answer
+              return { status: 'pass' }
+            },
+          },
+        ],
+      }
+      await executeSingleSlice(
+        step,
+        ctx,
+        snapshot,
+        tempDir,
+        {
+          activeGate: {
+            stepId: 'step-resume',
+            phase: 'afterStep',
+            guardrailIndex: 0,
+            gateType: 'human_review',
+            prompt: 'resume',
+            createdAt: new Date().toISOString(),
+          },
+          activeStepOutput: { completed: true },
+        },
+      )
+      expect(seen).toBe('saved')
+    }
+    finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('restores beforeStep results on attempt > 1 rehydration without rerunning beforeStep', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-slice-retry-'))
+    try {
+      const ctx = createDummyContext()
+      const snapshot = createDummySnapshot()
+      snapshot.activeBeforeStepResults = { answer: 'saved' }
+      let seen: unknown
+      const step: StepConfig = {
+        id: 'step-retry',
+        beforeStep: () => {
+          throw new Error('beforeStep must not rerun on attempt > 1')
+        },
+        run: (runCtx) => {
+          seen = (runCtx as typeof runCtx & { beforeStep: { answer: string } }).beforeStep.answer
+          return { ok: true }
+        },
+      }
+      await executeSingleSlice(
+        step,
+        ctx,
+        snapshot,
+        tempDir,
+        { attempt: 2 },
+      )
+      expect(seen).toBe('saved')
+    }
+    finally {
+      await rm(tempDir, { recursive: true, force: true })
+    }
   })
 })
 

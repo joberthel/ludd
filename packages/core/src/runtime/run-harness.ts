@@ -1,6 +1,6 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
-import type { HarnessConfig, HarnessRunResult, RunHarnessOptions } from '../types/harness.js'
+import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
 import type { ControlServer } from '../types/ipc.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
@@ -107,6 +107,14 @@ function resolveRunResult(
 
 export async function runHarness(
   config: HarnessConfig,
+  options?: RunHarnessOptions,
+): Promise<HarnessRunResult>
+export async function runHarness(
+  config: HarnessConfig<readonly StepConfig<any, any, any, any, any, any, any>[]>,
+  options?: RunHarnessOptions,
+): Promise<HarnessRunResult>
+export async function runHarness(
+  config: HarnessConfig<readonly StepConfig<any, any, any, any, any, any, any>[]>,
   options?: RunHarnessOptions,
 ): Promise<HarnessRunResult> {
   const validatedConfig = validateHarnessConfig(config)

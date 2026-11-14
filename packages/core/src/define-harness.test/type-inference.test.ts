@@ -56,6 +56,84 @@ describe('defineHarness outputSchema type inference', () => {
 })
 
 describe('defineHarness context-aware step factories', () => {
+  it('infers named beforeStep guardrail bodies in the run context', () => {
+    const harness = defineHarness({
+      name: 'typed-before-step-results',
+      steps: [
+        {
+          id: 'review',
+          beforeStep: () => ({
+            answer: {
+              __kind: 'guardrail' as const,
+              type: 'human_review' as const,
+              execute: async () => ({ status: 'pass' as const, body: '7' }),
+            },
+          }),
+          run: (ctx) => {
+            const answer: string = ctx.beforeStep.answer
+            expectTypeOf(answer).toEqualTypeOf<string>()
+            return { answer }
+          },
+        },
+      ],
+    })
+    expect(harness.steps[0].id).toBe('review')
+  })
+
+  it('infers array beforeStep guardrail bodies in the run context', () => {
+    const harness = defineHarness({
+      name: 'typed-before-step-array-results',
+      steps: [
+        {
+          id: 'review',
+          beforeStep: () => [
+            {
+              __kind: 'guardrail' as const,
+              type: 'human_review' as const,
+              execute: async () => ({ status: 'pass' as const, body: '7' }),
+            },
+          ],
+          run: (ctx) => {
+            const answer: string = ctx.beforeStep[0]
+            expectTypeOf(answer).toEqualTypeOf<string>()
+            return { answer }
+          },
+        },
+      ],
+    })
+    expect(harness.steps[0].id).toBe('review')
+  })
+
+  it('infers beforeStep bodies after prior steps', () => {
+    const harness = defineHarness({
+      name: 'typed-before-step-prior-result',
+      steps: [
+        {
+          id: 'first',
+          run: () => ({ ok: true }),
+        },
+        {
+          id: 'review',
+          beforeStep: () => ({
+            answer: {
+              __kind: 'guardrail' as const,
+              type: 'human_review' as const,
+              execute: async () => ({ status: 'pass' as const, body: '7' }),
+            },
+          }),
+          run: (ctx) => {
+            const answer: string = ctx.beforeStep.answer
+            expectTypeOf(answer).toEqualTypeOf<string>()
+            const ok: boolean = ctx.steps.first.output!.ok
+            expectTypeOf(ok).toEqualTypeOf<boolean>()
+            return { answer, ok }
+          },
+        },
+      ],
+    })
+    expect(harness.steps[1].id).toBe('review')
+  })
+
   it('types beforeStep and run factories from prior step outputs', () => {
     const harness = defineHarness({
       name: 'typed-step-factories',

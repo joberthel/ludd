@@ -38,6 +38,19 @@ describe('validateHarnessConfig beforeStep validation', () => {
       ],
     })).toThrow('Step "s1" beforeStep at index 0 must be a valid Guardrail instance.')
   })
+
+  it('rejects invalid guardrails in a keyed beforeStep map', () => {
+    expect(() => validateHarnessConfig({
+      name: 'test',
+      steps: [
+        {
+          id: 's1',
+          beforeStep: { bad: null } as any,
+          run: () => {},
+        },
+      ],
+    })).toThrow('Step "s1" beforeStep at key "bad" must be a valid Guardrail instance.')
+  })
 })
 describe('validateHarnessConfig afterStep validation', () => {
   it('rejects step with non-array afterStep', () => {

@@ -120,6 +120,88 @@ describe('runBeforeStepGuardrails empty guards', () => {
 })
 
 describe('runBeforeStepGuardrails sequential execution', () => {
+  it('restores partial results for keyed and indexed guardrail sets', async () => {
+    const createSnapshot = (activeBeforeStepResults: unknown): RunStateSnapshot => ({
+      schemaVersion: 1,
+      runId: 'r-restore',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 'restore',
+      activeBeforeStepResults,
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    })
+    const ctx = {
+      runId: 'r-restore',
+      environments: {},
+      steps: {},
+      step: { id: 'restore', output: null, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+    const keyedSnapshot = createSnapshot({ first: 'saved' })
+    await runBeforeStepGuardrails({
+      step: {
+        id: 'restore',
+        beforeStep: {
+          first: makeTestRail('pass'),
+          second: makeTestRail('pass', 'fresh'),
+        },
+        run: () => null,
+      },
+      ctx,
+      snapshot: keyedSnapshot,
+      runDir: tempDir,
+      startIndex: 1,
+    })
+    expect((ctx as typeof ctx & { beforeStep: Record<string, unknown> }).beforeStep).toEqual({ first: 'saved', second: 'fresh' })
+
+    const arraySnapshot = createSnapshot(['saved'])
+    await runBeforeStepGuardrails({
+      step: {
+        id: 'restore',
+        beforeStep: [
+          makeTestRail('pass'),
+          makeTestRail('pass', 'fresh'),
+        ],
+        run: () => null,
+      },
+      ctx,
+      snapshot: arraySnapshot,
+      runDir: tempDir,
+      startIndex: 1,
+    })
+    expect((ctx as typeof ctx & { beforeStep: unknown[] }).beforeStep).toEqual(['saved', 'fresh'])
+  })
+
+  it('rejects an invalid guardrail in a keyed factory result', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'r-key-error',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 'key-error',
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    }
+    const step: StepConfig = {
+      id: 'key-error',
+      beforeStep: (() => ({ bad: null })) as never,
+      run: () => null,
+    }
+    const ctx = {
+      runId: 'r-key-error',
+      environments: {},
+      steps: {},
+      step: { id: 'key-error', output: null, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+    await expect(runBeforeStepGuardrails({ step, ctx, snapshot, runDir: tempDir })).rejects.toThrow('at key "bad".')
+  })
+
   it('executes guardrails sequentially and offloads logs without halting on fail', async () => {
     const snapshot: RunStateSnapshot = {
       schemaVersion: 1,

@@ -168,6 +168,8 @@ export {
   type AfterStepGuardrails,
   type ArtifactMatrixStepDef,
   type BeforeStepGuardrails,
+  type BeforeStepGuardrailSet,
+  type BeforeStepResults,
   type CleanupPolicy,
   type CleanupPolicyAction,
   type DerivedStepContext,

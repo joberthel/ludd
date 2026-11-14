@@ -185,37 +185,90 @@ async function executeSingleBeforeStepGuardrail(
     : executeStandardBeforeStepGuardrail(params, guardrail, k, logStore)
 }
 
+function initCollectedBeforeStepResults(
+  isArray: boolean,
+  activeBeforeStepResults: unknown,
+): Record<string, unknown> | unknown[] {
+  if (isArray) {
+    return Array.isArray(activeBeforeStepResults)
+      ? [...(activeBeforeStepResults as unknown[])]
+      : []
+  }
+  if (activeBeforeStepResults !== null && typeof activeBeforeStepResults === 'object' && !Array.isArray(activeBeforeStepResults)) {
+    return { ...(activeBeforeStepResults as Record<string, unknown>) }
+  }
+  return {}
+}
+
 export async function runBeforeStepGuardrails(
   params: RunBeforeStepGuardrailsParams,
 ): Promise<string> {
   const { step, runDir } = params
-  const beforeStep = typeof step.beforeStep === 'function'
-    ? step.beforeStep(params.ctx)
-    : step.beforeStep
-  if (beforeStep !== undefined && !Array.isArray(beforeStep)) {
-    throw new TypeError(`Step "${step.id}" beforeStep factory must return an array.`)
-  }
-  if (!beforeStep || beforeStep.length === 0) {
+  const resolved = await resolveBeforeStepGuardrails(step, params.ctx)
+  if (resolved.guardrails.length === 0) {
+    const emptyResults = resolved.isArray
+      ? []
+      : {}
+    ;(params.ctx as StepContext & { beforeStep: unknown }).beforeStep = emptyResults
+    params.snapshot.activeBeforeStepResults = emptyResults
     return ''
   }
-  const guardrails: Guardrail[] = []
-  for (let i = 0; i < beforeStep.length; i++) {
-    const guardrail: unknown = beforeStep[i]
-    if (!isGuardrail(guardrail)) {
-      throw new TypeError(`Step "${step.id}" beforeStep factory returned an invalid Guardrail at index ${i}.`)
-    }
-    guardrails.push(guardrail)
-  }
-
   const store = params.logStore ?? createLogStore(runDir)
   const results: BeforeStepExecutionResult[] = []
   const startIndex = params.startIndex ?? 0
+  const collected = initCollectedBeforeStepResults(
+    resolved.isArray,
+    params.snapshot.activeBeforeStepResults,
+  )
 
-  for (let k = startIndex; k < guardrails.length; k++) {
-    const guardrail = guardrails[k]
+  for (let k = startIndex; k < resolved.guardrails.length; k++) {
+    const { guardrail } = resolved.guardrails[k]
     const result = await executeSingleBeforeStepGuardrail(params, guardrail, k, store)
     results.push(result)
+    if (resolved.isArray) {
+      ;(collected as unknown[])[k] = result.verdict.body
+    }
+    else {
+      ;(collected as Record<string, unknown>)[resolved.guardrails[k].key] = result.verdict.body
+    }
+    ;(params.ctx as StepContext & { beforeStep: unknown }).beforeStep = collected
+    params.snapshot.activeBeforeStepResults = collected
+    params.snapshot.updatedAt = new Date().toISOString()
+    writeRunStateAtomic(runDir, params.snapshot)
   }
 
   return formatBeforeStepNotification(results)
+}
+
+async function resolveBeforeStepGuardrails(
+  step: StepConfig,
+  ctx: StepContext,
+): Promise<{ isArray: boolean, guardrails: Array<{ key: string, guardrail: Guardrail }> }> {
+  const beforeStep = typeof step.beforeStep === 'function'
+    ? await step.beforeStep(ctx)
+    : step.beforeStep
+  if (beforeStep !== undefined && (typeof beforeStep !== 'object' || beforeStep === null)) {
+    throw new TypeError(`Step "${step.id}" beforeStep factory must return an array or an object map.`)
+  }
+  const isArray = Array.isArray(beforeStep)
+  let entries: Array<readonly [string, unknown]> = []
+  if (beforeStep !== undefined) {
+    entries = isArray
+      ? beforeStep.map((guardrail, index) => [
+          String(index),
+          guardrail,
+        ] as const)
+      : Object.entries(beforeStep)
+  }
+  const guardrails: Array<{ key: string, guardrail: Guardrail }> = []
+  for (const [key, value] of entries) {
+    if (!isGuardrail(value)) {
+      const location = isArray
+        ? `index ${key}`
+        : `key "${key}"`
+      throw new TypeError(`Step "${step.id}" beforeStep factory returned an invalid Guardrail at ${location}.`)
+    }
+    guardrails.push({ key, guardrail: value })
+  }
+  return { isArray, guardrails }
 }

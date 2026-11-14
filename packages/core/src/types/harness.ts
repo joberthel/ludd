@@ -62,10 +62,19 @@ export interface StepRunFactory<
   readonly __context?: TContext
 }
 
-/** Static before-step guardrails, or a factory that receives the step context. */
+/** An inferred map/tuple of before-step guardrail verdict bodies. */
+export type BeforeStepResults<TDeclaration> = TDeclaration extends (...args: any[]) => infer TReturn
+  ? BeforeStepResults<Awaited<TReturn>>
+  : TDeclaration extends readonly unknown[]
+    ? { -readonly [K in keyof TDeclaration]: TDeclaration[K] extends Guardrail<infer TBody, any> ? TBody : never }
+    : TDeclaration extends Record<string, unknown>
+      ? { [K in keyof TDeclaration]: TDeclaration[K] extends Guardrail<infer TBody, any> ? TBody : never }
+      : never
+
+/** Static guardrail arrays/maps, or a typed context factory returning them. */
+export type BeforeStepGuardrailSet = readonly Guardrail<any, any>[] | Readonly<Record<string, Guardrail<any, any>>>
 export type BeforeStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>
-  = | readonly Guardrail<any, any>[]
-    | ((ctx: TContext) => readonly Guardrail<any, any>[])
+  = BeforeStepGuardrailSet | ((ctx: TContext) => BeforeStepGuardrailSet | Promise<BeforeStepGuardrailSet>)
 
 /** Static after-step guardrails, or a factory that receives the typed completed-step context. */
 export type AfterStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>

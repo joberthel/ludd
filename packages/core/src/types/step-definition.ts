@@ -1,8 +1,8 @@
 import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
-import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
+import type { DynamicProperty, ProvisionedEnvironment, StepContext, StepContextWithBeforeStep } from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
-import type { AfterStepGuardrails, BeforeStepGuardrails, StepRunFactory, StepRunFn } from './harness.js'
+import type { AfterStepGuardrails, BeforeStepGuardrails, BeforeStepResults, StepRunFactory, StepRunFn } from './harness.js'
 import type {
   AccumulateArtifactItemMap,
   AccumulatePriorSteps,
@@ -16,6 +16,7 @@ export interface PlainStepDef<
   TId extends string = string,
   TOutput = any,
   TArtifacts = any,
+  TBeforeStep = readonly Guardrail<any, any>[],
 > {
   id: TId
   name?: string
@@ -27,19 +28,19 @@ export interface PlainStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+  beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   afterStep?: AfterStepGuardrails<
-    StepContext<
+    StepContextWithBeforeStep<StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
       AccumulatePriorSteps<TPriorSteps>,
       unknown,
       false
-    >
+    >, BeforeStepResults<TBeforeStep>>
   >
   run:
-    | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
-    | StepRunFactory<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
-    | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+    | StepRunFn<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
+    | StepRunFactory<StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
+    | AgentRunner<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
 }
 
 export interface ItemsMatrixStepDef<
@@ -48,6 +49,7 @@ export interface ItemsMatrixStepDef<
   TOutput = any,
   TArtifacts = any,
   TItem = any,
+  TBeforeStep = readonly Guardrail<any, any>[],
 > {
   id: TId
   name?: string
@@ -63,19 +65,19 @@ export interface ItemsMatrixStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+  beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   afterStep?: AfterStepGuardrails<
-    StepContext<
+    StepContextWithBeforeStep<StepContext<
       InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
       AccumulatePriorSteps<TPriorSteps>,
       TItem,
       true
-    >
+    >, BeforeStepResults<TBeforeStep>>
   >
   run:
-    | StepRunFn<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
-    | StepRunFactory<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
-    | AgentRunner<any, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+    | StepRunFn<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
+    | StepRunFactory<StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
+    | AgentRunner<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
 }
 
 export interface ArtifactMatrixStepDef<
@@ -84,6 +86,7 @@ export interface ArtifactMatrixStepDef<
   TOutput = any,
   TArtifacts = any,
   TKey extends string = string,
+  TBeforeStep = readonly Guardrail<any, any>[],
 > {
   id: TId
   name?: string
@@ -107,47 +110,59 @@ export interface ArtifactMatrixStepDef<
   maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
-  beforeStep?: BeforeStepGuardrails<
+  beforeStep?: TBeforeStep & BeforeStepGuardrails<
     StepContext<
       unknown,
       AccumulatePriorSteps<TPriorSteps>,
       InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
       true
     >
-  >[]
+  >
   afterStep?: AfterStepGuardrails<
-    StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-      true
+    StepContextWithBeforeStep<
+      StepContext<
+        InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
+        AccumulatePriorSteps<TPriorSteps>,
+        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+        true
+      >,
+      BeforeStepResults<TBeforeStep>
     >
   >
   run:
     | StepRunFn<
       any,
-      StepContext<
-        unknown,
-        AccumulatePriorSteps<TPriorSteps>,
-        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-        true
+      StepContextWithBeforeStep<
+        StepContext<
+          unknown,
+          AccumulatePriorSteps<TPriorSteps>,
+          InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+          true
+        >,
+        BeforeStepResults<TBeforeStep>
       >
     >
     | StepRunFactory<
-      StepContext<
-        unknown,
-        AccumulatePriorSteps<TPriorSteps>,
-        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-        true
+      StepContextWithBeforeStep<
+        StepContext<
+          unknown,
+          AccumulatePriorSteps<TPriorSteps>,
+          InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+          true
+        >,
+        BeforeStepResults<TBeforeStep>
       >
     >
     | AgentRunner<
       any,
-      StepContext<
-        unknown,
-        AccumulatePriorSteps<TPriorSteps>,
-        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-        true
+      StepContextWithBeforeStep<
+        StepContext<
+          unknown,
+          AccumulatePriorSteps<TPriorSteps>,
+          InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+          true
+        >,
+        BeforeStepResults<TBeforeStep>
       >
     >
 }

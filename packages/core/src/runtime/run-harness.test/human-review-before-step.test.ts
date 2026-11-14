@@ -6,6 +6,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { humanReviewGuardrail } from '@ludd/guardrails'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { defineHarness } from '../../define-harness.js'
 import { createControlClient } from '../../ipc/control-client.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { readRunState } from '../../persistence/state-store.js'
@@ -157,5 +158,41 @@ describe('humanReviewGuardrail in beforeStep and gate.resolve over control.sock'
     expect(turn1ReceivedPrompt).toContain('Analyze feature request and produce specification')
 
     verifyLedgerAndStateEvents(runDir)
+  })
+
+  it('exposes humanReviewGuardrail feedback on ctx.beforeStep.guess in a keyed beforeStep factory', async () => {
+    const runId = 'hr-keyed-run'
+    const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    let observedGuess: string | undefined
+
+    const harness = defineHarness({
+      name: 'human-review-keyed-run',
+      steps: [
+        {
+          id: 'guess-step',
+          beforeStep: () => ({
+            guess: humanReviewGuardrail({ prompt: 'Input a number.' }),
+          }),
+          run: (ctx) => {
+            observedGuess = ctx.beforeStep.guess
+            return { guess: ctx.beforeStep.guess }
+          },
+        },
+      ],
+    })
+
+    const harnessPromise = runHarness(harness, { runId, workspaceDir: tempDir })
+    const client = await waitForGateWaiting(runDir)
+    await client.resolveGate({
+      stepId: 'guess-step',
+      guardrailIndex: 0,
+      action: 'pass',
+      feedback: '42',
+    })
+    await client.close()
+
+    const runResult = await harnessPromise
+    expect(runResult.status).toBe('passed')
+    expect(observedGuess).toBe('42')
   })
 })
