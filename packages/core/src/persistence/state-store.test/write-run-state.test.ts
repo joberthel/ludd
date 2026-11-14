@@ -88,10 +88,10 @@ describe('writeRunStateAtomic initialization', () => {
     writeRunStateAtomic(runDir, sampleState)
 
     const stateFilePath = path.join(runDir, 'state.json')
-    const tmpFilePath = path.join(runDir, 'state.json.tmp')
+    const remainingTmpFiles = fs.readdirSync(runDir).filter(f => f.endsWith('.tmp'))
 
     expect(fs.existsSync(stateFilePath)).toBe(true)
-    expect(fs.existsSync(tmpFilePath)).toBe(false)
+    expect(remainingTmpFiles).toEqual([])
 
     const raw = fs.readFileSync(stateFilePath, 'utf-8')
     const parsed = JSON.parse(raw) as RunStateSnapshot
@@ -142,11 +142,40 @@ describe('writeRunStateAtomic updates', () => {
     writeRunStateAtomic(runDir, updatedState)
 
     const stateFilePath = path.join(runDir, 'state.json')
-    const tmpFilePath = path.join(runDir, 'state.json.tmp')
+    const remainingTmpFiles = fs.readdirSync(runDir).filter(f => f.endsWith('.tmp'))
 
-    expect(fs.existsSync(tmpFilePath)).toBe(false)
+    expect(remainingTmpFiles).toEqual([])
     const raw = fs.readFileSync(stateFilePath, 'utf-8')
     const parsed = JSON.parse(raw) as RunStateSnapshot
     expect(parsed).toEqual(updatedState)
+  })
+
+  it('uses unique temp filenames across writes to avoid concurrent rename races', () => {
+    const runDir = resolveRunDir(tempDir, 'run-unique-tmp')
+    const sampleState: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'run-unique-tmp',
+      harnessName: 'test-harness',
+      workflowName: 'test-harness',
+      status: 'running',
+      activeStepId: 'step-1',
+      steps: {},
+      updatedAt: '2026-11-08T20:00:00.000Z',
+    }
+
+    const writeSpy = vi.spyOn(fs, 'writeFileSync')
+    try {
+      writeRunStateAtomic(runDir, sampleState)
+      writeRunStateAtomic(runDir, sampleState)
+
+      const tmpPaths = writeSpy.mock.calls.map(call => String(call[0]))
+      expect(tmpPaths).toHaveLength(2)
+      expect(path.basename(tmpPaths[0])).toMatch(/^state\.json\.[0-9a-f-]+\.tmp$/)
+      expect(path.basename(tmpPaths[1])).toMatch(/^state\.json\.[0-9a-f-]+\.tmp$/)
+      expect(tmpPaths[0]).not.toBe(tmpPaths[1])
+    }
+    finally {
+      writeSpy.mockRestore()
+    }
   })
 })

@@ -1,4 +1,5 @@
 import type { RunStateSnapshot } from '../types/state.js'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
@@ -104,7 +105,7 @@ export function resolveRunDir(workspaceDir: string, runId: string): string {
 
 export function writeRunStateAtomic(runDir: string, state: RunStateSnapshot): void {
   fs.mkdirSync(runDir, { recursive: true })
-  const tmpPath = path.join(runDir, 'state.json.tmp')
+  const tmpPath = path.join(runDir, `state.json.${randomUUID()}.tmp`)
   const targetPath = path.join(runDir, 'state.json')
   const serialized = `${JSON.stringify(state, null, 2)}\n`
   fs.writeFileSync(tmpPath, serialized, 'utf-8')

@@ -75,9 +75,6 @@ export function createRunAbortHandler(
     const reason = params.reason ?? 'Run aborted by external control'
     const snapshot = context.getSnapshot()
 
-    context.gateWaiter.abort(reason)
-    context.abortController.abort(new Error(reason))
-
     appendLedgerEvent(context.runDir, {
       schemaVersion: 1,
       timestamp: new Date().toISOString(),
@@ -97,6 +94,9 @@ export function createRunAbortHandler(
 
     snapshot.updatedAt = new Date().toISOString()
     writeRunStateAtomic(context.runDir, snapshot)
+
+    context.gateWaiter.abort(reason)
+    context.abortController.abort(new Error(reason))
     return { ok: true }
   }
 }

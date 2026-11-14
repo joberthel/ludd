@@ -153,6 +153,48 @@ describe('createRunAbortHandler with teardown', () => {
     expect(readRunState(tempDir).environments).toEqual({})
     expect(readLedgerEvents(tempDir).some(e => e.eventType === 'run.teardown')).toBe(true)
   })
+
+  it('completes teardown and state persistence before firing abortController.abort()', async () => {
+    const snapshot = createSnapshot('abort-order', tempDir)
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const abortController = new AbortController()
+    const gateWaiter = createGateWaiter(abortController.signal)
+    const events: string[] = []
+
+    const mockEnv: ProvisionedEnvironment = {
+      __kind: 'environment',
+      id: 'e1',
+      type: 'host',
+      workingDir: tempDir,
+      exec: vi.fn(),
+      ping: vi.fn(),
+      teardown: vi.fn().mockImplementation(async () => {
+        events.push('teardown:start')
+        await new Promise(resolve => setTimeout(resolve, 10))
+        expect(abortController.signal.aborted).toBe(false)
+        events.push('teardown:end')
+      }),
+    }
+
+    abortController.signal.addEventListener('abort', () => {
+      expect(readRunState(tempDir).status).toBe('failed')
+      expect(readRunState(tempDir).environments).toEqual({})
+      events.push('abort')
+    })
+
+    const handler = createRunAbortHandler({
+      runDir: tempDir,
+      getSnapshot: () => snapshot,
+      getEnvironments: () => ({ e1: mockEnv }),
+      abortController,
+      gateWaiter,
+    })
+
+    const result = await handler({ teardown: true, reason: 'Ordered abort' })
+    expect(result.ok).toBe(true)
+    expect(events).toEqual(['teardown:start', 'teardown:end', 'abort'])
+  })
 })
 
 describe('createRunTeardownHandler', () => {
