@@ -46,6 +46,7 @@ const activeGateStateSchema = z.object({
   guardrailIndex: z.number().int().nonnegative(),
   gateType: z.enum(['human_review', 'max_retries_exceeded']),
   prompt: z.string(),
+  logKey: z.string().optional(),
   createdAt: z.string(),
 })
 

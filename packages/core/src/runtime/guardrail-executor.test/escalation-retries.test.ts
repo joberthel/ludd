@@ -151,6 +151,57 @@ describe('runAfterStepGuardrails escalation with force skip', () => {
       fs.rmSync(runDir, { recursive: true, force: true })
     }
   })
+
+  it('does not double-wrap prompt and preserves logKey on max_retries_exceeded rehydration', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const waiter = createGateWaiter()
+      const rail = makeGuardrail({ status: 'fail' }, { maxRetries: 0, onMaxRetriesExceeded: 'prompt_user' })
+      const step: StepConfig = {
+        id: 'step-1',
+        afterStep: [rail],
+        run: fakeAgent,
+      }
+      const ctx = makeStepContext(snapshot.runId)
+      const originalPrompt = 'Guardrail #0 in step "step-1" exceeded maxRetries.\nSummary: lint failed\nMCP logKey: "step-1-1-afterStep-0"\nChoose pass, skip, or abort.'
+
+      const p = runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        sessionId: 's-1',
+        maxTotalTurns: 3,
+        initialPrompt: 'Do task',
+        gateWaiter: waiter,
+        rehydratedGate: {
+          stepId: 'step-1',
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          gateType: 'max_retries_exceeded',
+          prompt: originalPrompt,
+          logKey: 'step-1-1-afterStep-0',
+          createdAt: new Date().toISOString(),
+        },
+      })
+
+      await waitForWaiter(waiter)
+      expect(snapshot.activeGate?.prompt).toBe(originalPrompt)
+      expect(snapshot.activeGate?.logKey).toBe('step-1-1-afterStep-0')
+
+      waiter.resolve({ stepId: 'step-1', action: 'pass' })
+      await expect(p).resolves.toBeUndefined()
+
+      const ledger = readLedgerEvents(runDir)
+      const passedEvent = ledger.find(e => e.eventType === 'guardrail.passed')
+      expect((passedEvent?.payload?.verdict as { logKey?: string } | undefined)?.logKey).toBe('step-1-1-afterStep-0')
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('runAfterStepGuardrails escalation with abort', () => {

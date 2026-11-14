@@ -77,6 +77,7 @@ function recordEscalationActiveGate(
   params: RunAfterStepGuardrailsParams,
   guardrailIndex: number,
   prompt: string,
+  logKey?: string,
 ): ActiveGateState {
   const { step, ctx, runDir, snapshot } = params
   const isMatchingExisting = snapshot.activeGate?.guardrailIndex === guardrailIndex
@@ -90,6 +91,9 @@ function recordEscalationActiveGate(
     guardrailIndex,
     gateType: 'max_retries_exceeded',
     prompt,
+    ...(logKey !== undefined
+      ? { logKey }
+      : {}),
     createdAt: isMatchingExisting
       ? snapshot.activeGate!.createdAt
       : new Date().toISOString(),
@@ -235,7 +239,11 @@ export async function handleGuardrailEscalation(
     throw new Error('GateWaiter is required for onMaxRetriesExceeded: prompt_user')
   }
 
-  const prompt = formatEscalationPrompt(step.id, k, verdict, reason)
-  const activeGate = recordEscalationActiveGate(params, k, prompt)
+  const isRehydratedEscalation = params.rehydratedGate?.guardrailIndex === k
+    && params.rehydratedGate.gateType === 'max_retries_exceeded'
+  const prompt = isRehydratedEscalation
+    ? params.rehydratedGate!.prompt
+    : formatEscalationPrompt(step.id, k, verdict, reason)
+  const activeGate = recordEscalationActiveGate(params, k, prompt, verdict.logKey)
   return handleEscalationResolution(params, k, guardrail, verdict, reason, activeGate)
 }

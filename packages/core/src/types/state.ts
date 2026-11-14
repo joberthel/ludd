@@ -10,6 +10,7 @@ export interface ActiveGateState {
   guardrailIndex: number
   gateType: 'human_review' | 'max_retries_exceeded'
   prompt: string
+  logKey?: string
   createdAt: string
 }
 

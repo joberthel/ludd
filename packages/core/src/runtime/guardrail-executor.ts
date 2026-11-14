@@ -177,7 +177,13 @@ async function processGuardrailResult(
   const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
   emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', { phase: 'afterStep', guardrailIndex: k, attempt })
   if (params.rehydratedGate?.guardrailIndex === k && params.rehydratedGate.gateType === 'max_retries_exceeded') {
-    const verdict: GuardrailVerdict = { status: 'fail', body: params.rehydratedGate.prompt }
+    const verdict: GuardrailVerdict = {
+      status: 'fail',
+      body: params.rehydratedGate.prompt,
+      ...(params.rehydratedGate.logKey !== undefined
+        ? { logKey: params.rehydratedGate.logKey }
+        : {}),
+    }
     await handleGuardrailEscalation(params, k, guardrail, verdict, 'guardrail_max_retries')
     return
   }

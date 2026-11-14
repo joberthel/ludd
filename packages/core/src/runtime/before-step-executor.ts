@@ -2,13 +2,13 @@ import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { ProvisionedEnvironment, StepContext } from '../types/context.js'
 import type { Guardrail, GuardrailVerdict } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
-import type { LedgerEventType } from '../types/ledger.js'
+import type { LedgerEvent, LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { GateWaiter } from './gate-waiter.js'
 import process from 'node:process'
 import { createLogStore } from '../mcp/log-store.js'
-import { appendLedgerEvent } from '../persistence/ledger-writer.js'
+import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isGuardrail } from '../types/guardrail.js'
 import { executeHumanReviewBeforeStepGuardrail } from './before-step-human-review.js'
@@ -196,6 +196,102 @@ function initCollectedBeforeStepResults(
   return {}
 }
 
+function resolveReconstructedStatus(
+  rawVerdict: GuardrailVerdict | undefined,
+  completionEvent: LedgerEvent | undefined,
+): GuardrailVerdict['status'] {
+  if (rawVerdict?.status) {
+    return rawVerdict.status
+  }
+  if (completionEvent?.eventType === 'guardrail.skipped') {
+    return 'skip'
+  }
+  if (completionEvent?.eventType === 'guardrail.failed') {
+    return 'fail'
+  }
+  return 'pass'
+}
+
+function reconstructPriorBeforeStepResults(
+  params: RunBeforeStepGuardrailsParams,
+  startIndex: number,
+): BeforeStepExecutionResult[] {
+  if (startIndex <= 0) {
+    return []
+  }
+  const { step, ctx, snapshot, runDir } = params
+  let events: LedgerEvent[] = []
+  try {
+    events = readLedgerEvents(runDir)
+  }
+  catch {
+    events = []
+  }
+
+  const logEntries = Object.values(snapshot.logs ?? {})
+  const reconstructed: BeforeStepExecutionResult[] = []
+
+  for (let k = 0; k < startIndex; k++) {
+    const exactLog = logEntries.find(m =>
+      m.stepId === step.id
+      && m.phase === 'beforeStep'
+      && m.guardrailIndex === k
+      && m.matrixIndex === ctx.matrix?.index,
+    )
+    const fallbackLog = ctx.matrix?.index !== undefined
+      ? logEntries.find(m =>
+          m.stepId === step.id
+          && m.phase === 'beforeStep'
+          && m.guardrailIndex === k
+          && m.matrixIndex === undefined,
+        )
+      : undefined
+    const logMeta = exactLog ?? fallbackLog
+
+    const completionEvent = events.filter(e =>
+      e.stepId === step.id
+      && e.matrixIndex === ctx.matrix?.index
+      && e.payload?.phase === 'beforeStep'
+      && e.payload?.guardrailIndex === k
+      && (e.eventType === 'guardrail.passed'
+        || e.eventType === 'guardrail.skipped'
+        || e.eventType === 'guardrail.failed'),
+    ).at(-1)
+    const gateResolvedEvent = events.filter(e =>
+      e.stepId === step.id
+      && e.matrixIndex === ctx.matrix?.index
+      && e.payload?.phase === 'beforeStep'
+      && e.payload?.guardrailIndex === k
+      && e.eventType === 'gate.resolved',
+    ).at(-1)
+
+    if (!logMeta && !completionEvent) {
+      continue
+    }
+
+    const rawVerdict = completionEvent?.payload?.verdict as GuardrailVerdict | undefined
+    const status = resolveReconstructedStatus(rawVerdict, completionEvent)
+    const verdict: GuardrailVerdict = rawVerdict
+      ? { ...rawVerdict, status }
+      : { status }
+    const logKey = logMeta?.logKey ?? verdict.logKey ?? ''
+    const feedback = typeof gateResolvedEvent?.payload?.feedback === 'string'
+      ? gateResolvedEvent.payload.feedback
+      : undefined
+
+    reconstructed.push({
+      guardrailIndex: k,
+      verdict,
+      logKey,
+      ...(feedback !== undefined
+        ? { feedback }
+        : {}),
+    })
+  }
+
+  return reconstructed
+}
+
 export async function runBeforeStepGuardrails(
   params: RunBeforeStepGuardrailsParams,
 ): Promise<string> {
@@ -210,8 +306,8 @@ export async function runBeforeStepGuardrails(
     return ''
   }
   const store = params.logStore ?? createLogStore(runDir)
-  const results: BeforeStepExecutionResult[] = []
   const startIndex = params.startIndex ?? 0
+  const results: BeforeStepExecutionResult[] = reconstructPriorBeforeStepResults(params, startIndex)
   const collected = initCollectedBeforeStepResults(
     resolved.isArray,
     params.snapshot.activeBeforeStepResults,

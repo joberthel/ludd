@@ -293,3 +293,168 @@ describe('runBeforeStepGuardrails error abortion (AC 5.3.4)', () => {
     )
   })
 })
+
+describe('runBeforeStepGuardrails partial rehydration', () => {
+  it('reconstructs notifications for guardrails 0 .. startIndex - 1 from logs and ledger', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'r-rehydrate',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 's-rehydrate',
+      steps: {},
+      logs: {
+        's-rehydrate-1-beforeStep-0': {
+          logKey: 's-rehydrate-1-beforeStep-0',
+          stepId: 's-rehydrate',
+          attempt: 1,
+          phase: 'beforeStep',
+          guardrailIndex: 0,
+          filePath: 'logs/s-rehydrate-1-beforeStep-0.log',
+          format: 'text',
+          totalLines: 1,
+          totalItems: 1,
+          createdAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    }
+    const ctx = {
+      runId: 'r-rehydrate',
+      environments: {},
+      steps: {},
+      step: { id: 's-rehydrate', output: null, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+    const rail0: Guardrail = {
+      __kind: 'guardrail',
+      type: 'fn',
+      execute: async () => {
+        throw new Error('rail0 should not be re-executed')
+      },
+    }
+    const rail1: Guardrail = {
+      __kind: 'guardrail',
+      type: 'fn',
+      execute: async () => ({ status: 'pass', body: 'ok-1' }),
+    }
+    const step: StepConfig = {
+      id: 's-rehydrate',
+      beforeStep: [rail0, rail1],
+      run: async () => ({}),
+    }
+
+    const { appendLedgerEvent } = await import('../persistence/ledger-writer.js')
+    appendLedgerEvent(tempDir, {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-rehydrate',
+      stepId: 's-rehydrate',
+      eventType: 'guardrail.passed',
+      payload: {
+        phase: 'beforeStep',
+        guardrailIndex: 0,
+        attempt: 1,
+        verdict: { status: 'pass', body: 'ok-0' },
+      },
+    })
+    appendLedgerEvent(tempDir, {
+      schemaVersion: 1,
+      timestamp: new Date().toISOString(),
+      runId: 'r-rehydrate',
+      stepId: 's-rehydrate',
+      eventType: 'gate.resolved',
+      payload: {
+        phase: 'beforeStep',
+        guardrailIndex: 0,
+        action: 'pass',
+        feedback: 'prior feedback',
+      },
+    })
+
+    const notification = await runBeforeStepGuardrails({
+      step,
+      ctx,
+      snapshot,
+      runDir: tempDir,
+      startIndex: 1,
+    })
+
+    expect(notification).toContain('Guardrail #0: logKey="s-rehydrate-1-beforeStep-0" (status: pass)')
+    expect(notification).toContain('Guardrail #1: logKey="s-rehydrate-1-beforeStep-1" (status: pass)')
+    expect(notification).toContain('User feedback (Guardrail #0):\nprior feedback')
+  })
+
+  it('reconstructs skipped/failed statuses and matrix fallback when payload.verdict is absent', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'r-rehydrate-2',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 's-rehydrate-2',
+      steps: {},
+      logs: {
+        's-rehydrate-2-1-beforeStep-0': {
+          logKey: 's-rehydrate-2-1-beforeStep-0',
+          stepId: 's-rehydrate-2',
+          attempt: 1,
+          phase: 'beforeStep',
+          guardrailIndex: 0,
+          filePath: 'logs/s-rehydrate-2-1-beforeStep-0.log',
+          format: 'text',
+          totalLines: 1,
+          totalItems: 1,
+          createdAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    }
+    const ctx = {
+      runId: 'r-rehydrate-2',
+      environments: {},
+      steps: {},
+      step: { id: 's-rehydrate-2', output: null, attempt: 1 },
+      matrix: { item: 'a', index: 0, total: 1 },
+      artifacts: {} as any,
+    }
+    const rail: Guardrail = {
+      __kind: 'guardrail',
+      type: 'fn',
+      execute: async () => ({ status: 'pass', body: 'ok' }),
+    }
+    const step: StepConfig = {
+      id: 's-rehydrate-2',
+      beforeStep: [rail, rail, rail, rail],
+      run: async () => ({}),
+    }
+
+    const { appendLedgerEvent } = await import('../persistence/ledger-writer.js')
+    for (const [idx, eventType] of [[0, 'guardrail.skipped'], [1, 'guardrail.failed'], [2, 'guardrail.passed']] as const) {
+      appendLedgerEvent(tempDir, {
+        schemaVersion: 1,
+        timestamp: new Date().toISOString(),
+        runId: 'r-rehydrate-2',
+        stepId: 's-rehydrate-2',
+        matrixIndex: 0,
+        eventType,
+        payload: { phase: 'beforeStep', guardrailIndex: idx, attempt: 1 },
+      })
+    }
+
+    const notification = await runBeforeStepGuardrails({
+      step,
+      ctx,
+      snapshot,
+      runDir: tempDir,
+      startIndex: 3,
+    })
+
+    expect(notification).toContain('Guardrail #0: logKey="s-rehydrate-2-1-beforeStep-0" (status: skip)')
+    expect(notification).toContain('Guardrail #1: logKey="" (status: fail)')
+    expect(notification).toContain('Guardrail #2: logKey="" (status: pass)')
+    expect(notification).toContain('Guardrail #3: logKey="s-rehydrate-2-m0-1-beforeStep-3" (status: pass)')
+  })
+})
