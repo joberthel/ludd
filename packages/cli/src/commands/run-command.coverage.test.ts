@@ -131,7 +131,7 @@ it('prompts once for a gate and closes its control client', async () => {
   await new Promise(resolve => setTimeout(resolve, 120))
   finishRun({ status: 'passed' })
   await expect(running).resolves.toBe(0)
-  expect(mocks.promptForGate).toHaveBeenCalledWith(waitingState(), client)
+  expect(mocks.promptForGate).toHaveBeenCalledWith(waitingState(), client, expect.any(AbortSignal))
   expect(client.close).toHaveBeenCalledOnce()
 })
 

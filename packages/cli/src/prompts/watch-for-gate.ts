@@ -7,14 +7,19 @@ import { promptForGate } from './inline-gate-prompter.js'
  * Polls the run state file for an active gate and prompts the user inline
  * until the run completes. No-ops immediately in worker mode.
  */
-export async function watchForGate(runDir: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
-  if (worker)
+export async function watchForGate(
+  runDir: string,
+  isCompleted: () => boolean,
+  worker: boolean,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (worker || signal?.aborted)
     return
   let gateKey = ''
   const stateFile = path.join(runDir, 'state.json')
-  while (!isCompleted()) {
+  while (!isCompleted() && !signal?.aborted) {
     await new Promise(resolve => setTimeout(resolve, 100))
-    if (isCompleted())
+    if (isCompleted() || signal?.aborted)
       break
     if (!fs.existsSync(stateFile))
       continue
@@ -30,7 +35,7 @@ export async function watchForGate(runDir: string, isCompleted: () => boolean, w
     gateKey = key
     const client = await createControlClient(runDir)
     try {
-      await promptForGate(state, client)
+      await promptForGate(state, client, signal)
     }
     finally {
       await client.close()

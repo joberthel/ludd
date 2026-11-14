@@ -48,7 +48,8 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()
   let completed = false
-  const gateWatcher = watchForGate(runDir, () => completed, options.worker ?? false)
+  const abortController = new AbortController()
+  const gateWatcher = watchForGate(runDir, () => completed, options.worker ?? false, abortController.signal)
   try {
     const result = await runHarness(config, { runId: options.runId, workspaceDir, configPath })
     return result.status === 'passed'
@@ -57,6 +58,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   }
   finally {
     completed = true
+    abortController.abort()
     tailer.stop()
     await gateWatcher
   }

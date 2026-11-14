@@ -187,3 +187,40 @@ it('resolves max-retry abort', async () => {
     feedback: 'Stop',
   })
 })
+
+it('returns immediately when signal is already aborted', async () => {
+  const control = client()
+  const controller = new AbortController()
+  controller.abort()
+  await promptForGate(snapshot(), control, controller.signal)
+  expect(createInterface).not.toHaveBeenCalled()
+  expect(control.resolveGate).not.toHaveBeenCalled()
+})
+
+it('aborts cleanly and closes readline when signal aborts during question', async () => {
+  const control = client()
+  const controller = new AbortController()
+  question.mockImplementationOnce((async (_prompt: string, options?: { signal?: AbortSignal }) => {
+    return new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => {
+        const err = new Error('The operation was aborted')
+        err.name = 'AbortError'
+        reject(err)
+      })
+    })
+  }) as unknown as (...args: string[]) => Promise<string>)
+
+  const pending = promptForGate(snapshot(), control, controller.signal)
+  controller.abort()
+  await expect(pending).resolves.toBeUndefined()
+  expect(control.resolveGate).not.toHaveBeenCalled()
+  expect(close).toHaveBeenCalledOnce()
+})
+
+it('rethrows non-abort errors from question', async () => {
+  const control = client()
+  const controller = new AbortController()
+  question.mockRejectedValueOnce(new Error('stdin failed'))
+  await expect(promptForGate(snapshot(), control, controller.signal)).rejects.toThrow('stdin failed')
+  expect(close).toHaveBeenCalledOnce()
+})
