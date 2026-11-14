@@ -1,24 +1,21 @@
 import type { HarnessConfig } from '../types/harness.js'
 import { access } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { createJiti } from 'jiti'
 import * as zodModule from 'zod'
-import { defineHarness, validateHarnessConfig } from '../define-harness.js'
-import { HarnessConfigError } from '../errors/harness-config-error.js'
+import { validateHarnessConfig } from '../define-harness.js'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
-import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
-import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
-import { RunAlreadyExistsError } from '../errors/run-already-exists-error.js'
-import { SchemaVersionMismatchError } from '../errors/schema-version-mismatch-error.js'
-import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
-import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-writer.js'
-import { acquireRunPidLock, isProcessAlive, releaseRunPidLock } from '../persistence/pid-lock.js'
-import { readRunState, resolveRunDir, SUPPORTED_SCHEMA_VERSION, writeRunStateAtomic } from '../persistence/state-store.js'
-import { appendStreamEvent, readStreamEvents, resolveStreamPath } from '../persistence/stream-writer.js'
-import { runHarness } from '../runtime/run-harness.js'
-import { isAgentRunner } from '../types/harness.js'
-import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
+import * as coreModule from '../index.js'
+
+export interface LoadHarnessConfigOptions {
+  virtualModules?: Record<string, unknown>
+}
+
+const OPTIONAL_WORKSPACE_PACKAGES = [
+  '@ludd/agents',
+  '@ludd/guardrails',
+  '@ludd/environments',
+] as const
 
 function validateConfigPath(configPath: unknown): string {
   if (typeof configPath !== 'string' || configPath.trim() === '') {
@@ -40,57 +37,24 @@ function formatErrorDetail(cause: unknown): string {
   return String(cause)
 }
 
-function createCoreModule(): Record<string, unknown> {
-  return {
-    DEFAULT_MAX_TOTAL_TURNS,
-    HarnessConfigError,
-    HarnessConfigLoadError,
-    MaxTotalTurnsExceededError,
-    RunAlreadyActiveError,
-    RunAlreadyExistsError,
-    SUPPORTED_SCHEMA_VERSION,
-    SchemaVersionMismatchError,
-    StepOutputValidationError,
-    acquireRunPidLock,
-    appendLedgerEvent,
-    appendStreamEvent,
-    defineHarness,
-    isAgentRunner,
-    isProcessAlive,
-    loadHarnessConfig,
-    readLedgerEvents,
-    readRunState,
-    readStreamEvents,
-    releaseRunPidLock,
-    resolveDynamicProperty,
-    resolveRunDir,
-    resolveStreamPath,
-    runHarness,
-    validateHarnessConfig,
-    writeRunStateAtomic,
-  }
-}
-
-async function loadAgentsModule(): Promise<Record<string, unknown>> {
-  const currentDir = path.dirname(fileURLToPath(import.meta.url))
-  const packageDir = path.resolve(currentDir, '../../../agents')
-  const builtEntry = path.join(packageDir, 'dist/index.js')
+async function resolveOptionalPackage(specifier: string): Promise<Record<string, unknown> | undefined> {
   try {
-    await access(builtEntry)
-    return await import(builtEntry) as Record<string, unknown>
+    const resolved = import.meta.resolve(specifier)
+    return await import(resolved) as Record<string, unknown>
   }
   catch (cause: unknown) {
-    if ((cause as NodeJS.ErrnoException).code !== 'ENOENT')
-      throw cause
+    const code = (cause as NodeJS.ErrnoException).code
+    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') {
+      return undefined
+    }
+    throw cause
   }
-
-  // Source tests can run before packages have been built; production uses the
-  // agents package's compiled entrypoint above.
-  const sourceEntry = path.join(packageDir, 'src/index.ts')
-  return import(sourceEntry) as Promise<Record<string, unknown>>
 }
 
-export async function loadHarnessConfig(configPath: string): Promise<HarnessConfig> {
+export async function loadHarnessConfig(
+  configPath: string,
+  options?: LoadHarnessConfigOptions,
+): Promise<HarnessConfig> {
   validateConfigPath(configPath)
   const resolvedPath = path.resolve(configPath)
 
@@ -105,11 +69,23 @@ export async function loadHarnessConfig(configPath: string): Promise<HarnessConf
     )
   }
 
-  const agentsModule = await loadAgentsModule()
   const virtualModules: Record<string, unknown> = {
-    '@ludd/core': createCoreModule(),
-    '@ludd/agents': agentsModule,
+    '@ludd/core': coreModule,
     'zod': zodModule,
+  }
+
+  for (const pkg of OPTIONAL_WORKSPACE_PACKAGES) {
+    if (options?.virtualModules && pkg in options.virtualModules) {
+      continue
+    }
+    const mod = await resolveOptionalPackage(pkg)
+    if (mod !== undefined) {
+      virtualModules[pkg] = mod
+    }
+  }
+
+  if (options?.virtualModules) {
+    Object.assign(virtualModules, options.virtualModules)
   }
 
   const jiti = createJiti(import.meta.url, {

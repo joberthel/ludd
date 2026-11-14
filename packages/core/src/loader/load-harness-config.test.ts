@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
 import { loadHarnessConfig } from './load-harness-config.js'
 
@@ -163,5 +163,73 @@ describe('loadHarnessConfig error handling for syntax and runtime issues', () =>
     await writeFile(filePath, 'export const notADefault = 123;')
 
     await expect(loadHarnessConfig(filePath)).rejects.toThrow(HarnessConfigLoadError)
+  })
+})
+
+describe('loadHarnessConfig virtualModules resolution', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-virtual-modules-'))
+  })
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('exposes all @ludd/core exports including previously omitted symbols', async () => {
+    const filePath = path.join(tempDir, 'core-exports.ts')
+    await writeFile(
+      filePath,
+      [
+        `import { defineHarness, teardownRun, gc, createArtifactStore, ForbiddenMountPathError, UnsafeDangerModeError } from '@ludd/core'`,
+        `if (typeof teardownRun !== 'function') throw new Error('missing teardownRun')`,
+        `if (typeof gc !== 'function') throw new Error('missing gc')`,
+        `if (typeof createArtifactStore !== 'function') throw new Error('missing createArtifactStore')`,
+        `if (typeof ForbiddenMountPathError !== 'function') throw new Error('missing ForbiddenMountPathError')`,
+        `if (typeof UnsafeDangerModeError !== 'function') throw new Error('missing UnsafeDangerModeError')`,
+        `export default defineHarness({ name: 'core-exports', steps: [{ id: 's1', run: async () => ({}) }] })`,
+      ].join('\n'),
+    )
+
+    const loaded = await loadHarnessConfig(filePath)
+    expect(loaded.name).toBe('core-exports')
+  })
+
+  it('resolves @ludd/agents, @ludd/guardrails, and @ludd/environments', async () => {
+    const filePath = path.join(tempDir, 'workspace-pkgs.ts')
+    await writeFile(
+      filePath,
+      [
+        `import { defineHarness } from '@ludd/core'`,
+        `import * as agents from '@ludd/agents'`,
+        `import * as guardrails from '@ludd/guardrails'`,
+        `import * as environments from '@ludd/environments'`,
+        `if (!agents || !guardrails || !environments) throw new Error('missing workspace package')`,
+        `export default defineHarness({ name: 'workspace-pkgs', steps: [{ id: 's1', run: async () => ({}) }] })`,
+      ].join('\n'),
+    )
+
+    const loaded = await loadHarnessConfig(filePath)
+    expect(loaded.name).toBe('workspace-pkgs')
+  })
+
+  it('supports custom virtualModules option', async () => {
+    const filePath = path.join(tempDir, 'custom-virtual.ts')
+    await writeFile(
+      filePath,
+      [
+        `import { defineHarness } from '@ludd/core'`,
+        `import { customName } from 'virtual:custom'`,
+        `export default defineHarness({ name: customName, steps: [{ id: 's1', run: async () => ({}) }] })`,
+      ].join('\n'),
+    )
+
+    const loaded = await loadHarnessConfig(filePath, {
+      virtualModules: {
+        'virtual:custom': { customName: 'from-custom-virtual' },
+      },
+    })
+    expect(loaded.name).toBe('from-custom-virtual')
   })
 })
