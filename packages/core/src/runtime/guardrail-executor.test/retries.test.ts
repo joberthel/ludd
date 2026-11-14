@@ -244,3 +244,82 @@ describe('runAfterStepGuardrails maxTotalTurns exhaustion', () => {
     }
   })
 })
+
+describe('runAfterStepGuardrails StepRunFactory retry', () => {
+  it('signals retry for factory-created agent step when isAgent is true', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const step: StepConfig = {
+        id: 's-factory',
+        afterStep: [
+          makeGuardrail({ status: 'fail', body: 'test failed' }, { maxRetries: 2 }),
+        ],
+        run: () => fakeAgent,
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-factory', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await expect(runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        sessionId: 'sess-1',
+        maxTotalTurns: 5,
+        initialPrompt: 'do coding',
+        isAgent: true,
+      })).rejects.toThrow(GuardrailRetrySignal)
+
+      expect(ctx.step.attempt).toBe(2)
+      expect(readRunState(runDir).activeGuardrailRetries?.['0']).toBe(1)
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
+
+  it('escalates immediately for function step when isAgent is false', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const step: StepConfig = {
+        id: 's-fn',
+        afterStep: [
+          makeGuardrail({ status: 'fail', body: 'test failed' }, { maxRetries: 2 }),
+        ],
+        run: () => ({ ok: true }),
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-fn', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await expect(runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        sessionId: undefined,
+        maxTotalTurns: 1,
+        initialPrompt: '',
+        isAgent: false,
+      })).rejects.toThrow(GuardrailMaxRetriesExceededError)
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
+})

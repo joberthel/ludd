@@ -43,6 +43,7 @@ export interface RunAfterStepGuardrailsParams {
   logStore?: LogStore
   gateWaiter?: GateWaiter
   startGuardrailIndex?: number
+  isAgent?: boolean
   rehydratedGate?: ActiveGateState | null
 }
 
@@ -149,7 +150,7 @@ async function handleGuardrailFailure(
 ): Promise<GuardrailVerdict> {
   const { step, snapshot, runDir, attempt, maxTotalTurns } = params
   const count = checkGuardrailRetries(snapshot, k, runDir)
-  const isAgent = isAgentRunner(step.run)
+  const isAgent = params.isAgent ?? isAgentRunner(step.run)
   const maxRetries = getEffectiveMaxRetries(guardrail, step.id, k, snapshot)
   const effectiveMaxTotalTurns = getEffectiveMaxTotalTurns(maxTotalTurns, step.id, snapshot)
 

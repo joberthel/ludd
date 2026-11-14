@@ -89,6 +89,7 @@ async function finalizeAgentTurn(
     step,
     sessionId: turnResult.sessionId,
     environment: params.environment,
+    isAgent: true,
   })
   return stepOutput
 }
@@ -128,6 +129,7 @@ async function resumeAfterStepGate(
       attempt,
       startGuardrailIndex: gate.guardrailIndex,
       rehydratedGate: gate,
+      isAgent: true,
     })
     return { success: true, result: output }
   }
