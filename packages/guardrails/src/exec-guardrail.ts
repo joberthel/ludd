@@ -1,5 +1,6 @@
 import type {
   DynamicProperty,
+  EnvironmentAdapter,
   EnvironmentExecResult,
   ExecLogPaginationConfig,
   Guardrail,
@@ -17,7 +18,7 @@ export interface ExecGuardrailConfig<
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
   command: DynamicProperty<string | readonly string[], TContext>
-  environment?: DynamicProperty<ProvisionedEnvironment, TContext>
+  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
   maxRetries?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   timeout?: number

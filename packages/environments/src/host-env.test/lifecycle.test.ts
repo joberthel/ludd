@@ -9,27 +9,30 @@ import { hostEnv, killProcessTree } from '../host-env.js'
 describe('hostEnv initialization and lifecycle', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-env-init-'))
 
-  it('defaults id to host and workingDir to cwd when options omitted', () => {
-    const env = hostEnv()
+  it('defaults id to host and workingDir to cwd when options omitted', async () => {
+    const env = await hostEnv().provision({
+      runId: 'test-run',
+      workspaceDir: process.cwd(),
+    })
     expect(env.id).toBe('host')
     expect(env.type).toBe('host')
     expect(env.__kind).toBe('environment')
     expect(env.workingDir).toBe(process.cwd())
   })
 
-  it('respects custom trimmed id and resolved cwd', () => {
-    const env = hostEnv({ id: '  my-env  ', cwd: tmpDir })
+  it('respects custom trimmed id and resolved cwd', async () => {
+    const env = await hostEnv({ id: '  my-env  ', cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     expect(env.id).toBe('my-env')
     expect(env.workingDir).toBe(path.resolve(tmpDir))
   })
 
   it('verifies directory existence on ping and tears down cleanly', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     expect(await env.ping()).toBe(true)
 
-    const deadEnv = hostEnv({
+    const deadEnv = await hostEnv({
       cwd: path.join(tmpDir, 'does-not-exist'),
-    })
+    }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     expect(await deadEnv.ping()).toBe(false)
 
     await expect(env.teardown()).resolves.toBeUndefined()
@@ -40,28 +43,28 @@ describe('hostEnv validation and timeouts', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-env-val-'))
 
   it('throws on empty string command', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     await expect(env.exec('   ')).rejects.toThrow('Command string must not be empty.')
   })
 
   it('throws on empty array command', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     await expect(env.exec([])).rejects.toThrow('Command array must not be empty.')
   })
 
   it('throws on invalid command type', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     await expect(env.exec(null as any)).rejects.toThrow('Command must be a non-empty string or array of strings.')
   })
 
   it('rejects on missing binary with and without timeout timer', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     await expect(env.exec(['non-existent-binary-99999'])).rejects.toThrow()
     await expect(env.exec(['non-existent-binary-99999'], { timeoutMs: 5000 })).rejects.toThrow()
   })
 
   it('handles timeout by killing process tree and resolving with timedOut true', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const result = await env.exec(['node', '-e', 'setInterval(() => {}, 1000)'], {
       timeoutMs: 100,
     })
@@ -74,7 +77,7 @@ describe('hostEnv abort signal handling', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-env-sig-'))
 
   it('rejects when signal is already aborted', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const controller = new AbortController()
     controller.abort(new Error('pre-aborted'))
     await expect(env.exec(['node', '-e', 'console.log("hi")'], { signal: controller.signal })).rejects.toThrow('pre-aborted')
@@ -92,7 +95,7 @@ describe('hostEnv abort signal handling', () => {
   })
 
   it('aborts running process and cleans up listeners with and without timeout', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     // Abort with active timeout timer
     const controllerWithTimeout = new AbortController()
     const execWithTimeout = env.exec(['node', '-e', 'setInterval(() => {}, 1000)'], {

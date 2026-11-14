@@ -1,5 +1,6 @@
 import type {
   DynamicProperty,
+  EnvironmentAdapter,
   ProvisionContext,
   ProvisionedEnvironment,
 } from '@ludd/core'
@@ -18,69 +19,49 @@ export interface HostEnvOptions {
   ephemeralPorts?: readonly string[]
 }
 
-interface EnvState {
-  ports?: Record<string, number>
-  injectedEnv?: Record<string, string>
-}
-
-function createHostEnvironmentObject(
-  id: string,
-  workingDir: string,
-  state: EnvState,
-  initPromise: Promise<void>,
-): ProvisionedEnvironment {
-  const env: ProvisionedEnvironment = {
-    __kind: 'environment',
-    id,
-    type: 'host',
-    workingDir,
-    get ephemeralPorts() {
-      return state.ports
-    },
-    get injectedEnv() {
-      return state.injectedEnv
-    },
-    exec: async (command, execOptions) => {
-      await initPromise
-      const mergedEnv = state.injectedEnv !== undefined
-        ? {
-            ...state.injectedEnv,
-            ...execOptions?.env,
-          }
-        : execOptions?.env
-      return execHostEnvCommand(workingDir, command, {
-        ...execOptions,
-        env: mergedEnv,
-      })
-    },
-    ping: async () => {
-      await initPromise
-      return fs.existsSync(workingDir)
-    },
-    teardown: async () => {},
-  }
-  return env
-}
-
 export function hostEnv(
   options?: HostEnvOptions,
   context?: Partial<ProvisionContext>,
-): ProvisionedEnvironment {
+): EnvironmentAdapter {
   const rawId = options?.id?.trim()
   const id = (rawId !== undefined && rawId.length > 0)
     ? rawId
     : 'host'
-  const workingDir = path.resolve(options?.cwd ?? process.cwd())
 
-  const state: EnvState = {}
-  const initPromise = resolveEnvironmentVariables(options ?? {}, {
-    workspaceDir: workingDir,
-    ...context,
-  }).then((res) => {
-    state.ports = res.ephemeralPorts
-    state.injectedEnv = res.injectedEnv
-  })
-  initPromise.catch(() => {})
+  return {
+    __kind: 'environment-adapter',
+    id,
+    type: 'host',
+    provision: async (provisionContext: ProvisionContext): Promise<ProvisionedEnvironment> => {
+      const workingDir = path.resolve(options?.cwd ?? provisionContext.workspaceDir ?? process.cwd())
+      const resolved = await resolveEnvironmentVariables(options ?? {}, {
+        ...provisionContext,
+        ...context,
+        workspaceDir: workingDir,
+      })
 
-  return createHostEnvironmentObject(id, workingDir, state, initPromise)
+      return {
+        __kind: 'environment',
+        id,
+        type: 'host',
+        workingDir,
+        ephemeralPorts: resolved.ephemeralPorts,
+        injectedEnv: resolved.injectedEnv,
+        exec: async (command, execOptions) => {
+          const mergedEnv = resolved.injectedEnv !== undefined
+            ? {
+                ...resolved.injectedEnv,
+                ...execOptions?.env,
+              }
+            : execOptions?.env
+          return execHostEnvCommand(workingDir, command, {
+            ...execOptions,
+            env: mergedEnv,
+          })
+        },
+        ping: async () => fs.existsSync(workingDir),
+        teardown: async () => {},
+      }
+    },
+  }
 }

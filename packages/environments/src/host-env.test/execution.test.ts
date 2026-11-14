@@ -9,7 +9,7 @@ describe('hostEnv command execution', () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-env-exec-'))
 
   it('executes string commands via shell', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const result = await env.exec('node -e "console.log(\'from string\')"')
     expect(result.exitCode).toBe(0)
     expect(result.stdout.trim()).toBe('from string')
@@ -17,7 +17,7 @@ describe('hostEnv command execution', () => {
   })
 
   it('executes argv array commands directly without shell expansion', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const subshellArg = '$(echo pwned)'
     const cmd = [
       'node',
@@ -31,14 +31,14 @@ describe('hostEnv command execution', () => {
   })
 
   it('captures stderr and non-zero exit code', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const result = await env.exec(['node', '-e', 'console.error("err msg"); process.exit(7)'])
     expect(result.exitCode).toBe(7)
     expect(result.stderr.trim()).toBe('err msg')
   })
 
   it('injects environment variables into child process', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const result = await env.exec(['node', '-e', 'console.log(process.env.MCP_SERVER_URL, process.env.MCP_AUTH_TOKEN)'], {
       env: {
         MCP_SERVER_URL: 'http://localhost:3000',
@@ -49,7 +49,7 @@ describe('hostEnv command execution', () => {
   })
 
   it('respects cwd option and whitespace fallback', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const subDir = path.join(tmpDir, 'child')
     fs.mkdirSync(subDir, { recursive: true })
 
@@ -79,7 +79,7 @@ describe('hostEnv inheritEnv: false isolation', () => {
   })
 
   it('does NOT inherit process.env when inheritEnv is false', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const nodePath = process.execPath
     const result = await env.exec([
       nodePath,
@@ -115,7 +115,7 @@ describe('hostEnv inheritEnv: true or undefined inheritance', () => {
   })
 
   it('inherits process.env when inheritEnv is true or undefined', async () => {
-    const env = hostEnv({ cwd: tmpDir })
+    const env = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const nodePath = process.execPath
 
     const resDefault = await env.exec([

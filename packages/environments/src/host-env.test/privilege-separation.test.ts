@@ -38,7 +38,7 @@ function mockExecSuccess(stdout = '') {
 
 describe('privilege separation: hostEnv vs isolated environments (ADR-0007)', () => {
   it('retains host secrets in hostEnv while gitWorktreeEnv blocks them', async () => {
-    const host = hostEnv({ cwd: tmpDir })
+    const host = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const nodePath = process.execPath
 
     const hostRes = await host.exec([
@@ -92,7 +92,7 @@ describe('privilege separation: hostEnv vs isolated environments (ADR-0007)', ()
 
 describe('privilege separation: execGuardrail on hostEnv', () => {
   it('executes privileged operations with hostEnv retaining GITHUB_TOKEN', async () => {
-    const host = hostEnv({ cwd: tmpDir })
+    const host = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const nodePath = process.execPath
 
     const guardrail = execGuardrail({

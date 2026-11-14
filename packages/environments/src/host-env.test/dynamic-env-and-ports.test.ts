@@ -16,10 +16,10 @@ afterEach(() => {
 
 describe('hostEnv ephemeral port allocation', () => {
   it('allocates ephemeral port and injects it into execution', async () => {
-    const env = hostEnv({
+    const env = await hostEnv({
       cwd: tmpDir,
       ephemeralPorts: ['APP_PORT'],
-    })
+    }).provision({ runId: 'test-run', workspaceDir: tmpDir })
 
     const res = await env.exec('echo "PORT:$APP_PORT"')
     expect(res.exitCode).toBe(0)
@@ -32,7 +32,7 @@ describe('hostEnv ephemeral port allocation', () => {
 
 describe('hostEnv dynamic env and options', () => {
   it('resolves dynamic env callback and injects resolved variables', async () => {
-    const env = hostEnv(
+    const env = await hostEnv(
       {
         cwd: tmpDir,
         env: (ctx: any) => ({
@@ -43,7 +43,7 @@ describe('hostEnv dynamic env and options', () => {
         runId: 'custom-run-123',
         workspaceDir: tmpDir,
       },
-    )
+    ).provision({ runId: 'custom-run-123', workspaceDir: tmpDir })
 
     const res = await env.exec('echo "DB:$DATABASE_SCHEMA"')
     expect(res.exitCode).toBe(0)
@@ -54,11 +54,11 @@ describe('hostEnv dynamic env and options', () => {
   })
 
   it('combines static env and ephemeral ports and awaits init in ping', async () => {
-    const env = hostEnv({
+    const env = await hostEnv({
       cwd: tmpDir,
       env: { SERVICE_NAME: 'payment-svc' },
       ephemeralPorts: ['SVC_PORT'],
-    })
+    }).provision({ runId: 'test-run', workspaceDir: tmpDir })
 
     expect(await env.ping()).toBe(true)
     expect(env.injectedEnv?.SERVICE_NAME).toBe('payment-svc')
@@ -70,11 +70,11 @@ describe('hostEnv dynamic env and options', () => {
   })
 
   it('supports multiple exec calls with injected env and override env options', async () => {
-    const env = hostEnv({
+    const env = await hostEnv({
       cwd: tmpDir,
       env: { BASE_VAR: 'base' },
       ephemeralPorts: ['RUN_PORT'],
-    })
+    }).provision({ runId: 'test-run', workspaceDir: tmpDir })
 
     const res1 = await env.exec('echo "BASE:$BASE_VAR PORT:$RUN_PORT"')
     expect(res1.exitCode).toBe(0)
@@ -86,18 +86,41 @@ describe('hostEnv dynamic env and options', () => {
     expect(res2.exitCode).toBe(0)
     expect(res2.stdout).toContain('EXTRA:extra_value BASE:base')
   })
+
+  it('populates ephemeralPorts and injectedEnv immediately after provision() before exec() or ping()', async () => {
+    const adapter = hostEnv({
+      cwd: tmpDir,
+      env: async () => ({ ASYNC_VAR: 'resolved' }),
+      ephemeralPorts: ['API_PORT'],
+    })
+
+    expect(adapter.__kind).toBe('environment-adapter')
+    const env = await adapter.provision({ runId: 'test-run', workspaceDir: tmpDir })
+
+    expect(env.ephemeralPorts?.API_PORT).toBeGreaterThan(1024)
+    expect(env.injectedEnv).toEqual({
+      ASYNC_VAR: 'resolved',
+      API_PORT: String(env.ephemeralPorts?.API_PORT),
+    })
+
+    // Spreading env (as resolveStepEnvironment does when wrapping exec) preserves properties
+    const wrapped = { ...env, exec: env.exec }
+    expect(wrapped.ephemeralPorts).toEqual(env.ephemeralPorts)
+    expect(wrapped.injectedEnv).toEqual(env.injectedEnv)
+  })
 })
 
 describe('hostEnv initialization rejection', () => {
   it('propagates rejection when dynamic env callback fails', async () => {
-    const env = hostEnv({
+    const adapter = hostEnv({
       cwd: tmpDir,
       env: () => {
         throw new Error('Dynamic env calculation failed')
       },
     })
 
-    await expect(env.exec('echo hi')).rejects.toThrow('Dynamic env calculation failed')
-    await expect(env.ping()).rejects.toThrow('Dynamic env calculation failed')
+    await expect(adapter.provision({ runId: 'test-run', workspaceDir: tmpDir })).rejects.toThrow(
+      'Dynamic env calculation failed',
+    )
   })
 })
