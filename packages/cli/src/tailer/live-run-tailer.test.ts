@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -79,6 +80,76 @@ it('detects truncation and does nothing after stop', async () => {
   expect(log.mock.calls).toEqual([
     ['[agent.stream.linked]'],
     ['[short]'],
+  ])
+  log.mockRestore()
+})
+
+it('preserves partial JSONL lines across polls without dropping events', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const file = path.join(dir, 'ledger.jsonl')
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const tailer = new LiveRunTailer(dir, false)
+  tailer.start()
+
+  // First write: only a partial line with no newline
+  fs.writeFileSync(file, '{"eventType":"run.')
+  await vi.advanceTimersByTimeAsync(100)
+  expect(log.mock.calls).toEqual([])
+
+  // Second write: completes the first line and starts a second partial line
+  fs.appendFileSync(file, 'started"}\n{"eventType":"step.')
+  await vi.advanceTimersByTimeAsync(100)
+  expect(log.mock.calls).toEqual([
+    ['[run.started]'],
+  ])
+
+  // Third write: completes the second line
+  fs.appendFileSync(file, 'completed","stepId":"s1"}\n')
+  await vi.advanceTimersByTimeAsync(100)
+  tailer.stop()
+
+  expect(log.mock.calls).toEqual([
+    ['[run.started]'],
+    ['[step.completed] s1'],
+  ])
+  log.mockRestore()
+})
+
+it('does not split multi-byte UTF-8 characters across reads', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const streams = path.join(dir, 'streams')
+  fs.mkdirSync(streams)
+  const ledger = path.join(dir, 'ledger.jsonl')
+  const streamFile = path.join(streams, 's1.jsonl')
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+  fs.writeFileSync(ledger, `${JSON.stringify({
+    eventType: 'agent.stream.linked',
+    payload: { sessionId: 's1' },
+  })}\n`)
+
+  const tailer = new LiveRunTailer(dir, true)
+  tailer.start()
+  await vi.advanceTimersByTimeAsync(100)
+
+  // Split a 4-byte UTF-8 emoji (🚀 = F0 9F 9A 80) across two writes
+  const fullLine = Buffer.from('{"text":"🚀"}\n', 'utf8')
+  const splitPoint = fullLine.indexOf(0xF0) + 2
+  fs.writeFileSync(streamFile, fullLine.subarray(0, splitPoint))
+  await vi.advanceTimersByTimeAsync(100)
+  expect(log.mock.calls).toEqual([
+    ['[agent.stream.linked]'],
+  ])
+
+  fs.appendFileSync(streamFile, fullLine.subarray(splitPoint))
+  await vi.advanceTimersByTimeAsync(100)
+  tailer.stop()
+
+  expect(log.mock.calls).toEqual([
+    ['[agent.stream.linked]'],
+    ['{"text":"🚀"}'],
   ])
   log.mockRestore()
 })

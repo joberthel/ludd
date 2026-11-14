@@ -36,8 +36,12 @@ export class LiveRunTailer {
     try {
       const buffer = Buffer.alloc(stat.size - current)
       fs.readSync(fd, buffer, 0, buffer.length, current)
-      this.offsets.set(file, stat.size)
-      for (const line of buffer.toString('utf8').split('\n').filter(Boolean)) callback(line)
+      const lastNewline = buffer.lastIndexOf(0x0A)
+      if (lastNewline === -1)
+        return
+      this.offsets.set(file, current + lastNewline + 1)
+      const chunk = buffer.subarray(0, lastNewline).toString('utf8')
+      for (const line of chunk.split('\n').filter(Boolean)) callback(line)
     }
     finally { fs.closeSync(fd) }
   }
