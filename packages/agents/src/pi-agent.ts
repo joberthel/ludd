@@ -34,8 +34,11 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
     agentDir: getAgentDir(),
     extensionFactories: [
       readOnly
-        ? readOnlyExtension(options.cwd)
-        : workspaceWriteExtension(options.cwd, { dangerMode: options.dangerMode }),
+        ? readOnlyExtension(options.cwd, { containerWorkingDir: options.environment?.containerWorkingDir })
+        : workspaceWriteExtension(options.cwd, {
+            dangerMode: options.dangerMode,
+            containerWorkingDir: options.environment?.containerWorkingDir,
+          }),
     ],
   })
   await resourceLoader.reload()

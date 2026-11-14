@@ -137,12 +137,16 @@ async function execDockerEnv(
   const userFlags = execOptions?.dangerMode
     ? ['-u', '0:0']
     : []
+  const cwdFlags = execOptions?.cwd !== undefined
+    ? ['-w', execOptions.cwd]
+    : []
   return execHostEnvCommand(
     worktreePath,
     [
       'docker',
       'exec',
       ...userFlags,
+      ...cwdFlags,
       ...envFlags,
       containerId,
       ...cmdArgs,
@@ -171,6 +175,7 @@ function createProvisionedDockerEnv(
     type: 'docker-worktree',
     supportsDangerMode: true,
     workingDir: worktreePath,
+    containerWorkingDir: options.containerWorkdir ?? '/workspace',
     containerId,
     branchName,
     ...(ephemeralPorts !== undefined

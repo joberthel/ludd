@@ -64,4 +64,17 @@ describe('environment bash delegation', () => {
     } as never)
     expect(exec).toHaveBeenCalledWith(['sh', '-c', 'ls'], expect.anything())
   })
+
+  it('maps host subdirectory cwd to containerWorkingDir and preserves container subpaths', async () => {
+    const { env, exec } = fakeEnv('docker-worktree')
+    await createEnvironmentBashOperations(env).exec('ls', '/w/packages/core', {
+      onData: vi.fn(),
+    })
+    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'ls'], { signal: undefined, cwd: '/workspace/packages/core' })
+
+    await createEnvironmentBashOperations(env).exec('pwd', '/workspace/sub', {
+      onData: vi.fn(),
+    })
+    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'pwd'], { signal: undefined, cwd: '/workspace/sub' })
+  })
 })

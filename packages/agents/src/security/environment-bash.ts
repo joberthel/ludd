@@ -1,17 +1,43 @@
 import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent'
 import type { ProvisionedEnvironment } from '@ludd/core'
 import { Buffer } from 'node:buffer'
+import path from 'node:path'
 import { createBashToolDefinition } from '@earendil-works/pi-coding-agent'
 
 /** Environment `type` discriminator of the docker adapter. */
 export const DOCKER_ENVIRONMENT_TYPE = 'docker-worktree'
 
+function resolveContainerCwd(cwd: string | undefined, environment: ProvisionedEnvironment): string | undefined {
+  if (cwd === undefined || cwd === '') {
+    return undefined
+  }
+  const containerRoot = environment.containerWorkingDir ?? '/workspace'
+  if (cwd === containerRoot) {
+    return undefined
+  }
+  if (cwd.startsWith(`${containerRoot}/`)) {
+    return cwd
+  }
+  const relative = path.relative(environment.workingDir, cwd)
+  if (relative === '') {
+    return undefined
+  }
+  if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+    return path.posix.join(containerRoot, ...relative.split(path.sep))
+  }
+  return undefined
+}
+
 /** Routes shell commands through `environment.exec()` instead of a host shell. */
 export function createEnvironmentBashOperations(environment: ProvisionedEnvironment): BashOperations {
   return {
-    exec: async (command, _cwd, options) => {
+    exec: async (command, cwd, options) => {
+      const containerCwd = resolveContainerCwd(cwd, environment)
       const result = await environment.exec(['sh', '-c', command], {
         signal: options.signal,
+        ...(containerCwd === undefined
+          ? {}
+          : { cwd: containerCwd }),
         ...(options.timeout === undefined
           ? {}
           : { timeoutMs: options.timeout * 1000 }),

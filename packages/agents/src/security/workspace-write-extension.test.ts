@@ -58,4 +58,11 @@ describe('workspace-write tool_call handler', () => {
     await workspaceWriteExtension(root)({ on } as unknown as ExtensionAPI)
     expect(on).toHaveBeenCalledWith('tool_call', expect.any(Function))
   })
+
+  it('normalizes containerWorkingDir-prefixed paths on tool_call input', () => {
+    const handler = createWorkspaceWriteToolCallHandler(root, { containerWorkingDir: '/workspace' })
+    const event = call('read', { path: '/workspace/src/a.ts' })
+    expect(handler(event)).toBeUndefined()
+    expect((event.input as { path: string }).path).toBe('src/a.ts')
+  })
 })

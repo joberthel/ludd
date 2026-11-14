@@ -5,6 +5,26 @@ import { SandboxViolationError } from '@ludd/core'
 export interface WorkspacePathGuardOptions {
   /** Permits paths outside the workspace root (only valid inside an isolated container). */
   dangerMode?: boolean
+  /** Container mount point (e.g. `/workspace`) mapped back to `workspaceRoot`. */
+  containerWorkingDir?: string
+}
+
+/**
+ * Strips `containerWorkingDir` prefix from container-absolute paths so they
+ * resolve relative to `workspaceRoot` on the host.
+ */
+export function normalizeContainerPath(target: string, containerWorkingDir?: string): string {
+  if (containerWorkingDir === undefined || containerWorkingDir === '') {
+    return target
+  }
+  const normalizedRoot = containerWorkingDir.replace(/\/+$/, '')
+  if (target === normalizedRoot) {
+    return '.'
+  }
+  if (target.startsWith(`${normalizedRoot}/`)) {
+    return target.slice(normalizedRoot.length + 1)
+  }
+  return target
 }
 
 const PROTECTED_PREFIXES: string[][] = [
@@ -41,8 +61,9 @@ export function assertSafeWorkspacePath(
   workspaceRoot: string,
   options: WorkspacePathGuardOptions = {},
 ): string {
+  const normalizedTarget = normalizeContainerPath(target, options.containerWorkingDir)
   const realRoot = realpathNearest(path.resolve(workspaceRoot))
-  const realTarget = realpathNearest(path.resolve(realRoot, target))
+  const realTarget = realpathNearest(path.resolve(realRoot, normalizedTarget))
   const relative = path.relative(realRoot, realTarget)
   const escapes = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
   if (!escapes && isProtected(relative.split(path.sep))) {

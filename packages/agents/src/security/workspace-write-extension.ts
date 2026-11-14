@@ -1,6 +1,6 @@
 import type { ExtensionFactory, ToolCallEvent, ToolCallEventResult } from '@earendil-works/pi-coding-agent'
 import { SandboxViolationError } from '@ludd/core'
-import { assertSafeWorkspacePath } from './workspace-path-guard.js'
+import { assertSafeWorkspacePath, normalizeContainerPath } from './workspace-path-guard.js'
 
 /** Tools whose `path` argument is routed through the workspace path guard. */
 const PATH_TOOLS = ['read', 'write', 'edit']
@@ -16,11 +16,20 @@ const PROTECTED_BASH_PATTERNS = [/\.harness\/runs(?:\/|\b)/, /\.git\/hooks(?:\/|
  * globbing or encoding). The container boundary (ADR-0009 Layer 2) is the real
  * control for shell access.
  */
-export function createWorkspaceWriteToolCallHandler(workspaceRoot: string, options: { dangerMode?: boolean } = {}) {
+export interface WorkspaceWriteExtensionOptions {
+  dangerMode?: boolean
+  containerWorkingDir?: string
+}
+
+export function createWorkspaceWriteToolCallHandler(workspaceRoot: string, options: WorkspaceWriteExtensionOptions = {}) {
   return (event: ToolCallEvent): ToolCallEventResult | undefined => {
     const input = event.input as { path?: unknown, command?: unknown }
     if (PATH_TOOLS.includes(event.toolName) && typeof input.path === 'string') {
       assertSafeWorkspacePath(input.path, workspaceRoot, options)
+      const normalized = normalizeContainerPath(input.path, options.containerWorkingDir)
+      if (normalized !== input.path) {
+        input.path = normalized
+      }
     }
     if (event.toolName === 'bash' && typeof input.command === 'string') {
       const command = input.command
@@ -32,7 +41,7 @@ export function createWorkspaceWriteToolCallHandler(workspaceRoot: string, optio
   }
 }
 
-export function workspaceWriteExtension(workspaceRoot: string, options: { dangerMode?: boolean } = {}): ExtensionFactory {
+export function workspaceWriteExtension(workspaceRoot: string, options: WorkspaceWriteExtensionOptions = {}): ExtensionFactory {
   const handler = createWorkspaceWriteToolCallHandler(workspaceRoot, options)
   return (pi) => {
     pi.on('tool_call', handler)

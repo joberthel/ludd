@@ -64,4 +64,13 @@ describe('assertSafeWorkspacePath', () => {
     expect(assertSafeWorkspacePath(path.join(outside, 'x'), root, { dangerMode: true })).toBe(path.join(outside, 'x'))
     expect(() => assertSafeWorkspacePath('.harness/runs/r1/state.json', root, { dangerMode: true })).toThrow(/protected/)
   })
+
+  it('normalizes containerWorkingDir-prefixed paths back to workspaceRoot', () => {
+    expect(assertSafeWorkspacePath('/workspace/src/a.ts', root, { containerWorkingDir: '/workspace' }))
+      .toBe(path.join(root, 'src/a.ts'))
+    expect(assertSafeWorkspacePath('/workspace', root, { containerWorkingDir: '/workspace' }))
+      .toBe(root)
+    expect(() => assertSafeWorkspacePath('/workspace/.harness/runs/r1/state.json', root, { containerWorkingDir: '/workspace' }))
+      .toThrow(/protected/)
+  })
 })
