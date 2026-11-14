@@ -79,7 +79,7 @@ export type BeforeStepGuardrails<TContext extends StepContext<any, any, any, any
 /** Static after-step guardrails, or a factory that receives the typed completed-step context. */
 export type AfterStepGuardrails<TContext extends StepContext<any, any, any, any> = StepContext>
   = | readonly Guardrail<any, any>[]
-    | ((ctx: TContext) => readonly Guardrail<any, any>[])
+    | ((ctx: TContext) => readonly Guardrail<any, any>[] | Promise<readonly Guardrail<any, any>[]>)
 
 export function isAgentRunner(value: unknown): value is AgentRunner {
   if (typeof value !== 'object' || value === null) {

@@ -144,6 +144,45 @@ describe('runAfterStepGuardrails factory shape validation', () => {
       fs.rmSync(runDir, { recursive: true, force: true })
     }
   })
+
+  it('awaits an async afterStep factory', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const gPass = makeGuardrail({ status: 'pass' })
+      const step: StepConfig = {
+        id: 's-1',
+        afterStep: async () => [gPass],
+        run: async () => ({}),
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-1', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        maxTotalTurns: 5,
+        initialPrompt: '',
+      })
+      const events = readLedgerEvents(runDir)
+      expect(events.map(e => e.eventType)).toEqual([
+        'guardrail.started',
+        'guardrail.passed',
+      ])
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('runAfterStepGuardrails passing and skipped runs', () => {

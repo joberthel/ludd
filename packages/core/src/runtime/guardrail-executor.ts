@@ -209,7 +209,7 @@ export async function runAfterStepGuardrails(
 ): Promise<void> {
   const { step, snapshot, runDir } = params
   const afterStep = typeof step.afterStep === 'function'
-    ? step.afterStep(params.ctx)
+    ? await step.afterStep(params.ctx)
     : step.afterStep
   if (afterStep !== undefined && !Array.isArray(afterStep)) {
     throw new TypeError(`Step "${step.id}" afterStep factory must return an array.`)
