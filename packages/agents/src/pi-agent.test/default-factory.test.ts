@@ -74,10 +74,10 @@ describe('defaultPiSessionFactory', () => {
     expect(bindExtensions).toHaveBeenCalledWith({})
   })
 
-  it('forwards dangerMode to workspaceWriteExtension', async () => {
+  it('does not forward dangerMode to host-side workspaceWriteExtension', async () => {
     const { defaultPiSessionFactory } = await import('../pi-agent.js')
     await defaultPiSessionFactory({ ...base, mode: 'workspace-write', dangerMode: true })
-    expect(workspaceWriteExtension).toHaveBeenCalledWith('/w', { dangerMode: true })
+    expect(workspaceWriteExtension).toHaveBeenCalledWith('/w', { containerWorkingDir: undefined })
   })
 
   it('forwards dangerMode from executeTurn to sessionFactory', async () => {

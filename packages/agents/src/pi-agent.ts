@@ -36,7 +36,6 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
       readOnly
         ? readOnlyExtension(options.cwd, { containerWorkingDir: options.environment?.containerWorkingDir })
         : workspaceWriteExtension(options.cwd, {
-            dangerMode: options.dangerMode,
             containerWorkingDir: options.environment?.containerWorkingDir,
           }),
     ],
