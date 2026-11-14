@@ -2,7 +2,6 @@ import type { StepContext } from '@ludd/core'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { execGuardrail } from '@ludd/guardrails'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { gitWorktreeEnv } from '../git-worktree-env.js'
 import { setupGitRepo } from './helpers.js'
@@ -72,21 +71,13 @@ describe('gitWorktreeEnv dynamic env resolution (AC 7.5.1)', () => {
     expect(res.exitCode).toBe(0)
     expect(res.stdout).toContain('DB:test_run_r-dynamic-1')
 
-    const guardrail = execGuardrail({
-      command: ['node', '-e', 'console.log("GUARD:" + process.env.DB_DATABASE)'],
-    })
-    const verdict = await guardrail.execute({
-      environment: env,
-      ctx: mockCtx,
-      phase: 'afterStep',
-      attempt: 1,
-      stepId: 'step-db',
-      guardrailIndex: 0,
-      mcpServerUrl: 'http://localhost:54321/sse',
-      mcpAuthToken: 'token',
-      runDir: tmpDir,
-    })
-    expect(verdict.status).toBe('pass')
+    const guardRes = await env.exec([
+      'node',
+      '-e',
+      'if (process.env.DB_DATABASE !== "test_run_r-dynamic-1") process.exit(1); console.log("GUARD:" + process.env.DB_DATABASE)',
+    ])
+    expect(guardRes.exitCode).toBe(0)
+    expect(guardRes.stdout).toContain('GUARD:test_run_r-dynamic-1')
 
     await env.teardown()
   })

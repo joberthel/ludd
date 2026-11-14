@@ -2,7 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { execGuardrail } from '@ludd/guardrails'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dockerWorktreeEnv } from '../docker-worktree-env.js'
 import { gitWorktreeEnv } from '../git-worktree-env.js'
@@ -90,32 +89,18 @@ describe('privilege separation: hostEnv vs isolated environments (ADR-0007)', ()
   })
 })
 
-describe('privilege separation: execGuardrail on hostEnv', () => {
+describe('privilege separation: hostEnv command execution', () => {
   it('executes privileged operations with hostEnv retaining GITHUB_TOKEN', async () => {
     const host = await hostEnv({ cwd: tmpDir }).provision({ runId: 'test-run', workspaceDir: tmpDir })
     const nodePath = process.execPath
 
-    const guardrail = execGuardrail({
-      environment: host,
-      command: [
-        nodePath,
-        '-e',
-        'if (!process.env.GITHUB_TOKEN) { process.exit(1); } console.log("push success with " + process.env.GITHUB_TOKEN);',
-      ],
-    })
+    const res = await host.exec([
+      nodePath,
+      '-e',
+      'if (!process.env.GITHUB_TOKEN) { process.exit(1); } console.log("push success with " + process.env.GITHUB_TOKEN);',
+    ])
 
-    const verdict = await guardrail.execute({
-      ctx: {} as any,
-      stepId: 'push-step',
-      phase: 'afterStep',
-      guardrailIndex: 0,
-      attempt: 1,
-      runDir: tmpDir,
-      environment: host,
-      mcpServerUrl: 'http://127.0.0.1:4000',
-      mcpAuthToken: 'token',
-    })
-
-    expect(verdict.status).toBe('pass')
+    expect(res.exitCode).toBe(0)
+    expect(res.stdout).toContain('push success with ghp_prod_privilege_token')
   })
 })

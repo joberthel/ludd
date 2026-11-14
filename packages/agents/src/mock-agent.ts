@@ -44,9 +44,7 @@ export interface MockAgentConfig<
 export interface MockAgentRunner<
   TOutput = unknown,
   TContext extends StepContext<any, any, any, any> = StepContext,
-> extends AgentRunner<TOutput, TContext> {
-  (): void
-}
+> extends AgentRunner<TOutput, TContext> {}
 
 function isTurnResultWithEvents<TOutput>(
   value: unknown,
@@ -135,5 +133,5 @@ export function mockAgent<
         sessionId: input.sessionId,
       }
     },
-  } as unknown as MockAgentRunner<TOutput, TContext>
+  }
 }

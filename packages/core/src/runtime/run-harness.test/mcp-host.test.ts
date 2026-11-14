@@ -90,7 +90,11 @@ describe('runHarness MCP host binding for Docker environments', () => {
   })
 
   it('detects docker-worktree in rehydrated environments', () => {
-    expect(hasDockerEnvironment([], { dock: { type: 'docker-worktree' } })).toBe(true)
-    expect(hasDockerEnvironment([], { local: { type: 'host' } })).toBe(false)
+    expect(hasDockerEnvironment([], {
+      dock: { type: 'docker-worktree' },
+    })).toBe(true)
+    expect(hasDockerEnvironment([], {
+      local: { type: 'host' },
+    })).toBe(false)
   })
 })

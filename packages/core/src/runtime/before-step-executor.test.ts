@@ -432,7 +432,12 @@ describe('runBeforeStepGuardrails partial rehydration', () => {
     }
 
     const { appendLedgerEvent } = await import('../persistence/ledger-writer.js')
-    for (const [idx, eventType] of [[0, 'guardrail.skipped'], [1, 'guardrail.failed'], [2, 'guardrail.passed']] as const) {
+    const entries = [
+      [0, 'guardrail.skipped'],
+      [1, 'guardrail.failed'],
+      [2, 'guardrail.passed'],
+    ] as const
+    for (const [idx, eventType] of entries) {
       appendLedgerEvent(tempDir, {
         schemaVersion: 1,
         timestamp: new Date().toISOString(),
