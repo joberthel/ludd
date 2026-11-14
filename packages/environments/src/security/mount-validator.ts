@@ -13,6 +13,25 @@ function isPathInsideOrEqual(parentDir: string, targetPath: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
 }
 
+/** Resolves symlinks for the nearest existing ancestor and re-appends the nonexistent tail. */
+function realpathNearest(target: string): string {
+  const tail: string[] = []
+  let current = target
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(current), ...tail.reverse())
+    }
+    catch {
+      const parent = path.dirname(current)
+      if (parent === current) {
+        return target
+      }
+      tail.push(path.basename(current))
+      current = parent
+    }
+  }
+}
+
 function checkPathAgainstForbidden(
   hostPath: string,
   targetPath: string,
@@ -21,6 +40,9 @@ function checkPathAgainstForbidden(
 ): void {
   if (isPathInsideOrEqual(forbiddenDir, targetPath)) {
     throw new ForbiddenMountPathError(hostPath, `Mount path resolves inside ${label}`)
+  }
+  if (isPathInsideOrEqual(targetPath, forbiddenDir)) {
+    throw new ForbiddenMountPathError(hostPath, `Mount path is an ancestor of ${label}`)
   }
 }
 
@@ -33,15 +55,13 @@ export function validateHostMountPath(workspaceDir: string, hostPath: string): v
   checkPathAgainstForbidden(hostPath, resolvedHostPath, runsDir, '.harness/runs')
   checkPathAgainstForbidden(hostPath, resolvedHostPath, hooksDir, '.git/hooks')
 
-  if (fs.existsSync(resolvedHostPath) && fs.existsSync(resolvedWorkspace)) {
-    const realWorkspace = fs.realpathSync(resolvedWorkspace)
-    const realRunsDir = path.resolve(realWorkspace, '.harness', 'runs')
-    const realHooksDir = path.resolve(realWorkspace, '.git', 'hooks')
-    const realHostPath = fs.realpathSync(resolvedHostPath)
+  const realWorkspace = realpathNearest(resolvedWorkspace)
+  const realRunsDir = path.resolve(realWorkspace, '.harness', 'runs')
+  const realHooksDir = path.resolve(realWorkspace, '.git', 'hooks')
+  const realHostPath = realpathNearest(resolvedHostPath)
 
-    checkPathAgainstForbidden(hostPath, realHostPath, realRunsDir, '.harness/runs')
-    checkPathAgainstForbidden(hostPath, realHostPath, realHooksDir, '.git/hooks')
-  }
+  checkPathAgainstForbidden(hostPath, realHostPath, realRunsDir, '.harness/runs')
+  checkPathAgainstForbidden(hostPath, realHostPath, realHooksDir, '.git/hooks')
 }
 
 export function validateAllMountPaths(

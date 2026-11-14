@@ -60,6 +60,33 @@ describe('mount-validator path validation', () => {
 
     expect(() => validateHostMountPath(tmpDir, symlinkToRuns)).toThrow(ForbiddenMountPathError)
   })
+
+  it('throws ForbiddenMountPathError when mounting an ancestor of forbidden paths', () => {
+    expect(() => validateHostMountPath(tmpDir, '.')).toThrow(ForbiddenMountPathError)
+    expect(() => validateHostMountPath(tmpDir, tmpDir)).toThrow(ForbiddenMountPathError)
+    expect(() => validateHostMountPath(tmpDir, '.harness')).toThrow(ForbiddenMountPathError)
+    expect(() => validateHostMountPath(tmpDir, '.git')).toThrow(ForbiddenMountPathError)
+
+    const harnessDir = path.join(tmpDir, '.harness')
+    fs.mkdirSync(harnessDir, { recursive: true })
+    const symlinkToHarness = path.join(tmpDir, 'symlink-harness')
+    fs.symlinkSync(harnessDir, symlinkToHarness)
+    expect(() => validateHostMountPath(tmpDir, symlinkToHarness)).toThrow(ForbiddenMountPathError)
+  })
+
+  it('detects forbidden mount paths through symlinks when leaf path does not exist yet', () => {
+    const runsDir = path.join(tmpDir, '.harness', 'runs')
+    fs.mkdirSync(runsDir, { recursive: true })
+    const symlinkToRuns = path.join(tmpDir, 'symlink-runs')
+    fs.symlinkSync(runsDir, symlinkToRuns)
+
+    expect(() => validateHostMountPath(tmpDir, path.join(symlinkToRuns, 'nonexistent-run'))).toThrow(
+      ForbiddenMountPathError,
+    )
+    expect(() => validateHostMountPath(tmpDir, 'symlink-runs/nested/nonexistent')).toThrow(
+      ForbiddenMountPathError,
+    )
+  })
 })
 
 describe('mount-validator aggregate mounts and flag builder', () => {
