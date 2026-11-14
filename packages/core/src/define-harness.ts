@@ -287,3 +287,80 @@ export function defineHarness(config: any): any {
   validateHarnessConfig(config)
   return config as HarnessConfig
 }
+
+export interface HarnessBuilder<
+  TName extends string,
+  TSteps extends readonly unknown[] = readonly [],
+> {
+  step: {
+    <
+      SId extends string,
+      SOut = any,
+      SArt = any,
+      const SBeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
+        | ((ctx: import('./types/inference.js').PriorStepContext<TSteps>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+    >(
+      step: PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep>,
+    ): HarnessBuilder<
+      TName,
+      readonly [...TSteps, PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep>]
+    >
+    <
+      SId extends string,
+      SOut = any,
+      SArt = any,
+      SItem = any,
+      const SBeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
+        | ((ctx: import('./types/context.js').StepContext<unknown, import('./types/inference.js').AccumulatePriorSteps<TSteps>, SItem, true>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+    >(
+      step: ItemsMatrixStepDef<TSteps, SId, SOut, SArt, SItem, SBeforeStep>,
+    ): HarnessBuilder<
+      TName,
+      readonly [...TSteps, ItemsMatrixStepDef<TSteps, SId, SOut, SArt, SItem, SBeforeStep>]
+    >
+    <
+      SId extends string,
+      SOut = any,
+      SArt = any,
+      const SKey extends string = string,
+      const SBeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
+        | ((ctx: import('./types/context.js').StepContext<unknown, import('./types/inference.js').AccumulatePriorSteps<TSteps>, import('./types/inference.js').InferMatrixItem<{ matrix: { itemsFromArtifact: SKey } }, import('./types/inference.js').AccumulateArtifactItemMap<TSteps>>, true>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+    >(
+      step: ArtifactMatrixStepDef<TSteps, SId, SOut, SArt, SKey, SBeforeStep>,
+    ): HarnessBuilder<
+      TName,
+      readonly [...TSteps, ArtifactMatrixStepDef<TSteps, SId, SOut, SArt, SKey, SBeforeStep>]
+    >
+  }
+  build: () => {
+    name: TName
+    cleanupPolicy?: CleanupPolicy
+    steps: TSteps
+  }
+}
+
+export function createHarness<TName extends string>(
+  name: TName,
+  options?: { cleanupPolicy?: CleanupPolicy },
+): HarnessBuilder<TName> {
+  const steps: unknown[] = []
+  const cleanupPolicy = options?.cleanupPolicy
+  const builder = {
+    step(step: unknown) {
+      steps.push(step)
+      return builder
+    },
+    build() {
+      const config = {
+        name,
+        ...(cleanupPolicy !== undefined
+          ? { cleanupPolicy }
+          : {}),
+        steps: [...steps],
+      }
+      validateHarnessConfig(config)
+      return config
+    },
+  }
+  return builder as unknown as HarnessBuilder<TName>
+}

@@ -1,4 +1,5 @@
-export { defineHarness, validateHarnessConfig } from './define-harness.js'
+export { createHarness, defineHarness, validateHarnessConfig } from './define-harness.js'
+export type { HarnessBuilder } from './define-harness.js'
 export { EnvironmentUnreachableError } from './errors/environment-unreachable-error.js'
 export { ForbiddenMountPathError } from './errors/forbidden-mount-path-error.js'
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
