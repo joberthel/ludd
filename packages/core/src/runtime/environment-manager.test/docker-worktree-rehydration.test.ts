@@ -223,4 +223,55 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
 
     execSpy.mockRestore()
   })
+
+  it('translates MCP_SERVER_URL to host.docker.internal and sanitizes host exec options', async () => {
+    const wtDir = path.join(tmpDir, 'wt-dock-exec-sanitize')
+    fs.mkdirSync(wtDir)
+
+    const execSpy = vi.spyOn(envExec, 'execHostCommand')
+    execSpy.mockResolvedValue({
+      exitCode: 0,
+      stdout: 'ok',
+      stderr: '',
+      timedOut: false,
+    })
+
+    const env = createDockerWorktreeEnvironmentFromDescriptor({
+      id: 'dock-env',
+      workingDir: wtDir,
+      containerId: 'c-123',
+      injectedEnv: {
+        MCP_SERVER_URL: 'http://127.0.0.1:54321/sse',
+      },
+    })
+
+    await env.exec(['node', '-v'], {
+      timeoutMs: 5000,
+      env: {
+        OTHER_VAR: 'value',
+      },
+      host: true,
+    } as any)
+
+    expect(execSpy).toHaveBeenCalledWith(
+      wtDir,
+      [
+        'docker',
+        'exec',
+        '-e',
+        'MCP_SERVER_URL=http://host.docker.internal:54321/sse',
+        '-e',
+        'OTHER_VAR=value',
+        'c-123',
+        'node',
+        '-v',
+      ],
+      {
+        timeoutMs: 5000,
+        signal: undefined,
+      },
+    )
+
+    execSpy.mockRestore()
+  })
 })

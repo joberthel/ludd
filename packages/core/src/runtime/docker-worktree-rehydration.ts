@@ -75,6 +75,13 @@ async function teardownDockerWorktree(
   }
 }
 
+function translateMcpServerUrl(url: string, bridgeHost = 'host.docker.internal'): string {
+  const normalized = url.startsWith('http://') || url.startsWith('https://')
+    ? url
+    : `http://${url}`
+  return normalized.replace(/\b(127\.0\.0\.1|localhost)\b/, bridgeHost)
+}
+
 async function execDockerWorktree(
   workingDir: string,
   containerId: string | undefined,
@@ -99,7 +106,10 @@ async function execDockerWorktree(
   const envArgs: string[] = []
   if (options?.env) {
     for (const [key, value] of Object.entries(options.env)) {
-      envArgs.push('-e', `${key}=${value}`)
+      const finalValue = key === 'MCP_SERVER_URL'
+        ? translateMcpServerUrl(value)
+        : value
+      envArgs.push('-e', `${key}=${finalValue}`)
     }
   }
   return execHostCommand(workingDir, [
@@ -110,8 +120,8 @@ async function execDockerWorktree(
     containerId,
     ...cmdArgs,
   ], {
+    timeoutMs: options?.timeoutMs,
     signal,
-    ...options,
   })
 }
 
