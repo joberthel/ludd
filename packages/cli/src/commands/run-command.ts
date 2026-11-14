@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyExistsError, runHarness } from '@ludd/core'
-import { promptForGate } from '../prompts/inline-gate-prompter.js'
+import { loadHarnessConfig, resolveRunDir, RunAlreadyExistsError, runHarness } from '@ludd/core'
+import { watchForGate } from '../prompts/watch-for-gate.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
 
 export interface RunCommandOptions {
@@ -13,36 +13,6 @@ export interface RunCommandOptions {
   stream?: boolean
   detach?: boolean
   worker?: boolean
-}
-
-async function watchForGate(runDir: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
-  let gateKey = ''
-  while (!isCompleted()) {
-    await new Promise(resolve => setTimeout(resolve, 100))
-    if (isCompleted())
-      break
-    const stateFile = path.join(runDir, 'state.json')
-    if (!fs.existsSync(stateFile))
-      continue
-    const state = readRunState(runDir)
-    const gate = state.activeGate
-    if (state.status !== 'waiting_for_gate' || !gate) {
-      gateKey = ''
-      continue
-    }
-    const key = `${gate.stepId}:${gate.guardrailIndex}:${gate.createdAt}`
-    if (gateKey === key)
-      continue
-    gateKey = key
-    const client = await createControlClient(runDir)
-    try {
-      if (!worker)
-        await promptForGate(state, client)
-    }
-    finally {
-      await client.close()
-    }
-  }
 }
 
 export async function runCommand(options: RunCommandOptions): Promise<number> {

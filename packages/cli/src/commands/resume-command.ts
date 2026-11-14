@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient, isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@ludd/core'
-import { promptForGate } from '../prompts/inline-gate-prompter.js'
+import { isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@ludd/core'
+import { watchForGate } from '../prompts/watch-for-gate.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
 
 export interface ResumeCommandOptions {
@@ -12,37 +12,6 @@ export interface ResumeCommandOptions {
   configPath?: string
   detach?: boolean
   worker?: boolean
-}
-
-async function watchForGate(runDir: string, stateFile: string, isCompleted: () => boolean, worker: boolean): Promise<void> {
-  let gateKey = ''
-  return (async () => {
-    while (!isCompleted()) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      if (isCompleted())
-        break
-      if (!fs.existsSync(stateFile))
-        continue
-      const state = readRunState(runDir)
-      const gate = state.activeGate
-      if (state.status !== 'waiting_for_gate' || !gate) {
-        gateKey = ''
-        continue
-      }
-      const key = `${gate.stepId}:${gate.guardrailIndex}:${gate.createdAt}`
-      if (gateKey === key)
-        continue
-      gateKey = key
-      const client = await createControlClient(runDir)
-      try {
-        if (!worker)
-          await promptForGate(state, client)
-      }
-      finally {
-        await client.close()
-      }
-    }
-  })()
 }
 
 export async function resumeCommand(options: ResumeCommandOptions): Promise<number> {
@@ -79,7 +48,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()
   let completed = false
-  const gateWatcher = watchForGate(runDir, stateFile, () => completed, options.worker ?? false)
+  const gateWatcher = watchForGate(runDir, () => completed, options.worker ?? false)
   try {
     const result = await runHarness(config, { runId: options.runId, workspaceDir, configPath })
     return result.status === 'passed'

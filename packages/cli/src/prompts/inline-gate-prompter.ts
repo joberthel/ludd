@@ -9,11 +9,12 @@ async function resolveHumanReview(gate: NonNullable<RunStateSnapshot['activeGate
     : actionInput === 'a' || actionInput === 'abort'
       ? 'abort'
       : 'pass'
-  const feedback = action === 'fail'
-    ? await rl.question('Feedback (required on fail): ')
-    : ''
-  if (action === 'fail' && !feedback.trim())
-    throw new Error('Feedback is required when failing a human review gate.')
+  let feedback = ''
+  if (action === 'fail') {
+    while (!feedback.trim()) {
+      feedback = await rl.question('Feedback (required on fail): ')
+    }
+  }
   return {
     stepId: gate.stepId,
     guardrailIndex: gate.guardrailIndex,
@@ -33,9 +34,22 @@ async function resolveRetryGate(gate: NonNullable<RunStateSnapshot['activeGate']
       : actionInput === 'a' || actionInput === 'abort'
         ? 'abort'
         : 'retry'
-  const addRetries = action === 'retry'
-    ? Number((await rl.question('Additional retries (1): ')).trim() || '1')
-    : undefined
+  let addRetries: number | undefined
+  if (action === 'retry') {
+    while (true) {
+      const raw = (await rl.question('Additional retries (1): ')).trim()
+      if (!raw) {
+        addRetries = 1
+        break
+      }
+      const parsed = Number(raw)
+      if (Number.isInteger(parsed) && parsed > 0) {
+        addRetries = parsed
+        break
+      }
+      console.log('Please enter a positive integer.')
+    }
+  }
   const feedback = await rl.question('Feedback hint (optional): ')
   return {
     stepId: gate.stepId,

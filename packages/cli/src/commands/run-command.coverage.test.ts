@@ -166,7 +166,7 @@ it('stops the gate watcher after the run completes while the client closes', asy
   expect(client.close).toHaveBeenCalledOnce()
 })
 
-it('does not prompt gates in worker mode', async () => {
+it('skips gate watching in worker mode', async () => {
   const dir = workspace()
   mocks.readRunState.mockReturnValue(waitingState())
   const runDir = path.join(dir, '.harness', 'runs', 'run-a')
@@ -179,9 +179,11 @@ it('does not prompt gates in worker mode', async () => {
     })
   })
   const running = runCommand({ workspace: dir, runId: 'run-a', worker: true })
-  await vi.waitFor(() => expect(createControlClient).toHaveBeenCalledOnce(), { timeout: 2000 })
+  await vi.waitFor(() => expect(mocks.runHarness).toHaveBeenCalledOnce(), { timeout: 2000 })
+  await new Promise(resolve => setTimeout(resolve, 150))
   finishRun({ status: 'failed' })
   await expect(running).resolves.toBe(1)
+  expect(createControlClient).not.toHaveBeenCalled()
   expect(mocks.promptForGate).not.toHaveBeenCalled()
 })
 

@@ -97,15 +97,15 @@ describe('resumeCommand gate watcher', () => {
     expect(mocks.clientClose).toHaveBeenCalledOnce()
   })
 
-  it('connects to gates in worker mode without opening the inline prompt', async () => {
+  it('skips gate watching in worker mode without connecting a control client', async () => {
     const dir = workspace()
     mocks.readRunState
       .mockReturnValueOnce(state('failed'))
       .mockReturnValue(state('waiting_for_gate'))
-    mocks.runHarness.mockImplementation(async () => new Promise(resolve => setTimeout(resolve, 220, { status: 'passed' })))
+    mocks.runHarness.mockImplementation(async () => new Promise(resolve => setTimeout(resolve, 150, { status: 'passed' })))
     await expect(resumeCommand({ runId: 'run-a', workspace: dir, worker: true })).resolves.toBe(0)
-    expect(mocks.createControlClient).toHaveBeenCalled()
+    expect(mocks.createControlClient).not.toHaveBeenCalled()
     expect(mocks.promptForGate).not.toHaveBeenCalled()
-    expect(mocks.clientClose).toHaveBeenCalled()
+    expect(mocks.clientClose).not.toHaveBeenCalled()
   })
 })

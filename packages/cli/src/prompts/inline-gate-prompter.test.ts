@@ -77,11 +77,21 @@ it('omits empty human review feedback', async () => {
   })
 })
 
-it.each(['f', 'fail'])('requires feedback for human review failure (%s)', async (action) => {
+it.each(['f', 'fail'])('re-prompts for feedback on human review failure (%s) until non-empty', async (action) => {
   const control = client()
-  question.mockResolvedValueOnce(action).mockResolvedValueOnce('  ')
-  await expect(promptForGate(snapshot(), control)).rejects.toThrow('Feedback is required when failing a human review gate.')
-  expect(control.resolveGate).not.toHaveBeenCalled()
+  question
+    .mockResolvedValueOnce(action)
+    .mockResolvedValueOnce('  ')
+    .mockResolvedValueOnce('')
+    .mockResolvedValueOnce('Please fix')
+  await promptForGate(snapshot(), control)
+  expect(control.resolveGate).toHaveBeenCalledWith({
+    stepId: 'step-a',
+    guardrailIndex: 1,
+    action: 'fail',
+    feedback: 'Please fix',
+  })
+  expect(question).toHaveBeenCalledTimes(4)
   expect(close).toHaveBeenCalledOnce()
 })
 
@@ -143,6 +153,27 @@ it('resolves max-retry skip', async () => {
     action: 'skip',
     feedback: 'Skip this',
   })
+})
+
+it('re-prompts on invalid additional retries input until a positive integer is entered', async () => {
+  const control = client()
+  question
+    .mockResolvedValueOnce('r')
+    .mockResolvedValueOnce('abc')
+    .mockResolvedValueOnce('0')
+    .mockResolvedValueOnce('-2')
+    .mockResolvedValueOnce('3')
+    .mockResolvedValueOnce('try again')
+  await promptForGate(snapshot('max_retries_exceeded'), control)
+  expect(control.resolveGate).toHaveBeenCalledWith({
+    stepId: 'step-a',
+    guardrailIndex: 1,
+    action: 'retry',
+    addRetries: 3,
+    feedback: 'try again',
+  })
+  expect(question).toHaveBeenCalledTimes(6)
+  expect(close).toHaveBeenCalledOnce()
 })
 
 it('resolves max-retry abort', async () => {
