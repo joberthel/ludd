@@ -84,6 +84,8 @@ export {
   createDockerWorktreeEnvironmentFromDescriptor,
   createGitWorktreeEnvironmentFromDescriptor,
   createHostEnvironmentFromDescriptor,
+  execHostCommand,
+  killProcessTree,
   recordEnvironment,
   rehydrateEnvironmentsAndCheckHealth,
   type RehydrateEnvironmentsParams,

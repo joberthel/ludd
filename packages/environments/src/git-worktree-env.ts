@@ -12,6 +12,7 @@ import process from 'node:process'
 import { execHostEnvCommand } from './host-env.js'
 import { resolveEnvironmentVariables } from './isolation/env-resolver.js'
 import { buildIsolatedEnvironmentVars } from './security/env-sanitizer.js'
+import { addGitWorktree, removeGitWorktree } from './worktree-helpers.js'
 
 export interface GitWorktreeEnvOptions {
   id: string
@@ -36,59 +37,6 @@ function resolveWorktreePaths(workspaceDir: string, runId: string, id: string): 
   const workspace = path.resolve(workspaceDir)
   const worktreePath = path.resolve(workspace, '.harness', 'worktrees', `${runId}-${id}`)
   return { workspace, worktreePath }
-}
-
-async function addGitWorktree(
-  workspaceDir: string,
-  worktreePath: string,
-  branchName: string,
-  baseBranch?: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  fs.mkdirSync(path.dirname(worktreePath), { recursive: true })
-  const result = await execHostEnvCommand(
-    workspaceDir,
-    [
-      'git',
-      'worktree',
-      'add',
-      '-b',
-      branchName,
-      worktreePath,
-      baseBranch ?? 'HEAD',
-    ],
-    { signal },
-  )
-  if (result.exitCode !== 0) {
-    const errorDetails = result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`
-    throw new Error(`Failed to create git worktree: ${errorDetails}`)
-  }
-}
-
-async function removeGitWorktree(
-  workspaceDir: string,
-  worktreePath: string,
-  signal?: AbortSignal,
-): Promise<void> {
-  try {
-    await execHostEnvCommand(
-      workspaceDir,
-      [
-        'git',
-        'worktree',
-        'remove',
-        '--force',
-        worktreePath,
-      ],
-      { signal },
-    )
-  }
-  catch {
-    // Ignore errors if worktree is already detached or removed
-  }
-  if (fs.existsSync(worktreePath)) {
-    fs.rmSync(worktreePath, { recursive: true, force: true })
-  }
 }
 
 async function pingGitWorktree(

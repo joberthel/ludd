@@ -7,10 +7,13 @@ import type {
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { execHostEnvCommand } from './host-process.js'
+import {
+  execHostCommand as execHostEnvCommand,
+  killProcessTree,
+} from '@ludd/core'
 import { resolveEnvironmentVariables } from './isolation/env-resolver.js'
 
-export { execHostEnvCommand, killProcessTree } from './host-process.js'
+export { execHostEnvCommand, killProcessTree }
 
 export interface HostEnvOptions {
   id?: string
