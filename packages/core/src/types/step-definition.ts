@@ -59,7 +59,6 @@ export interface ItemsMatrixStepDef<
   matrix: {
     items: DynamicProperty<readonly TItem[], PriorStepContext<TPriorSteps>>
     itemsFromArtifact?: never
-    concurrency?: number
   }
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
@@ -104,7 +103,6 @@ export interface ArtifactMatrixStepDef<
   matrix: {
     itemsFromArtifact: TKey
     items?: never
-    concurrency?: number
   }
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
