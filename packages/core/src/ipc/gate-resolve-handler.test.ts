@@ -215,4 +215,18 @@ describe('createGateResolveHandler minimal resolution', () => {
       action: 'skip',
     })
   })
+
+  it('rejects action "retry" on human_review gates', async () => {
+    const waiter = createGateWaiter()
+    const handler = createGateResolveHandler({
+      runDir: tempDir,
+      getSnapshot: () => snapshot,
+      gateWaiter: waiter,
+    })
+
+    await expect(handler({
+      stepId: 'step-1',
+      action: 'retry',
+    })).rejects.toThrow('Invalid params: action "retry" is not supported for human_review gates')
+  })
 })

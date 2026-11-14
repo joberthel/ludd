@@ -255,13 +255,13 @@ describe('recordEnvironment metadata persistence (#78)', () => {
       activeStepId: 's1',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      environments: {},
+      environments: {} as Record<string, unknown>,
     }
     const ctx = {
       runId: 'run-78',
       stepId: 's1',
       attempt: 1,
-      environments: {},
+      environments: {} as Record<string, unknown>,
       artifacts: {},
       stepOutputs: {},
     }
@@ -273,7 +273,12 @@ describe('recordEnvironment metadata persistence (#78)', () => {
       containerWorkingDir: '/app',
       bridgeHost: '172.17.0.1',
       whitelistEnv: ['FOO', 'MISSING_KEY'],
-      exec: async () => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false }),
+      exec: async () => ({
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+        timedOut: false,
+      }),
       ping: async () => true,
       teardown: async () => {},
     }

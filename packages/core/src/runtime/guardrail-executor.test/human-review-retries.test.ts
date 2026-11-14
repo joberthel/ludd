@@ -161,7 +161,9 @@ describe('runAfterStepGuardrails humanReviewGuardrail explicit maxRetries', () =
       })
       await new Promise(r => setTimeout(r, 10))
       waiter.resolve({ stepId: 's-hr', action: 'fail', feedback: 'Attempt 1 failed' })
-      await expect(p1).rejects.toThrow(GuardrailRetrySignal)
+      const signal1 = await p1.catch((err: unknown) => err) as GuardrailRetrySignal
+      expect(signal1).toBeInstanceOf(GuardrailRetrySignal)
+      expect(signal1.prompt).toContain('User hint:\nAttempt 1 failed')
 
       const p2 = runAfterStepGuardrails({
         step,

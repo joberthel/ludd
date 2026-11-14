@@ -10,6 +10,7 @@ import { isAgentRunner } from '../types/harness.js'
 import { executeAgentStep, validateStepOutput } from './agent-executor.js'
 import { validateStepArtifacts } from './artifact-validator.js'
 import { runAfterStepGuardrails } from './guardrail-executor.js'
+import { GuardrailRetrySignal } from './guardrail-retry-signal.js'
 
 interface StepRunExecutionParams {
   ctx: StepContext
@@ -55,29 +56,43 @@ async function executeFunctionStep(
   params: StepRunExecutionParams,
 ): Promise<unknown> {
   const { ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter } = params
-  if (rehydration?.activeGate?.phase === 'afterStep') {
-    return resumeFunctionAfterStepGate(step, params)
+  let shouldResumeGate = rehydration?.activeGate?.phase === 'afterStep'
+
+  while (true) {
+    try {
+      if (shouldResumeGate) {
+        shouldResumeGate = false
+        return await resumeFunctionAfterStepGate(step, params)
+      }
+      const rawOutput: unknown = await runner(ctx)
+      const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
+      await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
+      ctx.step = { id: step.id, output: validated, attempt: ctx.step.attempt }
+      await runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: ctx.step.attempt,
+        sessionId: undefined,
+        maxTotalTurns: 1,
+        initialPrompt: '',
+        isAgent: false,
+        mcpServer,
+        environment,
+        logStore,
+        gateWaiter,
+      })
+      return validated
+    }
+    catch (err) {
+      if (err instanceof GuardrailRetrySignal) {
+        ctx.step.attempt += 1
+        continue
+      }
+      throw err
+    }
   }
-  const rawOutput: unknown = await runner(ctx)
-  const validated = await validateStepOutput(step.id, step.outputSchema, rawOutput)
-  await validateStepArtifacts(step.id, step.artifacts, ctx.artifacts)
-  ctx.step = { id: step.id, output: validated, attempt: ctx.step.attempt }
-  await runAfterStepGuardrails({
-    step,
-    ctx,
-    snapshot,
-    runDir,
-    attempt: ctx.step.attempt,
-    sessionId: undefined,
-    maxTotalTurns: 1,
-    initialPrompt: '',
-    isAgent: false,
-    mcpServer,
-    environment,
-    logStore,
-    gateWaiter,
-  })
-  return validated
 }
 
 function hasAgentSessionOutput(output: unknown): boolean {
@@ -116,5 +131,13 @@ export async function executeStepRun(
       gateWaiter,
     )
   }
-  return executeFunctionStep(step, async () => run, params)
+  const stepRun = step.run as (ctx: StepContext) => Promise<unknown> | unknown
+  let firstAttempt = true
+  return executeFunctionStep(step, async (context) => {
+    if (firstAttempt) {
+      firstAttempt = false
+      return run
+    }
+    return stepRun(context)
+  }, params)
 }

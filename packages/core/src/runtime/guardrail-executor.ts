@@ -128,6 +128,7 @@ function triggerGuardrailRetry(
   params: RunAfterStepGuardrailsParams,
   k: number,
   verdict: GuardrailVerdict,
+  feedback?: string,
 ): never {
   const { runDir, ctx, step, sessionId, attempt, initialPrompt, mcpServer } = params
   const nextAttempt = attempt + 1
@@ -138,7 +139,7 @@ function triggerGuardrailRetry(
     verdict,
   })
 
-  const retryPrompt = formatGuardrailRetryPrompt(initialPrompt, k, verdict, mcpServer?.url)
+  const retryPrompt = formatGuardrailRetryPrompt(initialPrompt, k, verdict, mcpServer?.url, feedback)
   throw new GuardrailRetrySignal(retryPrompt)
 }
 
@@ -162,7 +163,10 @@ async function handleGuardrailFailure(
     return handleGuardrailEscalation(params, k, guardrail, verdict, reason)
   }
 
-  triggerGuardrailRetry(params, k, verdict)
+  const feedback = guardrail.type === 'human_review' && typeof verdict.body === 'string'
+    ? verdict.body
+    : undefined
+  triggerGuardrailRetry(params, k, verdict, feedback)
 }
 
 async function processGuardrailResult(
