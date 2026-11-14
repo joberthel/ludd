@@ -11,6 +11,7 @@ export interface LogMetadata {
   readonly attempt?: number
   readonly phase?: 'beforeStep' | 'afterStep'
   readonly guardrailIndex?: number
+  readonly matrixIndex?: number
   readonly createdAt?: string
 }
 
@@ -61,6 +62,7 @@ export interface OffloadLogOptions {
   readonly attempt: number
   readonly phase: 'beforeStep' | 'afterStep'
   readonly guardrailIndex: number
+  readonly matrixIndex?: number
   readonly content: string
   readonly format?: LogFormat
   readonly pagination?: string | { readonly key: string } | ((data: unknown) => readonly unknown[])

@@ -12,7 +12,6 @@ export interface LogStoreWriterOptions {
 async function writeJsonLogFiles(
   logsDir: string,
   indexedKey: string,
-  primaryKey: string,
   content: string,
   pagination?: ExecLogPaginationConfig,
 ): Promise<{ totalItems: number }> {
@@ -26,7 +25,6 @@ async function writeJsonLogFiles(
   const items = extractJsonItems(parsed, pagination)
   const itemsJson = JSON.stringify(items, null, 2)
   await writeAtomic(path.join(logsDir, `${indexedKey}.items.json`), itemsJson)
-  await writeAtomic(path.join(logsDir, `${primaryKey}.items.json`), itemsJson)
   return { totalItems: items.length }
 }
 
@@ -48,18 +46,19 @@ export async function performLogOffload(
 ): Promise<LogMetadata> {
   const isJson = opts.format === 'json' || opts.pagination !== undefined
   const format: LogFormat = isJson ? 'json' : 'text'
-  const indexedKey = `${opts.stepId}-${opts.attempt}-${opts.phase}-${opts.guardrailIndex}`
-  const primaryKey = `${opts.stepId}-${opts.attempt}`
+  const matrixSegment = opts.matrixIndex !== undefined
+    ? `-m${opts.matrixIndex}`
+    : ''
+  const indexedKey = `${opts.stepId}${matrixSegment}-${opts.attempt}-${opts.phase}-${opts.guardrailIndex}`
 
   const totalItems = isJson
-    ? (await writeJsonLogFiles(logsDir, indexedKey, primaryKey, opts.content, opts.pagination)).totalItems
+    ? (await writeJsonLogFiles(logsDir, indexedKey, opts.content, opts.pagination)).totalItems
     : undefined
   const totalLines = isJson
     ? undefined
     : splitTextLines(opts.content).length
 
   await writeAtomic(path.join(logsDir, `${indexedKey}.log`), opts.content)
-  await writeAtomic(path.join(logsDir, `${primaryKey}.log`), opts.content)
 
   const metadata: LogMetadata = {
     logKey: indexedKey,
@@ -72,22 +71,17 @@ export async function performLogOffload(
     attempt: opts.attempt,
     phase: opts.phase,
     guardrailIndex: opts.guardrailIndex,
+    ...(opts.matrixIndex !== undefined
+      ? { matrixIndex: opts.matrixIndex }
+      : {}),
     createdAt: new Date().toISOString(),
-  }
-  const primaryMeta: LogMetadata = {
-    ...metadata,
-    logKey: primaryKey,
-    filePath: path.join('logs', `${primaryKey}.log`),
   }
 
   metadataMap.set(indexedKey, metadata)
   metadataMap.set(`${indexedKey}.log`, metadata)
-  metadataMap.set(primaryKey, primaryMeta)
-  metadataMap.set(`${primaryKey}.log`, primaryMeta)
 
   if (options?.onLogPersisted) {
     await options.onLogPersisted(indexedKey, metadata)
-    await options.onLogPersisted(primaryKey, primaryMeta)
   }
   return metadata
 }
@@ -114,6 +108,7 @@ export async function offloadGuardrailLog(
   guardrailIndex: number,
   verdict: GuardrailVerdict,
   logStore?: LogStore,
+  matrixIndex?: number,
 ): Promise<LogMetadata> {
   const { createLogStore } = await import('./log-store.js')
   const store = logStore ?? createLogStore(runDir)
@@ -124,22 +119,16 @@ export async function offloadGuardrailLog(
     attempt,
     phase,
     guardrailIndex,
+    matrixIndex,
     content,
     format: verdict.logFormat,
     pagination: verdict.pagination,
   })
 
-  verdict.logKey = `${stepId}-${attempt}`
-  const primaryKey = `${stepId}-${attempt}`
-  const indexedKey = `${stepId}-${attempt}-${phase}-${guardrailIndex}`
+  verdict.logKey = metadata.logKey
 
   snapshot.logs = snapshot.logs ?? {}
-  snapshot.logs[indexedKey] = metadata
-  snapshot.logs[primaryKey] = {
-    ...metadata,
-    logKey: primaryKey,
-    filePath: path.join('logs', `${primaryKey}.log`),
-  }
+  snapshot.logs[metadata.logKey] = metadata
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
 

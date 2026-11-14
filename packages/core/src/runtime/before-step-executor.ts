@@ -6,7 +6,6 @@ import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { GateWaiter } from './gate-waiter.js'
-import path from 'node:path'
 import process from 'node:process'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
@@ -105,6 +104,7 @@ export async function offloadBeforeStepLog(
   k: number,
   verdict: GuardrailVerdict,
   logStore: LogStore,
+  matrixIndex?: number,
 ): Promise<string> {
   const content = resolveBeforeStepContent(k, verdict)
   const meta = await logStore.offload({
@@ -112,6 +112,7 @@ export async function offloadBeforeStepLog(
     attempt: 1,
     phase: 'beforeStep',
     guardrailIndex: k,
+    matrixIndex,
     content,
     format: verdict.logFormat,
     pagination: verdict.pagination,
@@ -120,11 +121,6 @@ export async function offloadBeforeStepLog(
   verdict.logKey = meta.logKey
   snapshot.logs = snapshot.logs ?? {}
   snapshot.logs[meta.logKey] = meta
-  snapshot.logs[`${stepId}-1`] = {
-    ...meta,
-    logKey: `${stepId}-1`,
-    filePath: path.join('logs', `${stepId}-1.log`),
-  }
   snapshot.updatedAt = new Date().toISOString()
   writeRunStateAtomic(runDir, snapshot)
   return meta.logKey
@@ -163,7 +159,7 @@ async function executeStandardBeforeStepGuardrail(
     verdict,
   })
 
-  const logKey = await offloadBeforeStepLog(runDir, snapshot, step.id, k, verdict, logStore)
+  const logKey = await offloadBeforeStepLog(runDir, snapshot, step.id, k, verdict, logStore, ctx.matrix?.index)
   return { guardrailIndex: k, verdict, logKey }
 }
 

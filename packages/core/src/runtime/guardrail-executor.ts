@@ -194,7 +194,7 @@ async function processGuardrailResult(
     return
   }
 
-  await offloadGuardrailLog(runDir, snapshot, step.id, attempt, 'afterStep', k, verdict, logStore)
+  await offloadGuardrailLog(runDir, snapshot, step.id, attempt, 'afterStep', k, verdict, logStore, ctx.matrix?.index)
   emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.failed', {
     phase: 'afterStep',
     guardrailIndex: k,
