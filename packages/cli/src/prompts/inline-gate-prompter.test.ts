@@ -119,6 +119,34 @@ it.each(['a', 'abort'])('resolves a human review abort action (%s)', async (acti
   expect(question).toHaveBeenCalledOnce()
 })
 
+it.each(['s', 'skip'])('resolves a human review skip action (%s)', async (action) => {
+  const control = client()
+  question.mockResolvedValueOnce(action)
+  await promptForGate(snapshot(), control)
+  expect(control.resolveGate).toHaveBeenCalledWith({
+    stepId: 'step-a',
+    guardrailIndex: 1,
+    action: 'skip',
+  })
+  expect(question).toHaveBeenCalledOnce()
+})
+
+it('re-prompts on unrecognized human review action until a valid option is entered', async () => {
+  const control = client()
+  question
+    .mockResolvedValueOnce('deny')
+    .mockResolvedValueOnce('r')
+    .mockResolvedValueOnce('skip')
+  await promptForGate(snapshot(), control)
+  expect(control.resolveGate).toHaveBeenCalledWith({
+    stepId: 'step-a',
+    guardrailIndex: 1,
+    action: 'skip',
+  })
+  expect(question).toHaveBeenCalledTimes(3)
+  expect(close).toHaveBeenCalledOnce()
+})
+
 it('resolves max-retry retry with default retry count and feedback', async () => {
   const control = client()
   question.mockResolvedValueOnce('').mockResolvedValueOnce('').mockResolvedValueOnce('try again')
@@ -186,6 +214,23 @@ it('resolves max-retry abort', async () => {
     action: 'abort',
     feedback: 'Stop',
   })
+})
+
+it('re-prompts on unrecognized max-retry action until a valid option is entered', async () => {
+  const control = client()
+  question
+    .mockResolvedValueOnce('unknown')
+    .mockResolvedValueOnce('f')
+    .mockResolvedValueOnce('p')
+    .mockResolvedValueOnce('')
+  await promptForGate(snapshot('max_retries_exceeded'), control)
+  expect(control.resolveGate).toHaveBeenCalledWith({
+    stepId: 'step-a',
+    guardrailIndex: 1,
+    action: 'pass',
+  })
+  expect(question).toHaveBeenCalledTimes(4)
+  expect(close).toHaveBeenCalledOnce()
 })
 
 it('returns immediately when signal is already aborted', async () => {

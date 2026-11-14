@@ -2,17 +2,44 @@ import type { ControlClient, GateResolveParams, RunStateSnapshot } from '@ludd/c
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
 
+async function promptAction<T extends string>(
+  prompt: string,
+  options: Record<string, T>,
+  defaultAction: T,
+  rl: ReturnType<typeof createInterface>,
+  signal?: AbortSignal,
+): Promise<T> {
+  while (true) {
+    const input = (await rl.question(prompt, { signal })).trim().toLowerCase()
+    if (!input)
+      return defaultAction
+    if (Object.hasOwn(options, input))
+      return options[input]
+    console.log('Invalid option. Please try again.')
+  }
+}
+
 async function resolveHumanReview(
   gate: NonNullable<RunStateSnapshot['activeGate']>,
   rl: ReturnType<typeof createInterface>,
   signal?: AbortSignal,
 ): Promise<GateResolveParams> {
-  const actionInput = (await rl.question('Action [p]ass / [f]ail / [a]bort (pass): ', { signal })).trim().toLowerCase()
-  const action = actionInput === 'f' || actionInput === 'fail'
-    ? 'fail'
-    : actionInput === 'a' || actionInput === 'abort'
-      ? 'abort'
-      : 'pass'
+  const action = await promptAction<'pass' | 'fail' | 'skip' | 'abort'>(
+    'Action [p]ass / [f]ail / [s]kip / [a]bort (pass): ',
+    {
+      p: 'pass',
+      pass: 'pass',
+      f: 'fail',
+      fail: 'fail',
+      s: 'skip',
+      skip: 'skip',
+      a: 'abort',
+      abort: 'abort',
+    },
+    'pass',
+    rl,
+    signal,
+  )
   let feedback = ''
   if (action === 'fail') {
     while (!feedback.trim()) {
@@ -34,14 +61,22 @@ async function resolveRetryGate(
   rl: ReturnType<typeof createInterface>,
   signal?: AbortSignal,
 ): Promise<GateResolveParams> {
-  const actionInput = (await rl.question('Action [r]etry / [p]ass / [s]kip / [a]bort (retry): ', { signal })).trim().toLowerCase()
-  const action = actionInput === 'p' || actionInput === 'pass'
-    ? 'pass'
-    : actionInput === 's' || actionInput === 'skip'
-      ? 'skip'
-      : actionInput === 'a' || actionInput === 'abort'
-        ? 'abort'
-        : 'retry'
+  const action = await promptAction<'retry' | 'pass' | 'skip' | 'abort'>(
+    'Action [r]etry / [p]ass / [s]kip / [a]bort (retry): ',
+    {
+      r: 'retry',
+      retry: 'retry',
+      p: 'pass',
+      pass: 'pass',
+      s: 'skip',
+      skip: 'skip',
+      a: 'abort',
+      abort: 'abort',
+    },
+    'retry',
+    rl,
+    signal,
+  )
   let addRetries: number | undefined
   if (action === 'retry') {
     while (true) {
