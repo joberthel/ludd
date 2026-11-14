@@ -33,6 +33,20 @@ interface PreparedRun {
   logStore: LogStore
 }
 
+export function hasDockerEnvironment(
+  steps: readonly StepConfig[],
+  environments: Record<string, { readonly type?: string }>,
+): boolean {
+  if (Object.values(environments).some(env => env.type === 'docker-worktree')) {
+    return true
+  }
+  return steps.some(
+    step => typeof step.environment === 'object'
+      && step.environment !== null
+      && step.environment.type === 'docker-worktree',
+  )
+}
+
 async function prepareRunContext(
   validatedConfig: HarnessConfig,
   runDir: string,
@@ -59,7 +73,16 @@ async function prepareRunContext(
   }
   const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
   ctx.artifacts = artifactStore
-  const mcpServer = await startEmbeddedMcpServer(runDir, { artifactStore, logStore })
+  const mcpHost = hasDockerEnvironment(steps, ctx.environments)
+    ? '0.0.0.0'
+    : undefined
+  const mcpServer = await startEmbeddedMcpServer(runDir, {
+    artifactStore,
+    logStore,
+    ...(mcpHost !== undefined
+      ? { host: mcpHost }
+      : {}),
+  })
   return {
     ctx,
     snapshot,

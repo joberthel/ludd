@@ -12,6 +12,7 @@ import { executeToolCall, handleInitialize, handleToolsList } from './mcp-tools.
 export interface EmbeddedMcpServerOptions {
   readonly artifactStore?: ArtifactClient
   readonly logStore?: LogStore
+  readonly host?: string
 }
 
 function resolveAuthToken(authToken?: string): string {
@@ -239,6 +240,7 @@ export async function startEmbeddedMcpServer(
     : options
   const store = resolvedOpts?.artifactStore ?? createArtifactStore(runDir)
   const logStore = resolvedOpts?.logStore ?? createLogStore(runDir)
+  const host = resolvedOpts?.host ?? '127.0.0.1'
   const sseConnections = new Set<ServerResponse>()
 
   const server = http.createServer((req, res) => {
@@ -247,7 +249,7 @@ export async function startEmbeddedMcpServer(
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(0, host, () => {
       server.removeListener('error', reject)
       resolve()
     })
@@ -255,7 +257,10 @@ export async function startEmbeddedMcpServer(
 
   const addr = server.address() as AddressInfo
   const port = addr.port
-  const serverUrl = `http://127.0.0.1:${port}/mcp`
+  const urlHost = host === '0.0.0.0' || host === '::'
+    ? '127.0.0.1'
+    : host
+  const serverUrl = `http://${urlHost}:${port}/mcp`
 
   return {
     url: serverUrl,
