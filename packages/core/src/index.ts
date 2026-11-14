@@ -235,4 +235,5 @@ export type {
 } from './types/log.js'
 export type { ActiveGateState, EnvironmentDescriptor, RunStateSnapshot, RunStatus } from './types/state.js'
 export type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
+export { realpathNearest } from './utils/realpath-nearest.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'

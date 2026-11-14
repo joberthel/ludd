@@ -1,6 +1,5 @@
-import fs from 'node:fs'
 import path from 'node:path'
-import { ForbiddenMountPathError } from '@ludd/core'
+import { ForbiddenMountPathError, realpathNearest } from '@ludd/core'
 
 export interface DockerMount {
   readonly hostPath: string
@@ -11,25 +10,6 @@ export interface DockerMount {
 function isPathInsideOrEqual(parentDir: string, targetPath: string): boolean {
   const rel = path.relative(parentDir, targetPath)
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
-}
-
-/** Resolves symlinks for the nearest existing ancestor and re-appends the nonexistent tail. */
-function realpathNearest(target: string): string {
-  const tail: string[] = []
-  let current = target
-  for (;;) {
-    try {
-      return path.join(fs.realpathSync(current), ...tail.reverse())
-    }
-    catch {
-      const parent = path.dirname(current)
-      if (parent === current) {
-        return target
-      }
-      tail.push(path.basename(current))
-      current = parent
-    }
-  }
 }
 
 function checkPathAgainstForbidden(
