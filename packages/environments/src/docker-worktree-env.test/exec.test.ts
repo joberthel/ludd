@@ -215,5 +215,13 @@ describe('dockerWorktreeEnv exec timeout and signal options', () => {
       expect.any(Array),
       { timeoutMs: undefined, signal: overrideCtrl.signal },
     )
+
+    // Passes -w <cwd> when cwd option is provided
+    await env.exec(['pwd'], { cwd: '/workspace/packages/core' })
+    expect(execSpy).toHaveBeenLastCalledWith(
+      env.workingDir,
+      expect.arrayContaining(['-w', '/workspace/packages/core']),
+      expect.any(Object),
+    )
   })
 })

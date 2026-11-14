@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveRunDir, writeRunStateAtomic } from '../state-store.js'
 
 describe('resolveRunDir', () => {
@@ -42,6 +42,16 @@ describe('resolveRunDir', () => {
     ]
     for (const badId of invalidIds) {
       expect(() => resolveRunDir('/workspace', badId)).toThrow()
+    }
+  })
+
+  it('rejects runId if resolved path escapes runsDir', () => {
+    const spy = vi.spyOn(path, 'relative').mockReturnValueOnce('..')
+    try {
+      expect(() => resolveRunDir('/workspace', 'valid-run-id')).toThrow('Run ID escapes runs directory')
+    }
+    finally {
+      spy.mockRestore()
     }
   })
 })

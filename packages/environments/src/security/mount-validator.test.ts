@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { ForbiddenMountPathError } from '@ludd/core'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildMountFlags,
   validateAllMountPaths,
@@ -86,6 +86,19 @@ describe('mount-validator path validation', () => {
     expect(() => validateHostMountPath(tmpDir, 'symlink-runs/nested/nonexistent')).toThrow(
       ForbiddenMountPathError,
     )
+  })
+
+  it('falls back to target path when realpathSync fails up to filesystem root', () => {
+    const spy = vi.spyOn(fs, 'realpathSync').mockImplementation(() => {
+      throw new Error('ENOENT')
+    })
+    try {
+      const validSubdir = path.join(tmpDir, 'valid-dir')
+      expect(() => validateHostMountPath(tmpDir, validSubdir)).not.toThrow()
+    }
+    finally {
+      spy.mockRestore()
+    }
   })
 })
 

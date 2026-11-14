@@ -272,6 +272,52 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
       },
     )
 
+    const envHttps = createDockerWorktreeEnvironmentFromDescriptor({
+      id: 'dock-env-https',
+      workingDir: wtDir,
+      containerId: 'c-123',
+      injectedEnv: {
+        MCP_SERVER_URL: 'https://localhost:54321/sse',
+      },
+    })
+    await envHttps.exec(['node', '-v'])
+    expect(execSpy).toHaveBeenLastCalledWith(
+      wtDir,
+      [
+        'docker',
+        'exec',
+        '-e',
+        'MCP_SERVER_URL=https://host.docker.internal:54321/sse',
+        'c-123',
+        'node',
+        '-v',
+      ],
+      expect.any(Object),
+    )
+
+    const envNoScheme = createDockerWorktreeEnvironmentFromDescriptor({
+      id: 'dock-env-noscheme',
+      workingDir: wtDir,
+      containerId: 'c-123',
+      injectedEnv: {
+        MCP_SERVER_URL: '127.0.0.1:54321/sse',
+      },
+    })
+    await envNoScheme.exec(['node', '-v'])
+    expect(execSpy).toHaveBeenLastCalledWith(
+      wtDir,
+      [
+        'docker',
+        'exec',
+        '-e',
+        'MCP_SERVER_URL=http://host.docker.internal:54321/sse',
+        'c-123',
+        'node',
+        '-v',
+      ],
+      expect.any(Object),
+    )
+
     execSpy.mockRestore()
   })
 })

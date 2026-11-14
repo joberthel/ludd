@@ -77,4 +77,21 @@ describe('environment bash delegation', () => {
     })
     expect(exec).toHaveBeenCalledWith(['sh', '-c', 'pwd'], { signal: undefined, cwd: '/workspace/sub' })
   })
+
+  it('omits container cwd when cwd is empty, equals containerRoot, or is outside workingDir', async () => {
+    const { env, exec } = fakeEnv('docker-worktree')
+    const ops = createEnvironmentBashOperations(env)
+    await ops.exec('pwd', '', {
+      onData: vi.fn(),
+    })
+    await ops.exec('pwd', '/workspace', {
+      onData: vi.fn(),
+    })
+    await ops.exec('pwd', '/outside/dir', {
+      onData: vi.fn(),
+    })
+    expect(exec).toHaveBeenNthCalledWith(1, ['sh', '-c', 'pwd'], { signal: undefined })
+    expect(exec).toHaveBeenNthCalledWith(2, ['sh', '-c', 'pwd'], { signal: undefined })
+    expect(exec).toHaveBeenNthCalledWith(3, ['sh', '-c', 'pwd'], { signal: undefined })
+  })
 })

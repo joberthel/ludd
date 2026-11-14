@@ -244,4 +244,40 @@ describe('createLogStore disk rehydration', () => {
       expect(pageText.totalLines).toBe(3)
     }
   })
+
+  it('returns zero totalPages when reading an empty json or text log', async () => {
+    const store = createLogStore(tempDir)
+    await store.offload({
+      stepId: 'step-empty-json',
+      attempt: 1,
+      phase: 'afterStep',
+      guardrailIndex: 0,
+      content: '[]',
+      format: 'json',
+    })
+    await store.offload({
+      stepId: 'step-empty-text',
+      attempt: 1,
+      phase: 'afterStep',
+      guardrailIndex: 0,
+      content: '',
+      format: 'text',
+    })
+
+    const jsonPage = await store.readPage('step-empty-json-1-afterStep-0', 1, 10)
+    expect(jsonPage).toMatchObject({
+      format: 'json',
+      items: [],
+      totalPages: 0,
+      totalItems: 0,
+    })
+
+    const textPage = await store.readPage('step-empty-text-1-afterStep-0', 1, 10)
+    expect(textPage).toMatchObject({
+      format: 'text',
+      lines: [],
+      totalPages: 0,
+      totalLines: 0,
+    })
+  })
 })

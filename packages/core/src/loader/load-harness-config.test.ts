@@ -1,9 +1,9 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
-import { loadHarnessConfig } from './load-harness-config.js'
+import { loaderInternals, loadHarnessConfig, resolveOptionalPackage } from './load-harness-config.js'
 
 describe('loadHarnessConfig path and file access validation', () => {
   it('rejects empty or whitespace path strings', async () => {
@@ -231,5 +231,46 @@ describe('loadHarnessConfig virtualModules resolution', () => {
       },
     })
     expect(loaded.name).toBe('from-custom-virtual')
+  })
+
+  it('skips optional package resolution when overridden in virtualModules', async () => {
+    const filePath = path.join(tempDir, 'override-optional.ts')
+    await writeFile(
+      filePath,
+      [
+        `import { defineHarness } from '@ludd/core'`,
+        `import { customFlag } from '@ludd/agents'`,
+        `export default defineHarness({ name: customFlag, steps: [{ id: 's1', run: async () => ({}) }] })`,
+      ].join('\n'),
+    )
+
+    const loaded = await loadHarnessConfig(filePath, {
+      virtualModules: {
+        '@ludd/agents': { customFlag: 'overridden-agents' },
+      },
+    })
+    expect(loaded.name).toBe('overridden-agents')
+  })
+
+  it('returns undefined for missing optional packages and rethrows non-not-found errors', async () => {
+    await expect(resolveOptionalPackage('@ludd/definitely-nonexistent-pkg')).resolves.toBeUndefined()
+    await expect(resolveOptionalPackage('data:text/javascript,throw new Error("boom")')).rejects.toThrow('boom')
+  })
+
+  it('continues when an optional workspace package resolves to undefined', async () => {
+    const filePath = path.join(tempDir, 'missing-optional.ts')
+    await writeFile(
+      filePath,
+      `import { defineHarness } from '@ludd/core'\nexport default defineHarness({ name: 'missing-optional', steps: [{ id: 's1', run: async () => ({}) }] })`,
+    )
+
+    const spy = vi.spyOn(loaderInternals, 'resolveOptionalPackage').mockResolvedValueOnce(undefined)
+    try {
+      const loaded = await loadHarnessConfig(filePath)
+      expect(loaded.name).toBe('missing-optional')
+    }
+    finally {
+      spy.mockRestore()
+    }
   })
 })

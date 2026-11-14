@@ -51,4 +51,17 @@ describe('attachSocketLineBuffer', () => {
     expect(socket.destroyError?.message).toContain('16 bytes')
     expect(lines).toEqual([])
   })
+
+  it('flushes a trailing partial line on socket end and skips blank lines', () => {
+    const socket = new MockSocket()
+    const lines: string[] = []
+    attachSocketLineBuffer(socket as unknown as net.Socket, (line) => {
+      lines.push(line)
+    })
+
+    socket.emit('data', Buffer.from('\nfirst\n   \ntrailing', 'utf8'))
+    socket.emit('end')
+
+    expect(lines).toEqual(['first', 'trailing'])
+  })
 })

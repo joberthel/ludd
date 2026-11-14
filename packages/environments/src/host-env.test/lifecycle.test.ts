@@ -18,6 +18,11 @@ describe('hostEnv initialization and lifecycle', () => {
     expect(env.type).toBe('host')
     expect(env.__kind).toBe('environment')
     expect(env.workingDir).toBe(process.cwd())
+
+    const fallbackEnv = await hostEnv().provision({
+      runId: 'test-run',
+    } as never)
+    expect(fallbackEnv.workingDir).toBe(process.cwd())
   })
 
   it('respects custom trimmed id and resolved cwd', async () => {

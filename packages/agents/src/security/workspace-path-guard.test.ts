@@ -70,6 +70,8 @@ describe('assertSafeWorkspacePath', () => {
       .toBe(path.join(root, 'src/a.ts'))
     expect(assertSafeWorkspacePath('/workspace', root, { containerWorkingDir: '/workspace' }))
       .toBe(root)
+    expect(assertSafeWorkspacePath('src/a.ts', root, { containerWorkingDir: '/workspace' }))
+      .toBe(path.join(root, 'src/a.ts'))
     expect(() => assertSafeWorkspacePath('/workspace/.harness/runs/r1/state.json', root, { containerWorkingDir: '/workspace' }))
       .toThrow(/protected/)
   })

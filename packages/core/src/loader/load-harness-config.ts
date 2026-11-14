@@ -37,7 +37,7 @@ function formatErrorDetail(cause: unknown): string {
   return String(cause)
 }
 
-async function resolveOptionalPackage(specifier: string): Promise<Record<string, unknown> | undefined> {
+export async function resolveOptionalPackage(specifier: string): Promise<Record<string, unknown> | undefined> {
   try {
     const resolved = import.meta.resolve(specifier)
     return await import(resolved) as Record<string, unknown>
@@ -49,6 +49,10 @@ async function resolveOptionalPackage(specifier: string): Promise<Record<string,
     }
     throw cause
   }
+}
+
+export const loaderInternals = {
+  resolveOptionalPackage,
 }
 
 export async function loadHarnessConfig(
@@ -78,7 +82,7 @@ export async function loadHarnessConfig(
     if (options?.virtualModules && pkg in options.virtualModules) {
       continue
     }
-    const mod = await resolveOptionalPackage(pkg)
+    const mod = await loaderInternals.resolveOptionalPackage(pkg)
     if (mod !== undefined) {
       virtualModules[pkg] = mod
     }
