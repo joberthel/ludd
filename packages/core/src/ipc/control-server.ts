@@ -18,6 +18,7 @@ import {
   JSON_RPC_METHOD_NOT_FOUND,
   JSON_RPC_PARSE_ERROR,
 } from '../types/ipc.js'
+import { attachSocketLineBuffer } from './socket-line-buffer.js'
 import { CONTROL_SOCKET_NAME, getControlSocketPath } from './socket-path.js'
 
 function extractId(raw: unknown): JsonRpcId {
@@ -145,22 +146,6 @@ export async function handleRpcMessage(
   }
 
   return dispatchRpcRequest(validation.request!, handlers)
-}
-
-function attachSocketLineBuffer(socket: net.Socket, onLine: (line: string) => void): void {
-  let buffer = ''
-  socket.on('data', (chunk) => {
-    buffer += chunk.toString('utf-8')
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      if (line.length > 0) {
-        onLine(line)
-      }
-      newlineIndex = buffer.indexOf('\n')
-    }
-  })
 }
 
 async function processSocketMessage(

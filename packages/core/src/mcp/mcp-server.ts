@@ -41,14 +41,49 @@ function sendJson(res: ServerResponse, statusCode: number, data: unknown): void 
   res.end(JSON.stringify(data))
 }
 
-async function readRequestBody(req: IncomingMessage): Promise<string> {
-  return new Promise<string>((resolve) => {
+export const MAX_MCP_BODY_BYTES = 1024 * 1024 // 1 MiB
+
+class PayloadTooLargeError extends Error {
+  constructor(maxBytes: number) {
+    super(`Request body exceeded ${maxBytes} bytes`)
+    this.name = 'PayloadTooLargeError'
+  }
+}
+
+async function readRequestBody(
+  req: IncomingMessage,
+  maxBytes: number = MAX_MCP_BODY_BYTES,
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = []
+    let totalBytes = 0
+    let rejected = false
+
     req.on('data', (chunk: Buffer) => {
+      if (rejected) {
+        return
+      }
+      totalBytes += chunk.length
+      if (totalBytes > maxBytes) {
+        rejected = true
+        req.destroy()
+        reject(new PayloadTooLargeError(maxBytes))
+        return
+      }
       chunks.push(chunk)
     })
+
     req.on('end', () => {
-      resolve(Buffer.concat(chunks).toString('utf8'))
+      if (!rejected) {
+        resolve(Buffer.concat(chunks).toString('utf8'))
+      }
+    })
+
+    req.on('error', (err) => {
+      if (!rejected) {
+        rejected = true
+        reject(err)
+      }
     })
   })
 }
@@ -101,7 +136,21 @@ async function handleJsonRpcPost(
   store: ArtifactClient,
   logStore: LogStore,
 ): Promise<void> {
-  const bodyText = await readRequestBody(req)
+  let bodyText: string
+  try {
+    bodyText = await readRequestBody(req)
+  }
+  catch (err) {
+    if (err instanceof PayloadTooLargeError) {
+      sendJson(res, 413, {
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'Payload too large' },
+      })
+      return
+    }
+    throw err
+  }
 
   let parsed: unknown
   try {

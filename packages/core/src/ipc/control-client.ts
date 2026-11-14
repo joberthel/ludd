@@ -12,6 +12,7 @@ import type {
 import type { RunStateSnapshot } from '../types/state.js'
 import net from 'node:net'
 import { JsonRpcResponseError } from '../errors/json-rpc-response-error.js'
+import { attachSocketLineBuffer } from './socket-line-buffer.js'
 import { getControlSocketPath } from './socket-path.js'
 
 interface PendingRequest {
@@ -86,19 +87,7 @@ function attachClientFraming(
   socket: net.Socket,
   onLine: (line: string) => void,
 ): void {
-  let buffer = ''
-  socket.on('data', (chunk) => {
-    buffer += chunk.toString('utf-8')
-    let newlineIndex = buffer.indexOf('\n')
-    while (newlineIndex !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      if (line.length > 0) {
-        onLine(line)
-      }
-      newlineIndex = buffer.indexOf('\n')
-    }
-  })
+  attachSocketLineBuffer(socket, onLine)
 }
 
 function buildRpcPayload(id: number, method: string, params?: unknown): JsonRpcRequest {
