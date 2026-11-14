@@ -80,6 +80,9 @@ function createProvisionedWorktree(
     ...(injectedEnv !== undefined
       ? { injectedEnv }
       : {}),
+    ...(options.whitelistEnv !== undefined
+      ? { whitelistEnv: options.whitelistEnv }
+      : {}),
     exec: async (command: string | readonly string[], execOptions?: EnvironmentExecOptions): Promise<EnvironmentExecResult> => {
       const isolatedEnv = buildIsolatedEnvironmentVars({
         hostProcessEnv: process.env,

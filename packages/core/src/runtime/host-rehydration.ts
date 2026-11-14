@@ -23,8 +23,8 @@ export function createHostEnvironmentFromDescriptor(descriptor: {
       ? { injectedEnv: descriptor.injectedEnv }
       : {}),
     exec: async (command, options) => execHostCommand(workingDir, command, {
-      signal: options?.signal ?? defaultSignal,
       ...options,
+      signal: options?.signal ?? defaultSignal,
       env: descriptor.injectedEnv
         ? {
             ...descriptor.injectedEnv,

@@ -44,6 +44,17 @@ export function recordEnvironment(
       ...(containerId !== undefined
         ? { containerId }
         : {}),
+      ...(env.containerWorkingDir !== undefined
+        ? { containerWorkingDir: env.containerWorkingDir }
+        : {}),
+      ...(env.bridgeHost !== undefined
+        ? { bridgeHost: env.bridgeHost }
+        : {}),
+      ...(env.whitelistEnv !== undefined
+        ? {
+            whitelistEnv: [...env.whitelistEnv],
+          }
+        : {}),
       ...(env.ephemeralPorts !== undefined
         ? { ephemeralPorts: env.ephemeralPorts }
         : {}),
@@ -109,13 +120,13 @@ export async function resolveStepEnvironment(
     ? {
         ...env,
         exec: async (command, options) => env.exec(command, {
-          ...(defaultSignal !== undefined
-            ? { signal: defaultSignal }
-            : {}),
-          ...(stepDangerMode !== undefined
-            ? { dangerMode: stepDangerMode }
-            : {}),
           ...options,
+          ...(options?.signal !== undefined || defaultSignal !== undefined
+            ? { signal: options?.signal ?? defaultSignal }
+            : {}),
+          ...(options?.dangerMode !== undefined || stepDangerMode !== undefined
+            ? { dangerMode: options?.dangerMode ?? stepDangerMode }
+            : {}),
         }),
       }
     : env

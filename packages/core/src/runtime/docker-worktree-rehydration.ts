@@ -5,6 +5,8 @@ import type {
 } from '../types/environment.js'
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
+import { buildIsolatedEnvironmentVars } from './env-sanitizer.js'
 import { execHostCommand } from './environment-exec.js'
 
 async function pingDockerWorktree(
@@ -88,10 +90,24 @@ async function execDockerWorktree(
   command: string | readonly string[],
   options?: EnvironmentExecOptions,
   defaultSignal?: AbortSignal,
+  bridgeHost?: string,
+  whitelistEnv?: readonly string[],
+  injectedEnv?: Record<string, string>,
 ): Promise<EnvironmentExecResult> {
   const signal = options?.signal ?? defaultSignal
+  const isolatedEnv = buildIsolatedEnvironmentVars({
+    hostProcessEnv: process.env,
+    whitelistEnv,
+    staticEnv: injectedEnv,
+    injectedEnv: options?.env,
+  })
   if (containerId === undefined || containerId === '') {
-    return execHostCommand(workingDir, command, { signal, ...options })
+    return execHostCommand(workingDir, command, {
+      ...options,
+      signal,
+      env: isolatedEnv,
+      inheritEnv: false,
+    })
   }
   const cmdArgs = Array.isArray(command)
     ? command.map(String)
@@ -103,19 +119,21 @@ async function execDockerWorktree(
   const userArgs = options?.dangerMode
     ? ['-u', '0:0']
     : []
+  const cwdArgs = options?.cwd !== undefined
+    ? ['-w', options.cwd]
+    : []
   const envArgs: string[] = []
-  if (options?.env) {
-    for (const [key, value] of Object.entries(options.env)) {
-      const finalValue = key === 'MCP_SERVER_URL'
-        ? translateMcpServerUrl(value)
-        : value
-      envArgs.push('-e', `${key}=${finalValue}`)
-    }
+  for (const [key, value] of Object.entries(isolatedEnv)) {
+    const finalValue = key === 'MCP_SERVER_URL'
+      ? translateMcpServerUrl(value, bridgeHost)
+      : value
+    envArgs.push('-e', `${key}=${finalValue}`)
   }
   return execHostCommand(workingDir, [
     'docker',
     'exec',
     ...userArgs,
+    ...cwdArgs,
     ...envArgs,
     containerId,
     ...cmdArgs,
@@ -125,38 +143,15 @@ async function execDockerWorktree(
   })
 }
 
-async function execRehydratedDocker(
-  workingDir: string,
-  containerId: string | undefined,
-  injectedEnv: Record<string, string> | undefined,
-  command: string | readonly string[],
-  options?: EnvironmentExecOptions,
-  defaultSignal?: AbortSignal,
-): Promise<EnvironmentExecResult> {
-  const mergedEnv = injectedEnv !== undefined
-    ? {
-        ...injectedEnv,
-        ...(options?.env ?? {}),
-      }
-    : options?.env
-  return execDockerWorktree(
-    workingDir,
-    containerId,
-    command,
-    {
-      ...options,
-      env: mergedEnv,
-    },
-    defaultSignal,
-  )
-}
-
 export function createDockerWorktreeEnvironmentFromDescriptor(
   descriptor: {
     id: string
     type?: string
     workingDir: string
     containerId?: string
+    containerWorkingDir?: string
+    bridgeHost?: string
+    whitelistEnv?: readonly string[]
     branchName?: string
     ephemeralPorts?: Record<string, number>
     injectedEnv?: Record<string, string>
@@ -171,6 +166,15 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     type: 'docker-worktree',
     supportsDangerMode: true,
     workingDir,
+    ...(descriptor.containerWorkingDir !== undefined
+      ? { containerWorkingDir: descriptor.containerWorkingDir }
+      : {}),
+    ...(descriptor.bridgeHost !== undefined
+      ? { bridgeHost: descriptor.bridgeHost }
+      : {}),
+    ...(descriptor.whitelistEnv !== undefined
+      ? { whitelistEnv: descriptor.whitelistEnv }
+      : {}),
     ...(descriptor.containerId !== undefined
       ? { containerId: descriptor.containerId }
       : {}),
@@ -183,13 +187,15 @@ export function createDockerWorktreeEnvironmentFromDescriptor(
     ...(descriptor.injectedEnv !== undefined
       ? { injectedEnv: descriptor.injectedEnv }
       : {}),
-    exec: async (command, options) => execRehydratedDocker(
+    exec: async (command, options) => execDockerWorktree(
       workingDir,
       descriptor.containerId,
-      descriptor.injectedEnv,
       command,
       options,
       defaultSignal,
+      descriptor.bridgeHost,
+      descriptor.whitelistEnv,
+      descriptor.injectedEnv,
     ),
     ping: async () => pingDockerWorktree(workingDir, descriptor.containerId, defaultSignal),
     teardown: async () => teardownDockerWorktree(workingDir, descriptor.containerId, workspaceDir, defaultSignal),

@@ -22,6 +22,8 @@ export interface ProvisionedEnvironment {
   readonly type: string
   readonly workingDir: string
   readonly containerWorkingDir?: string
+  readonly bridgeHost?: string
+  readonly whitelistEnv?: readonly string[]
   readonly supportsDangerMode?: boolean
   readonly branchName?: string
   readonly containerId?: string

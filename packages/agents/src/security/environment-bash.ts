@@ -34,7 +34,9 @@ export function createEnvironmentBashOperations(environment: ProvisionedEnvironm
     exec: async (command, cwd, options) => {
       const containerCwd = resolveContainerCwd(cwd, environment)
       const result = await environment.exec(['sh', '-c', command], {
-        signal: options.signal,
+        ...(options.signal === undefined
+          ? {}
+          : { signal: options.signal }),
         ...(containerCwd === undefined
           ? {}
           : { cwd: containerCwd }),

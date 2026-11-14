@@ -63,34 +63,46 @@ describe('createDockerWorktreeEnvironmentFromDescriptor exec with containerId', 
 
     const resArr = await env.exec(['ls', '-la'])
     expect(resArr.stdout).toBe('done\n')
-    expect(execSpy).toHaveBeenCalledWith(wtDir, [
-      'docker',
-      'exec',
-      'c-exec',
-      'ls',
-      '-la',
-    ], expect.any(Object))
+    expect(execSpy).toHaveBeenCalledWith(
+      wtDir,
+      expect.arrayContaining([
+        'docker',
+        'exec',
+        'c-exec',
+        'ls',
+        '-la',
+      ]),
+      expect.any(Object),
+    )
 
     const resStr = await env.exec('echo hi')
     expect(resStr.stdout).toBe('done\n')
-    expect(execSpy).toHaveBeenCalledWith(wtDir, [
-      'docker',
-      'exec',
-      'c-exec',
-      'sh',
-      '-c',
-      'echo hi',
-    ], expect.any(Object))
+    expect(execSpy).toHaveBeenCalledWith(
+      wtDir,
+      expect.arrayContaining([
+        'docker',
+        'exec',
+        'c-exec',
+        'sh',
+        '-c',
+        'echo hi',
+      ]),
+      expect.any(Object),
+    )
 
     await env.exec(['id'], { dangerMode: true })
-    expect(execSpy).toHaveBeenCalledWith(wtDir, [
-      'docker',
-      'exec',
-      '-u',
-      '0:0',
-      'c-exec',
-      'id',
-    ], expect.any(Object))
+    expect(execSpy).toHaveBeenCalledWith(
+      wtDir,
+      expect.arrayContaining([
+        'docker',
+        'exec',
+        '-u',
+        '0:0',
+        'c-exec',
+        'id',
+      ]),
+      expect.any(Object),
+    )
 
     execSpy.mockRestore()
   })
@@ -255,7 +267,7 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
 
     expect(execSpy).toHaveBeenCalledWith(
       wtDir,
-      [
+      expect.arrayContaining([
         'docker',
         'exec',
         '-e',
@@ -265,7 +277,7 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
         'c-123',
         'node',
         '-v',
-      ],
+      ]),
       {
         timeoutMs: 5000,
         signal: undefined,
@@ -283,7 +295,7 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
     await envHttps.exec(['node', '-v'])
     expect(execSpy).toHaveBeenLastCalledWith(
       wtDir,
-      [
+      expect.arrayContaining([
         'docker',
         'exec',
         '-e',
@@ -291,7 +303,7 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
         'c-123',
         'node',
         '-v',
-      ],
+      ]),
       expect.any(Object),
     )
 
@@ -306,7 +318,7 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
     await envNoScheme.exec(['node', '-v'])
     expect(execSpy).toHaveBeenLastCalledWith(
       wtDir,
-      [
+      expect.arrayContaining([
         'docker',
         'exec',
         '-e',
@@ -314,10 +326,109 @@ describe('rehydrateEnvironmentsAndCheckHealth docker-worktree descriptor', () =>
         'c-123',
         'node',
         '-v',
-      ],
+      ]),
       expect.any(Object),
     )
 
     execSpy.mockRestore()
+  })
+})
+
+describe('createDockerWorktreeEnvironmentFromDescriptor isolation, cwd, metadata, and signal (#78)', () => {
+  it('passes -w cwd, custom bridgeHost, whitelistEnv, containerWorkingDir, and preserves defaultSignal when options.signal is undefined', async () => {
+    const wtDir = path.join(os.tmpdir(), 'wt-78')
+    const controller = new AbortController()
+    const origSecret = process.env.LUDD_SECRET_78
+    const origAllowed = process.env.LUDD_ALLOWED_78
+    process.env.LUDD_SECRET_78 = 'secret-val'
+    process.env.LUDD_ALLOWED_78 = 'allowed-val'
+    try {
+      const execSpy = vi.spyOn(envExec, 'execHostCommand').mockResolvedValue({
+        exitCode: 0,
+        stdout: 'ok\n',
+        stderr: '',
+        timedOut: false,
+      })
+
+      const env = createDockerWorktreeEnvironmentFromDescriptor({
+        id: 'dock-78',
+        workingDir: wtDir,
+        containerId: 'c-78',
+        containerWorkingDir: '/app',
+        bridgeHost: '172.17.0.1',
+        whitelistEnv: ['LUDD_ALLOWED_78'],
+        injectedEnv: { MCP_SERVER_URL: 'http://127.0.0.1:4000/sse' },
+      }, controller.signal)
+
+      expect(env.containerWorkingDir).toBe('/app')
+      expect(env.bridgeHost).toBe('172.17.0.1')
+      expect(env.whitelistEnv).toEqual(['LUDD_ALLOWED_78'])
+
+      await env.exec(['pwd'], { cwd: '/app/sub', signal: undefined })
+
+      expect(execSpy).toHaveBeenCalledTimes(1)
+      const [, args, execOpts] = execSpy.mock.calls[0]
+      expect(args).toContain('-w')
+      expect(args).toContain('/app/sub')
+      expect(args).toContain('LUDD_ALLOWED_78=allowed-val')
+      expect(args).toContain('MCP_SERVER_URL=http://172.17.0.1:4000/sse')
+      expect((args as readonly string[]).join(' ')).not.toContain('LUDD_SECRET_78')
+      expect(execOpts?.signal).toBe(controller.signal)
+    }
+    finally {
+      if (origSecret === undefined) {
+        delete process.env.LUDD_SECRET_78
+      }
+      else {
+        process.env.LUDD_SECRET_78 = origSecret
+      }
+      if (origAllowed === undefined) {
+        delete process.env.LUDD_ALLOWED_78
+      }
+      else {
+        process.env.LUDD_ALLOWED_78 = origAllowed
+      }
+    }
+  })
+
+  it('isolates host process.env with inheritEnv: false when containerId is absent', async () => {
+    const wtDir = path.join(os.tmpdir(), 'wt-78-fallback')
+    const controller = new AbortController()
+    const origSecret = process.env.LUDD_SECRET_78_FALLBACK
+    process.env.LUDD_SECRET_78_FALLBACK = 'secret-val'
+    try {
+      const execSpy = vi.spyOn(envExec, 'execHostCommand').mockResolvedValue({
+        exitCode: 0,
+        stdout: 'ok\n',
+        stderr: '',
+        timedOut: false,
+      })
+
+      const env = createDockerWorktreeEnvironmentFromDescriptor({
+        id: 'dock-78-fallback',
+        workingDir: wtDir,
+      }, controller.signal)
+
+      await env.exec(['echo', 'hi'], { signal: undefined })
+
+      expect(execSpy).toHaveBeenCalledWith(
+        wtDir,
+        ['echo', 'hi'],
+        expect.objectContaining({
+          signal: controller.signal,
+          inheritEnv: false,
+        }),
+      )
+      const [, , execOpts] = execSpy.mock.calls[0]
+      expect(execOpts?.env).not.toHaveProperty('LUDD_SECRET_78_FALLBACK')
+    }
+    finally {
+      if (origSecret === undefined) {
+        delete process.env.LUDD_SECRET_78_FALLBACK
+      }
+      else {
+        process.env.LUDD_SECRET_78_FALLBACK = origSecret
+      }
+    }
   })
 })

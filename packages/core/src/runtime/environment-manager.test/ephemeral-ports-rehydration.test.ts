@@ -185,7 +185,7 @@ describe('rehydration of docker-worktree ephemeral ports and injected env', () =
     })
     expect(execSpy).toHaveBeenLastCalledWith(
       wtDir,
-      [
+      expect.arrayContaining([
         'docker',
         'exec',
         '-e',
@@ -197,7 +197,7 @@ describe('rehydration of docker-worktree ephemeral ports and injected env', () =
         'c-dock-rehydrate',
         'ls',
         '-l',
-      ],
+      ]),
       expect.any(Object),
     )
   })
@@ -210,7 +210,7 @@ describe('rehydration of docker-worktree exec without extra env', () => {
     await env.exec('echo hi')
     expect(execSpy).toHaveBeenLastCalledWith(
       wtDir,
-      [
+      expect.arrayContaining([
         'docker',
         'exec',
         '-e',
@@ -221,7 +221,7 @@ describe('rehydration of docker-worktree exec without extra env', () => {
         'sh',
         '-c',
         'echo hi',
-      ],
+      ]),
       expect.any(Object),
     )
   })

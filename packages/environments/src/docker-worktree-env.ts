@@ -176,6 +176,10 @@ function createProvisionedDockerEnv(
     supportsDangerMode: true,
     workingDir: worktreePath,
     containerWorkingDir: options.containerWorkdir ?? '/workspace',
+    bridgeHost,
+    ...(options.whitelistEnv !== undefined
+      ? { whitelistEnv: options.whitelistEnv }
+      : {}),
     containerId,
     branchName,
     ...(ephemeralPorts !== undefined

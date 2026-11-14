@@ -19,6 +19,9 @@ export interface EnvironmentDescriptor {
   workingDir: string
   branchName?: string
   containerId?: string
+  containerWorkingDir?: string
+  bridgeHost?: string
+  whitelistEnv?: readonly string[]
   tornDown?: boolean
   ephemeralPorts?: Record<string, number>
   injectedEnv?: Record<string, string>

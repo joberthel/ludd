@@ -95,3 +95,32 @@ describe('environment bash delegation', () => {
     expect(exec).toHaveBeenNthCalledWith(3, ['sh', '-c', 'pwd'], { signal: undefined })
   })
 })
+
+describe('environment-bash signal handling (#78)', () => {
+  it('does not pass signal: undefined to environment.exec when options.signal is undefined', async () => {
+    const execMock = vi.fn().mockResolvedValue({
+      exitCode: 0,
+      stdout: 'ok',
+      stderr: '',
+      timedOut: false,
+    })
+    const ops = createEnvironmentBashOperations({
+      __kind: 'environment',
+      id: 'dock',
+      type: 'docker-worktree',
+      workingDir: '/tmp/wt',
+      exec: execMock,
+      ping: async () => true,
+      teardown: async () => {},
+    })
+
+    await ops.exec('echo hi', '/tmp/wt', {
+      onData: () => {},
+      signal: undefined,
+    })
+
+    expect(execMock).toHaveBeenCalledTimes(1)
+    const [, execOpts] = execMock.mock.calls[0]
+    expect('signal' in execOpts).toBe(false)
+  })
+})

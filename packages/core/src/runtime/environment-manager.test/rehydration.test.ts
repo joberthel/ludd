@@ -243,3 +243,47 @@ describe('rehydrateEnvironmentsAndCheckHealth failure handling', () => {
     ).rejects.toThrow(EnvironmentUnreachableError)
   })
 })
+
+describe('recordEnvironment metadata persistence (#78)', () => {
+  it('persists containerWorkingDir, bridgeHost, and whitelistEnv onto snapshot.environments', () => {
+    const snapshot = {
+      schemaVersion: 1 as const,
+      runId: 'run-78',
+      harnessName: 'h',
+      workflowName: 'w',
+      status: 'running' as const,
+      activeStepId: 's1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      environments: {},
+    }
+    const ctx = {
+      runId: 'run-78',
+      stepId: 's1',
+      attempt: 1,
+      environments: {},
+      artifacts: {},
+      stepOutputs: {},
+    }
+    const env = {
+      __kind: 'environment' as const,
+      id: 'dock-78',
+      type: 'docker-worktree',
+      workingDir: '/tmp/wt',
+      containerWorkingDir: '/app',
+      bridgeHost: '172.17.0.1',
+      whitelistEnv: ['FOO', 'MISSING_KEY'],
+      exec: async () => ({ exitCode: 0, stdout: '', stderr: '', timedOut: false }),
+      ping: async () => true,
+      teardown: async () => {},
+    }
+
+    recordEnvironment(env, ctx as any, snapshot as any)
+
+    expect(snapshot.environments['dock-78']).toEqual(expect.objectContaining({
+      containerWorkingDir: '/app',
+      bridgeHost: '172.17.0.1',
+      whitelistEnv: ['FOO', 'MISSING_KEY'],
+    }))
+  })
+})

@@ -185,3 +185,62 @@ describe('rehydrateEnvironmentsAndCheckHealth git-worktree descriptor', () => {
     execSpy.mockRestore()
   })
 })
+
+describe('createGitWorktreeEnvironmentFromDescriptor isolation and signal (#78)', () => {
+  it('isolates host process.env with inheritEnv: false, respects whitelistEnv, and preserves defaultSignal when options.signal is undefined', async () => {
+    const wtDir = path.join(os.tmpdir(), 'wt-git-78')
+    const controller = new AbortController()
+    const origSecret = process.env.LUDD_GIT_SECRET_78
+    const origAllowed = process.env.LUDD_GIT_ALLOWED_78
+    process.env.LUDD_GIT_SECRET_78 = 'secret'
+    process.env.LUDD_GIT_ALLOWED_78 = 'allowed'
+    try {
+      const execSpy = vi.spyOn(envExec, 'execHostCommand').mockResolvedValue({
+        exitCode: 0,
+        stdout: 'ok\n',
+        stderr: '',
+        timedOut: false,
+      })
+
+      const env = createGitWorktreeEnvironmentFromDescriptor({
+        id: 'git-78',
+        workingDir: wtDir,
+        whitelistEnv: ['LUDD_GIT_ALLOWED_78'],
+        injectedEnv: { STATIC_VAR: '1' },
+      }, controller.signal)
+
+      expect(env.whitelistEnv).toEqual(['LUDD_GIT_ALLOWED_78'])
+
+      await env.exec(['echo', 'hi'], { signal: undefined })
+
+      expect(execSpy).toHaveBeenCalledWith(
+        wtDir,
+        ['echo', 'hi'],
+        expect.objectContaining({
+          signal: controller.signal,
+          inheritEnv: false,
+          env: expect.objectContaining({
+            LUDD_GIT_ALLOWED_78: 'allowed',
+            STATIC_VAR: '1',
+          }),
+        }),
+      )
+      const [, , execOpts] = execSpy.mock.calls[0]
+      expect(execOpts?.env).not.toHaveProperty('LUDD_GIT_SECRET_78')
+    }
+    finally {
+      if (origSecret === undefined) {
+        delete process.env.LUDD_GIT_SECRET_78
+      }
+      else {
+        process.env.LUDD_GIT_SECRET_78 = origSecret
+      }
+      if (origAllowed === undefined) {
+        delete process.env.LUDD_GIT_ALLOWED_78
+      }
+      else {
+        process.env.LUDD_GIT_ALLOWED_78 = origAllowed
+      }
+    }
+  })
+})

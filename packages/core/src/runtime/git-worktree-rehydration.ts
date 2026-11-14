@@ -1,6 +1,8 @@
 import type { ProvisionedEnvironment } from '../types/environment.js'
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
+import { buildIsolatedEnvironmentVars } from './env-sanitizer.js'
 import { execHostCommand } from './environment-exec.js'
 
 async function pingGitWorktreeDir(workingDir: string, signal?: AbortSignal): Promise<boolean> {
@@ -47,6 +49,7 @@ export function createGitWorktreeEnvironmentFromDescriptor(
     branchName?: string
     ephemeralPorts?: Record<string, number>
     injectedEnv?: Record<string, string>
+    whitelistEnv?: readonly string[]
   },
   defaultSignal?: AbortSignal,
   workspaceDir?: string,
@@ -66,17 +69,21 @@ export function createGitWorktreeEnvironmentFromDescriptor(
     ...(descriptor.injectedEnv !== undefined
       ? { injectedEnv: descriptor.injectedEnv }
       : {}),
+    ...(descriptor.whitelistEnv !== undefined
+      ? { whitelistEnv: descriptor.whitelistEnv }
+      : {}),
     exec: async (command, options) => {
-      const mergedEnv = descriptor.injectedEnv !== undefined
-        ? {
-            ...descriptor.injectedEnv,
-            ...(options?.env ?? {}),
-          }
-        : options?.env
+      const isolatedEnv = buildIsolatedEnvironmentVars({
+        hostProcessEnv: process.env,
+        whitelistEnv: descriptor.whitelistEnv,
+        staticEnv: descriptor.injectedEnv,
+        injectedEnv: options?.env,
+      })
       return execHostCommand(workingDir, command, {
-        signal: options?.signal ?? defaultSignal,
         ...options,
-        env: mergedEnv,
+        signal: options?.signal ?? defaultSignal,
+        env: isolatedEnv,
+        inheritEnv: false,
       })
     },
     ping: async () => pingGitWorktreeDir(workingDir, defaultSignal),
