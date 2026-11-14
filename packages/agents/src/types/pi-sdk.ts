@@ -32,6 +32,8 @@ export interface PiSessionFactoryOptions {
   /** Absolute path of the JSONL session file (`<runDir>/pi-sessions/<sessionId>.jsonl`). Resumed when present. */
   sessionFile: string
   mode: AgentAccessMode
+  /** Allow paths outside the workspace root (intended for isolated containers). */
+  dangerMode?: boolean
   /** Provisioned environment; `docker-worktree` environments receive a container-delegating `bash` tool. */
   environment?: ProvisionedEnvironment
   /** Opaque Pi SDK model object, forwarded to `createAgentSession`. */

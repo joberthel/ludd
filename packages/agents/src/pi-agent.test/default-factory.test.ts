@@ -21,6 +21,11 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
   createBashToolDefinition: (cwd: string, opts: unknown) => ({ name: 'bash', cwd, opts }),
 }))
 
+const workspaceWriteExtension = vi.fn(() => () => {})
+vi.mock('../security/workspace-write-extension.js', () => ({
+  workspaceWriteExtension,
+}))
+
 const base = { cwd: '/w', sessionFile: '/r/pi-sessions/a.jsonl' }
 
 describe('defaultPiSessionFactory', () => {
@@ -67,5 +72,35 @@ describe('defaultPiSessionFactory', () => {
       resourceLoader: expect.any(FakeLoader),
     }))
     expect(bindExtensions).toHaveBeenCalledWith({})
+  })
+
+  it('forwards dangerMode to workspaceWriteExtension', async () => {
+    const { defaultPiSessionFactory } = await import('../pi-agent.js')
+    await defaultPiSessionFactory({ ...base, mode: 'workspace-write', dangerMode: true })
+    expect(workspaceWriteExtension).toHaveBeenCalledWith('/w', { dangerMode: true })
+  })
+
+  it('forwards dangerMode from executeTurn to sessionFactory', async () => {
+    const { piAgent } = await import('../pi-agent.js')
+    const factory = vi.fn(async () => ({
+      subscribe: () => () => {},
+      prompt: async () => {},
+      abort: async () => {},
+      getLastAssistantText: () => 'ok',
+    }))
+    await piAgent({ prompt: 'p', sessionFactory: factory }).executeTurn({
+      stepId: 's',
+      sessionId: 'sess',
+      runDir: '/r',
+      mode: 'workspace-write',
+      dangerMode: true,
+      prompt: 'p',
+      mcpServerUrl: '',
+      mcpAuthToken: '',
+      environment: { workingDir: '/w' } as never,
+      ctx: {} as never,
+      attempt: 1,
+    })
+    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ dangerMode: true }))
   })
 })

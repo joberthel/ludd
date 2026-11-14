@@ -35,7 +35,7 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
     extensionFactories: [
       readOnly
         ? readOnlyExtension(options.cwd)
-        : workspaceWriteExtension(options.cwd),
+        : workspaceWriteExtension(options.cwd, { dangerMode: options.dangerMode }),
     ],
   })
   await resourceLoader.reload()
@@ -211,6 +211,7 @@ async function executePiTurn<TOutput>(
     cwd: input.environment.workingDir,
     sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
     mode: input.mode,
+    dangerMode: input.dangerMode,
     model: config.model,
     environment: input.environment,
     ...(customTools.length === 0
