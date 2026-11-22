@@ -37,7 +37,7 @@ export interface PiSessionFactoryOptions {
   dangerMode?: boolean
   /** Provisioned environment; `docker-worktree` environments receive a container-delegating `bash` tool. */
   environment?: ProvisionedEnvironment
-  /** Opaque Pi SDK model object, forwarded to `createAgentSession`. */
+  /** Opaque Pi SDK model object or model pattern string, resolved and forwarded to `createAgentSession`. */
   model?: unknown
   /** Extra Pi `customTools` (MCP bridge, `submit_step_output`), available in every mode. */
   customTools?: ToolDefinition[]

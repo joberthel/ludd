@@ -9,7 +9,7 @@ import type {
 } from '@ludd/core'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 import path from 'node:path'
-import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from '@earendil-works/pi-coding-agent'
+import { createAgentSession, DefaultResourceLoader, getAgentDir, resolveCliModel, SessionManager } from '@earendil-works/pi-coding-agent'
 import { appendStreamEvent, StepOutputValidationError } from '@ludd/core'
 import { createMcpBridgeTools, createSubmitStepOutputTool, MISSING_SUBMISSION_ISSUE } from './mcp/pi-mcp-tools.js'
 import { environmentBashTool } from './security/environment-bash.js'
@@ -20,10 +20,25 @@ export interface PiAgentConfig<TContext extends StepContext<any, any, any, any> 
   mode?: AgentAccessMode
   prompt: DynamicProperty<string, TContext>
   sessionId?: DynamicProperty<string | undefined, TContext>
-  /** Pi SDK model object forwarded to `createAgentSession`. */
+  /** Pi SDK model object or model pattern string (e.g. `"provider/model-id"` or `"model-id"`). */
   model?: unknown
   /** Overrides the real Pi SDK session creation (used by tests). */
   sessionFactory?: PiSessionFactory
+}
+
+async function applyStringModel(
+  session: Awaited<ReturnType<typeof createAgentSession>>['session'],
+  model: string,
+): Promise<void> {
+  const resolved = resolveCliModel({ cliModel: model, modelRuntime: session.modelRuntime })
+  if (resolved.error !== undefined || resolved.model === undefined) {
+    session.dispose()
+    throw new Error(resolved.error ?? `Unknown Pi model: ${model}`)
+  }
+  await session.setModel(resolved.model)
+  if (resolved.thinkingLevel !== undefined) {
+    session.setThinkingLevel(resolved.thinkingLevel)
+  }
 }
 
 export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessionFactoryOptions) => {
@@ -50,10 +65,11 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
       : [bashTool]),
     ...(options.customTools ?? []),
   ]
+  const isStringModel = typeof options.model === 'string'
   const { session } = await createAgentSession({
     cwd: options.cwd,
     sessionManager,
-    ...(options.model === undefined
+    ...(options.model === undefined || isStringModel
       ? {}
       : { model: options.model as never }),
     resourceLoader,
@@ -65,6 +81,9 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
       : { customTools }),
   })
   await session.bindExtensions({})
+  if (isStringModel) {
+    await applyStringModel(session, options.model as string)
+  }
   return session
 }
 
