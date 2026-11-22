@@ -1094,4 +1094,78 @@ describe('runTreeReducer & tree selectors', () => {
     expect(preservedFailed.runStatus).toBe('failed')
     expect(preservedFailed.activity).toBeUndefined()
   })
+
+  it('propagates and preserves runId across SET_BLUEPRINT, HYDRATE_SNAPSHOT, and run lifecycle entries', () => {
+    let state = createInitialRunTreeState('flow')
+    expect(state.runId).toBeUndefined()
+
+    state = runTreeReducer(state, {
+      type: 'SET_BLUEPRINT',
+      blueprint: { harnessName: 'flow', runId: 'run-bp-1', steps: [] },
+    })
+    expect(state.runId).toBe('run-bp-1')
+
+    // Omitting runId in SET_BLUEPRINT preserves existing runId
+    state = runTreeReducer(state, {
+      type: 'SET_BLUEPRINT',
+      blueprint: { harnessName: 'flow', steps: [] },
+    })
+    expect(state.runId).toBe('run-bp-1')
+
+    // HYDRATE_SNAPSHOT updates runId when non-empty and preserves when empty
+    state = runTreeReducer(state, {
+      type: 'HYDRATE_SNAPSHOT',
+      snapshot: {
+        schemaVersion: 1,
+        runId: 'run-snap-2',
+        harnessName: 'flow',
+        workflowName: 'flow',
+        status: 'running',
+        activeStepId: null,
+        steps: {},
+        updatedAt: new Date().toISOString(),
+      },
+    })
+    expect(state.runId).toBe('run-snap-2')
+
+    state = runTreeReducer(state, {
+      type: 'HYDRATE_SNAPSHOT',
+      snapshot: {
+        schemaVersion: 1,
+        runId: '',
+        harnessName: 'flow',
+        workflowName: 'flow',
+        status: 'running',
+        activeStepId: null,
+        steps: {},
+        updatedAt: new Date().toISOString(),
+      },
+    })
+    expect(state.runId).toBe('run-snap-2')
+
+    // PUSH_ENTRY run.started / run.resumed updates when provided and preserves when omitted
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: { kind: 'run.started', harnessName: 'flow', runId: 'run-start-3' },
+    })
+    expect(state.runId).toBe('run-start-3')
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: { kind: 'run.started', harnessName: 'flow' },
+    })
+    expect(state.runId).toBe('run-start-3')
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: { kind: 'run.resumed', harnessName: 'flow', runId: 'run-resume-4' },
+    })
+    expect(state.runId).toBe('run-resume-4')
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: { kind: 'run.resumed', harnessName: 'flow' },
+    })
+    expect(state.runId).toBe('run-resume-4')
+  })
 })

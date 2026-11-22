@@ -128,5 +128,10 @@ describe('run-ui-bridge', () => {
         },
       ],
     })
+
+    const withRunId = toHarnessBlueprint({ name: 'my-flow', steps: [] }, 'run-123')
+    expect(withRunId.runId).toBe('run-123')
+    const withoutRunId = toHarnessBlueprint({ name: 'my-flow', steps: [] })
+    expect(withoutRunId.runId).toBeUndefined()
   })
 })

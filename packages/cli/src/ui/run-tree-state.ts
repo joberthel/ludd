@@ -46,6 +46,7 @@ export interface StepTreeItem {
 
 export interface RunTreeState {
   harnessName: string
+  runId?: string
   runStatus: RunOverallStatus
   steps: StepTreeItem[]
   entries: KeyedRunUiEntry[]
@@ -402,6 +403,7 @@ function handleBlueprint(state: RunTreeState, blueprint: HarnessBlueprint): RunT
   return {
     ...state,
     harnessName: blueprint.harnessName,
+    runId: blueprint.runId ?? state.runId,
     steps,
   }
 }
@@ -487,6 +489,7 @@ function handleHydrateSnapshot(state: RunTreeState, snapshot: RunStateSnapshot):
   return withActiveNode({
     ...state,
     harnessName: snapshot.harnessName || state.harnessName,
+    runId: snapshot.runId || state.runId,
     runStatus,
     steps,
   }, activeNodeId)
@@ -560,6 +563,7 @@ function handlePushEntry(state: RunTreeState, entry: RunUiEntry): RunTreeState {
       nextState = {
         ...nextState,
         harnessName: entry.harnessName ?? nextState.harnessName,
+        runId: entry.runId ?? nextState.runId,
         runStatus: 'running',
       }
       break

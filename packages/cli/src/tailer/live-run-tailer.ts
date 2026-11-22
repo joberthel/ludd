@@ -7,6 +7,7 @@ import { formatToolArgsSummary, getRunUiHost } from '../ui/run-ui-bridge.js'
 
 interface LedgerRecord {
   eventType?: string
+  runId?: string
   stepId?: string | null
   matrixIndex?: number | null
   payload?: Record<string, unknown>
@@ -150,18 +151,28 @@ function extractGuardrailOutput(verdict: unknown): { output?: string, logKey?: s
 
 function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
   const stepId = nonEmptyString(event.stepId) ?? 'step'
+  const runId = nonEmptyString(event.runId)
   const payload = event.payload ?? {}
   const error = nonEmptyString(payload.error)
   const guardrailName = nonEmptyString(payload.guardrailName)
   const scope = buildScope(event)
   switch (event.eventType ?? '') {
     case 'run.started':
-      uiHost.pushEntry(withScope({ kind: 'run.started', harnessName: nonEmptyString(payload.harnessName) ?? 'ludd' }, scope))
+      uiHost.pushEntry(withScope({
+        kind: 'run.started',
+        harnessName: nonEmptyString(payload.harnessName) ?? 'ludd',
+        ...(runId !== undefined
+          ? { runId }
+          : {}),
+      }, scope))
       break
     case 'run.resumed':
       uiHost.pushEntry(withScope({
         kind: 'run.resumed',
         harnessName: nonEmptyString(payload.harnessName),
+        ...(runId !== undefined
+          ? { runId }
+          : {}),
       }, scope))
       break
     case 'run.passed':

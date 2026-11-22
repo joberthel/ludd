@@ -112,7 +112,7 @@ export function RunDashboard({
   return (
     <Box position="relative" flexDirection="column" width={columns} height={rows}>
       <Box justifyContent="space-between" paddingX={1}>
-        <Box>
+        <Box flexShrink={0}>
           <Text bold color="cyan">
             {'◆ '}
             {state.harnessName}
@@ -124,11 +124,13 @@ export function RunDashboard({
             ]
           </Text>
         </Box>
-        {state.activity !== undefined
-          ? <Text dimColor wrap="truncate-end">{state.activity}</Text>
-          : isFinished
-            ? <Text dimColor bold wrap="truncate-end">Press q or Esc to exit</Text>
-            : null}
+        {state.runId !== undefined
+          ? (
+              <Box flexShrink={1} marginLeft={1}>
+                <Text dimColor wrap="truncate-end">{state.runId}</Text>
+              </Box>
+            )
+          : null}
       </Box>
 
       <Box flexDirection="row" height={bodyHeight}>
