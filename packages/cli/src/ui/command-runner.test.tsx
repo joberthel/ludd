@@ -170,7 +170,7 @@ it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, a
     const execute = vi.fn(async () => new Promise<number>((resolve) => {
       finish = resolve
     }))
-    const { lastFrame, unmount } = render(<CommandRunner execute={execute} dashboard={true} />)
+    const { lastFrame, stdin, unmount } = render(<CommandRunner execute={execute} dashboard={true} />)
     await vi.waitFor(() => expect(getRunUiHost()).toBeDefined())
 
     expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049h\x1B[2J\x1B[H')
@@ -208,10 +208,26 @@ it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, a
     finish(0)
     await vi.waitFor(() => {
       expect(process.exitCode).toBe(0)
+      expect(lastFrame()).toContain('Press q or Esc to exit')
+      expect(lastFrame()).toContain('q/Esc: exit')
+    })
+    expect(writeSpy).not.toHaveBeenCalledWith('\x1B[?1049l')
+
+    // User can still navigate panes after run finishes
+    await new Promise(resolve => setTimeout(resolve, 20))
+    stdin.write('j')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('follow:off')
+    })
+
+    // Pressing q dismisses dashboard, exits alt-screen, and prints FinalRunSummary
+    stdin.write('q')
+    await vi.waitFor(() => {
       expect(lastFrame()).toContain('✔ dash-demo — Run passed')
       expect(lastFrame()).toContain('✔ triage (passed)')
       expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049l')
     })
+    expect(process.exitCode).toBe(0)
     unmount()
   }
   finally {
@@ -283,6 +299,16 @@ it('handles hydrateSnapshot, guardrails, gates, prompts, and failed summary in d
     await vi.waitFor(() => {
       expect(process.exitCode).toBe(1)
       const frame = lastFrame()!
+      expect(frame).toContain('◆ resume-demo [failed]')
+      expect(frame).toContain('✖ run exploded')
+      expect(frame).toContain('q/Esc: exit')
+    })
+    expect(errSpy).not.toHaveBeenCalled()
+
+    await new Promise(resolve => setTimeout(resolve, 25))
+    stdin.write('\x1B')
+    await vi.waitFor(() => {
+      const frame = lastFrame()!
       expect(frame).toContain('✖ resume-demo — Run failed: run exploded')
       expect(frame).toContain('↷ s1 (skipped)')
       expect(frame).toContain('✖ s2 (failed)')
@@ -302,9 +328,73 @@ it('handles hydrateSnapshot, guardrails, gates, prompts, and failed summary in d
       />,
     )
     await vi.waitFor(() => {
+      expect(failedQuiet.lastFrame()).toContain('q/Esc: exit')
+    })
+    await new Promise(resolve => setTimeout(resolve, 25))
+    failedQuiet.stdin.write('q')
+    await vi.waitFor(() => {
       expect(failedQuiet.lastFrame()).toContain('✖ ludd — Run failed')
     })
     failedQuiet.unmount()
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
+})
+
+it('exits dashboard immediately when keepOpen is false or on pre-run startup error', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    // keepOpen={false} exits immediately on finish
+    const autoExit = render(
+      <CommandRunner
+        execute={async () => {
+          getRunUiHost()!.setBlueprint?.({
+            harnessName: 'auto-demo',
+            steps: [
+              { id: 's1', hasMatrix: false },
+            ],
+          })
+          getRunUiHost()!.pushEntry({
+            kind: 'step.passed',
+            stepId: 's1',
+            scope: { stepId: 's1' },
+          })
+          return 0
+        }}
+        dashboard={true}
+        keepOpen={false}
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(autoExit.lastFrame()).toContain('✔ auto-demo — Run passed')
+      expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049l')
+    })
+    autoExit.unmount()
+
+    // Pre-run startup error (no steps or entries pushed) exits immediately even when keepOpen={true}
+    const startupFail = render(
+      <CommandRunner
+        execute={async () => {
+          throw new Error('Config not found')
+        }}
+        dashboard={true}
+        keepOpen={true}
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(process.exitCode).toBe(1)
+      expect(startupFail.lastFrame()).toContain('✖ ludd — Run failed: Config not found')
+      expect(errSpy).toHaveBeenCalledWith('Config not found')
+      expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049l')
+    })
+    startupFail.unmount()
   }
   finally {
     if (origTty)

@@ -34,6 +34,9 @@ export const options = z.object({
     alias: 'd',
     description: 'Run detached in the background',
   })),
+  autoExit: z.boolean().optional().describe(option({
+    description: 'Exit the dashboard automatically when the run finishes or fails',
+  })),
 })
 
 export interface RunProps {
@@ -73,5 +76,11 @@ export default function Run({ args: [positionalConfig], options: opts }: RunProp
     opts.workspace,
   ])
 
-  return <CommandRunner execute={execute} dashboard={!opts.stream && !opts.detach} />
+  return (
+    <CommandRunner
+      execute={execute}
+      dashboard={!opts.stream && !opts.detach}
+      keepOpen={!opts.autoExit}
+    />
+  )
 }

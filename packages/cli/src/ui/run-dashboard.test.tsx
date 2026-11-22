@@ -299,4 +299,82 @@ describe('runDashboard', () => {
     expect(frame).toContain('t: thoughts · o: output')
     unmount()
   })
+
+  it('calls onExit on q or Esc only when finished/errored, renders exit hints, and keeps navigation active', async () => {
+    const onExit = vi.fn()
+    let initial = createInitialRunTreeState('demo')
+    initial = runTreeReducer(initial, {
+      type: 'SET_BLUEPRINT',
+      blueprint: {
+        harnessName: 'demo',
+        steps: [
+          { id: 'triage', hasMatrix: false },
+          { id: 'implement', hasMatrix: false },
+        ],
+      },
+    })
+
+    function InteractiveFinishedHarness({ status, errorMessage }: { status: 'running' | 'done' | 'error', errorMessage?: string }) {
+      const [state, dispatch] = useReducer(runTreeReducer, {
+        ...initial,
+        runStatus: status === 'running'
+          ? 'running'
+          : status === 'done'
+            ? 'passed'
+            : 'failed',
+      })
+      return (
+        <RunDashboard
+          state={state}
+          dispatch={dispatch}
+          status={status}
+          errorMessage={errorMessage}
+          onPromptSubmit={vi.fn()}
+          onExit={onExit}
+          useAltScreen={false}
+        />
+      )
+    }
+
+    // While running, q and Esc should NOT trigger onExit
+    const running = render(<InteractiveFinishedHarness status="running" />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    running.stdin.write('q')
+    running.stdin.write('\x1B')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onExit).not.toHaveBeenCalled()
+    expect(running.lastFrame()).not.toContain('q/Esc: exit')
+    running.unmount()
+
+    // When done, navigation still works and q/Esc calls onExit
+    const done = render(<InteractiveFinishedHarness status="done" />)
+    await vi.waitFor(() => {
+      const frame = done.lastFrame()!
+      expect(frame).toContain('Press q or Esc to exit')
+      expect(frame).toContain('q/Esc: exit')
+    })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    done.stdin.write('j')
+    await vi.waitFor(() => {
+      expect(done.lastFrame()).toContain('follow:off')
+    })
+    done.stdin.write('\t')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    done.stdin.write('q')
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(1))
+    done.unmount()
+
+    // When errored, error message and q/Esc: exit are both shown, and Esc calls onExit
+    const errored = render(<InteractiveFinishedHarness status="error" errorMessage="step crashed" />)
+    await vi.waitFor(() => {
+      const frame = errored.lastFrame()!
+      expect(frame).toContain('✖ step crashed')
+      expect(frame).toContain('q/Esc: exit')
+      expect(frame).toContain('Press q or Esc to exit')
+    })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    errored.stdin.write('\x1B')
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(2))
+    errored.unmount()
+  })
 })

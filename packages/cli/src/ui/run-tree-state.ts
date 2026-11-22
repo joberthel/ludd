@@ -69,6 +69,7 @@ export type RunTreeAction
     | { type: 'MOVE_SELECTION', delta: number }
     | { type: 'TOGGLE_EXPAND', nodeId?: string }
     | { type: 'SET_FOLLOW_ACTIVE', follow: boolean }
+    | { type: 'FINISH_RUN', status: 'passed' | 'failed' }
 
 export interface VisibleTreeRow {
   id: string
@@ -792,6 +793,14 @@ export function runTreeReducer(state: RunTreeState, action: RunTreeAction): RunT
         followActive: action.follow,
         ...(action.follow
           ? { selectedNodeId: state.activeNodeId }
+          : {}),
+      }
+    case 'FINISH_RUN':
+      return {
+        ...state,
+        activity: undefined,
+        ...(state.runStatus === 'running' || state.runStatus === 'waiting_for_gate'
+          ? { runStatus: action.status }
           : {}),
       }
   }
