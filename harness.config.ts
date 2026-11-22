@@ -57,14 +57,12 @@ export default createHarness('ludd-dev', {
     },
     outputSchema: z.object({
       summary: z.string().describe('A brief summary of the plan'),
-      filesToTouch: z.array(z.string()).describe('List of files that will be modified as part of the plan'),
     }),
     afterStep: ctx => [
       humanReviewGuardrail({
         name: 'Plan Review',
         prompt: [
           `Plan summary: ${ctx.step.output.summary}`,
-          `Files: ${ctx.step.output.filesToTouch.join(', ') || '(none)'}`,
           'Approve this plan and start implementation?',
         ].join('\n'),
       }),
