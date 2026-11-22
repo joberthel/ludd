@@ -8,6 +8,7 @@ import Resume from './commands/resume.js'
 import Run from './commands/run.js'
 import Status from './commands/status.js'
 import Teardown from './commands/teardown.js'
+import { getRunUiHost } from './ui/run-ui-bridge.js'
 
 const actions = vi.hoisted(() => ({
   run: vi.fn(async () => 0),
@@ -195,6 +196,73 @@ it('enables dashboard mode for foreground Run and Resume unless --stream or --de
     await vi.waitFor(() => expect(fgResume.lastFrame()).toContain('Steps'))
     fgResume.unmount()
     expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049h\x1B[2J\x1B[H')
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
+})
+
+it('keeps Run and Resume dashboard open by default on finish and auto-exits when autoExit is true', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    actions.run.mockImplementation(async () => {
+      getRunUiHost()?.setBlueprint?.({
+        harnessName: 'run-flow',
+        steps: [
+          { id: 's1', hasMatrix: false },
+        ],
+      })
+      getRunUiHost()?.pushEntry({
+        kind: 'step.passed',
+        stepId: 's1',
+        scope: { stepId: 's1' },
+      })
+      return 0
+    })
+
+    const stayOpenRun = render(<Run args={[undefined]} options={{}} />)
+    await vi.waitFor(() => {
+      expect(stayOpenRun.lastFrame()).toContain('q/Esc: exit')
+    })
+    stayOpenRun.unmount()
+
+    const autoExitRun = render(<Run args={[undefined]} options={{ autoExit: true }} />)
+    await vi.waitFor(() => {
+      expect(autoExitRun.lastFrame()).toContain('✔ run-flow — Run passed')
+    })
+    autoExitRun.unmount()
+
+    actions.resume.mockImplementation(async () => {
+      getRunUiHost()?.setBlueprint?.({
+        harnessName: 'resume-flow',
+        steps: [
+          { id: 's1', hasMatrix: false },
+        ],
+      })
+      getRunUiHost()?.pushEntry({
+        kind: 'step.passed',
+        stepId: 's1',
+        scope: { stepId: 's1' },
+      })
+      return 0
+    })
+
+    const stayOpenResume = render(<Resume args={['run-a']} options={{}} />)
+    await vi.waitFor(() => {
+      expect(stayOpenResume.lastFrame()).toContain('q/Esc: exit')
+    })
+    stayOpenResume.unmount()
+
+    const autoExitResume = render(<Resume args={['run-a']} options={{ autoExit: true }} />)
+    await vi.waitFor(() => {
+      expect(autoExitResume.lastFrame()).toContain('✔ resume-flow — Run passed')
+    })
+    autoExitResume.unmount()
   }
   finally {
     if (origTty)

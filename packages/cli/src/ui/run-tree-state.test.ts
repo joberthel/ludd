@@ -1075,4 +1075,23 @@ describe('runTreeReducer & tree selectors', () => {
     expect(getNodeStatus(state, guardrailNodeId('s2', 99, 'beforeStep', 0))).toBe('pending')
     expect(getNodeStatus(state, 'unknown-node')).toBe('running')
   })
+
+  it('handles FINISH_RUN by clearing activity, transitioning active states, and preserving failed status', () => {
+    let runningState = createInitialRunTreeState('flow')
+    runningState = runTreeReducer(runningState, { type: 'SET_ACTIVITY', activity: 'working...' })
+    const passedState = runTreeReducer(runningState, { type: 'FINISH_RUN', status: 'passed' })
+    expect(passedState.runStatus).toBe('passed')
+    expect(passedState.activity).toBeUndefined()
+
+    let gateState = runTreeReducer(createInitialRunTreeState('flow'), { type: 'SET_GATE_WAITING', waiting: true })
+    gateState = runTreeReducer(gateState, { type: 'SET_ACTIVITY', activity: 'waiting...' })
+    const failedFromGate = runTreeReducer(gateState, { type: 'FINISH_RUN', status: 'failed' })
+    expect(failedFromGate.runStatus).toBe('failed')
+    expect(failedFromGate.activity).toBeUndefined()
+
+    const alreadyFailed = runTreeReducer(failedFromGate, { type: 'SET_ACTIVITY', activity: 'lingering' })
+    const preservedFailed = runTreeReducer(alreadyFailed, { type: 'FINISH_RUN', status: 'passed' })
+    expect(preservedFailed.runStatus).toBe('failed')
+    expect(preservedFailed.activity).toBeUndefined()
+  })
 })

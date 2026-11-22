@@ -4,7 +4,7 @@ import type { RunUiEntry } from './run-ui-bridge.js'
 import process from 'node:process'
 import { Spinner, StatusMessage } from '@inkjs/ui'
 import { Box, Static, Text } from 'ink'
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { InteractiveQuestionPrompt, registerTtyPromptHost } from './interactive-question-prompt.js'
 import { RunDashboard } from './run-dashboard.js'
 import { RunLogEntry } from './run-log-entry.js'
@@ -18,6 +18,8 @@ export interface CommandRunnerProps {
   spinnerLabel?: string
   /** Enable full-screen split-pane dashboard when running in a TTY. */
   dashboard?: boolean
+  /** Keep the dashboard open after the run finishes or fails until dismissed (default: true). */
+  keepOpen?: boolean
 }
 
 type KeyedRunUiEntry = RunUiEntry & { id: number }
@@ -75,13 +77,15 @@ function FinalRunSummary({
   )
 }
 
-export function CommandRunner({ execute, spinnerLabel, dashboard = false }: CommandRunnerProps) {
+export function CommandRunner({ execute, spinnerLabel, dashboard = false, keepOpen = true }: CommandRunnerProps) {
   const isDashboard = Boolean(dashboard && process.stdout.isTTY)
   const [status, setStatus] = useState<'running' | 'done' | 'error'>('running')
   const [errorMessage, setErrorMessage] = useState<string | undefined>()
   const [activePrompt, setActivePrompt] = useState<ActiveTtyPrompt | undefined>()
   const [activity, setActivity] = useState<string | undefined>()
   const [entries, setEntries] = useState<KeyedRunUiEntry[]>([])
+  const [dismissed, setDismissed] = useState(false)
+  const loggedErrorRef = useRef(false)
   const [treeState, dispatch] = useReducer(runTreeReducer, undefined, () => createInitialRunTreeState())
 
   useEffect(() => registerTtyPromptHost(setActivePrompt), [])
@@ -120,6 +124,14 @@ export function CommandRunner({ execute, spinnerLabel, dashboard = false }: Comm
           return
         process.exitCode = code
         setActivity(undefined)
+        if (isDashboard) {
+          dispatch({
+            type: 'FINISH_RUN',
+            status: code === 0
+              ? 'passed'
+              : 'failed',
+          })
+        }
         setStatus('done')
       })
       .catch((error: unknown) => {
@@ -129,15 +141,28 @@ export function CommandRunner({ execute, spinnerLabel, dashboard = false }: Comm
           ? error.message
           : String(error)
         process.exitCode = 1
-        console.error(message)
         setActivity(undefined)
         setErrorMessage(message)
+        if (isDashboard) {
+          dispatch({ type: 'FINISH_RUN', status: 'failed' })
+        }
         setStatus('error')
       })
     return () => {
       active = false
     }
-  }, [execute])
+  }, [execute, isDashboard])
+
+  const isFinished = status === 'done' || status === 'error'
+  const hasObservableRun = treeState.steps.length > 0 || treeState.entries.length > 0
+  const shouldHoldDashboard = isDashboard && keepOpen && hasObservableRun && !dismissed
+
+  useEffect(() => {
+    if (status === 'error' && errorMessage !== undefined && !shouldHoldDashboard && !loggedErrorRef.current) {
+      loggedErrorRef.current = true
+      console.error(errorMessage)
+    }
+  }, [status, errorMessage, shouldHoldDashboard])
 
   const handleSubmit = (answer: unknown): void => {
     const current = activePrompt!
@@ -162,7 +187,7 @@ export function CommandRunner({ execute, spinnerLabel, dashboard = false }: Comm
   }
 
   if (isDashboard) {
-    if (status === 'done' || status === 'error') {
+    if (isFinished && !shouldHoldDashboard) {
       return (
         <FinalRunSummary
           state={treeState}
@@ -179,6 +204,7 @@ export function CommandRunner({ execute, spinnerLabel, dashboard = false }: Comm
         status={status}
         errorMessage={errorMessage}
         onPromptSubmit={handleSubmit}
+        onExit={() => setDismissed(true)}
       />
     )
   }

@@ -15,6 +15,7 @@ export interface RunDashboardProps {
   status: 'running' | 'done' | 'error'
   errorMessage?: string
   onPromptSubmit: (answer: unknown) => void
+  onExit?: () => void
   useAltScreen?: boolean
 }
 
@@ -32,6 +33,7 @@ export function RunDashboard({
   status,
   errorMessage,
   onPromptSubmit,
+  onExit,
   useAltScreen = Boolean(process.stdout.isTTY),
 }: RunDashboardProps) {
   const [size, setSize] = useState(getTerminalSize)
@@ -63,10 +65,15 @@ export function RunDashboard({
   }, [])
 
   const modalOpen = activePrompt !== undefined && !modalMinimized
+  const isFinished = status === 'done' || status === 'error'
 
   useInput((input, key) => {
     if (activePrompt !== undefined && key.ctrl && input === 'b') {
       setModalMinimized(prev => !prev)
+      return
+    }
+    if (!modalOpen && isFinished && (input === 'q' || key.escape)) {
+      onExit?.()
       return
     }
     if (!modalOpen && key.tab) {
@@ -119,7 +126,9 @@ export function RunDashboard({
         </Box>
         {state.activity !== undefined
           ? <Text dimColor wrap="truncate-end">{state.activity}</Text>
-          : null}
+          : isFinished
+            ? <Text dimColor bold wrap="truncate-end">Press q or Esc to exit</Text>
+            : null}
       </Box>
 
       <Box flexDirection="row" height={bodyHeight}>
@@ -145,21 +154,30 @@ export function RunDashboard({
         />
       </Box>
 
-      <Box paddingX={1}>
-        {activePrompt !== undefined && modalMinimized
-          ? <Text bold color="yellow">⏸ Question waiting — press Ctrl+B to answer</Text>
-          : status === 'error' && errorMessage !== undefined
-            ? (
-                <Text color="red" wrap="truncate-end">
-                  {'✖ '}
-                  {errorMessage}
-                </Text>
-              )
-            : (
-                <Text dimColor wrap="truncate-end">
-                  Tab: switch pane · ↑/↓: navigate · Enter/Space: expand · f: follow · t: thoughts · o: output · g/G: top/bottom
-                </Text>
-              )}
+      <Box justifyContent="space-between" paddingX={1}>
+        <Box flexShrink={1}>
+          {activePrompt !== undefined && modalMinimized
+            ? <Text bold color="yellow">⏸ Question waiting — press Ctrl+B to answer</Text>
+            : status === 'error' && errorMessage !== undefined
+              ? (
+                  <Text color="red" wrap="truncate-end">
+                    {'✖ '}
+                    {errorMessage}
+                  </Text>
+                )
+              : (
+                  <Text dimColor wrap="truncate-end">
+                    Tab: switch pane · ↑/↓: navigate · Enter/Space: expand · f: follow · t: thoughts · o: output · g/G: top/bottom
+                  </Text>
+                )}
+        </Box>
+        {isFinished
+          ? (
+              <Box flexShrink={0} marginLeft={1}>
+                <Text bold dimColor>q/Esc: exit</Text>
+              </Box>
+            )
+          : null}
       </Box>
 
       {activePrompt !== undefined
