@@ -13,7 +13,7 @@ const devWorktree = gitWorktreeEnv({
 
 export default createHarness('ludd-dev', {
   cleanupPolicy: {
-    onSuccess: 'keep',
+    onSuccess: 'destroy',
     onFailure: 'keep',
   },
 })
@@ -121,5 +121,28 @@ export default createHarness('ludd-dev', {
         maxRetries: 0,
       }),
     ],
+  })
+  .step({
+    id: 'merge',
+    name: 'Merge to Main Worktree',
+    run: async (ctx) => {
+      const branchName = ctx.environments['dev-worktree']?.branchName
+      if (branchName === undefined || branchName === '') {
+        throw new Error('Missing dev-worktree branch to merge.')
+      }
+      const mergeResult = await ctx.environments.host.exec([
+        'git',
+        'merge',
+        '--ff-only',
+        branchName,
+      ])
+      if (mergeResult.exitCode !== 0) {
+        throw new Error(`Failed to fast-forward merge ${branchName}: ${mergeResult.stderr.trim() || mergeResult.stdout.trim()}`)
+      }
+      return {
+        mergedBranch: branchName,
+        commitMessage: ctx.steps.implement.output?.commitMessage ?? '',
+      }
+    },
   })
   .build()
