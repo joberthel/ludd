@@ -4,14 +4,14 @@ import type {
   EnvironmentDescriptor,
   ProvisionContext,
   ProvisionedEnvironment,
-} from '@ludd/core'
+} from '@luddjs/core'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import {
   execHostCommand as execHostEnvCommand,
   killProcessTree,
-} from '@ludd/core'
+} from '@luddjs/core'
 import { resolveEnvironmentVariables } from './isolation/env-resolver.js'
 
 export { execHostEnvCommand, killProcessTree }

@@ -1,4 +1,4 @@
-import type { StepContext } from '@ludd/core'
+import type { StepContext } from '@luddjs/core'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { resolveEnvironmentVariables } from './env-resolver.js'

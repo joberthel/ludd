@@ -5,8 +5,8 @@ import type {
   AgentTurnResult,
   DynamicProperty,
   StepContext,
-} from '@ludd/core'
-import { appendStreamEvent } from '@ludd/core'
+} from '@luddjs/core'
+import { appendStreamEvent } from '@luddjs/core'
 
 export type AgentMidTurnEventType = 'thought' | 'tool_call' | 'message_chunk'
 

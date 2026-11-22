@@ -1,8 +1,8 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { getControlSocketPath, startControlServer } from '@ludd/core'
+import { getControlSocketPath, startControlServer } from '@luddjs/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { statusCommand } from './status-command.js'
 

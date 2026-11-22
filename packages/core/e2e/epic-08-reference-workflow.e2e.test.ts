@@ -22,7 +22,7 @@ function git(cwd: string, ...args: string[]): string {
 function initFixtureRepo(): void {
   git(workspaceDir, 'init', '-b', 'main')
   git(workspaceDir, 'config', 'user.name', 'Ludd E2E')
-  git(workspaceDir, 'config', 'user.email', 'e2e@ludd.dev')
+  git(workspaceDir, 'config', 'user.email', 'e2e@luddjs.dev')
   fs.mkdirSync(path.join(workspaceDir, 'src'))
   fs.writeFileSync(path.join(workspaceDir, 'src', 'index.js'), '// fixture\n')
   fs.writeFileSync(path.join(workspaceDir, 'test.js'), 'require("./src/index.js")\n')

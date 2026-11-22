@@ -42,11 +42,11 @@ afterAll(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-it('loads valid TypeScript config with defineHarness and @ludd/core alias', async () => {
+it('loads valid TypeScript config with defineHarness and @luddjs/core alias', async () => {
   const filePath = path.join(tempDir, 'harness.config.ts')
   await writeFile(
     filePath,
-    `import { defineHarness } from '@ludd/core';
+    `import { defineHarness } from '@luddjs/core';
 export default defineHarness({
   name: 'ts-workflow',
   steps: [{ id: 'step-1', run: async () => ({ status: 'done' }) }]
@@ -62,8 +62,8 @@ it('loads agents from the package entrypoint exposed to config files', async () 
   const filePath = path.join(tempDir, 'agents.config.ts')
   await writeFile(
     filePath,
-    `import { defineHarness } from '@ludd/core';
-import { mockAgent } from '@ludd/agents';
+    `import { defineHarness } from '@luddjs/core';
+import { mockAgent } from '@luddjs/agents';
 export default defineHarness({
   name: 'agents-workflow',
   steps: [{ id: 'agent-step', run: mockAgent({ prompt: 'test', responses: [{ ok: true }] }) }]
@@ -177,12 +177,12 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('exposes all @ludd/core exports including previously omitted symbols', async () => {
+  it('exposes all @luddjs/core exports including previously omitted symbols', async () => {
     const filePath = path.join(tempDir, 'core-exports.ts')
     await writeFile(
       filePath,
       [
-        `import { defineHarness, teardownRun, gc, createArtifactStore, ForbiddenMountPathError, UnsafeDangerModeError } from '@ludd/core'`,
+        `import { defineHarness, teardownRun, gc, createArtifactStore, ForbiddenMountPathError, UnsafeDangerModeError } from '@luddjs/core'`,
         `if (typeof teardownRun !== 'function') throw new Error('missing teardownRun')`,
         `if (typeof gc !== 'function') throw new Error('missing gc')`,
         `if (typeof createArtifactStore !== 'function') throw new Error('missing createArtifactStore')`,
@@ -196,15 +196,15 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     expect(loaded.name).toBe('core-exports')
   })
 
-  it('resolves @ludd/agents, @ludd/guardrails, and @ludd/environments', async () => {
+  it('resolves @luddjs/agents, @luddjs/guardrails, and @luddjs/environments', async () => {
     const filePath = path.join(tempDir, 'workspace-pkgs.ts')
     await writeFile(
       filePath,
       [
-        `import { defineHarness } from '@ludd/core'`,
-        `import * as agents from '@ludd/agents'`,
-        `import * as guardrails from '@ludd/guardrails'`,
-        `import * as environments from '@ludd/environments'`,
+        `import { defineHarness } from '@luddjs/core'`,
+        `import * as agents from '@luddjs/agents'`,
+        `import * as guardrails from '@luddjs/guardrails'`,
+        `import * as environments from '@luddjs/environments'`,
         `if (!agents || !guardrails || !environments) throw new Error('missing workspace package')`,
         `export default defineHarness({ name: 'workspace-pkgs', steps: [{ id: 's1', run: async () => ({}) }] })`,
       ].join('\n'),
@@ -219,7 +219,7 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     await writeFile(
       filePath,
       [
-        `import { defineHarness } from '@ludd/core'`,
+        `import { defineHarness } from '@luddjs/core'`,
         `import { customName } from 'virtual:custom'`,
         `export default defineHarness({ name: customName, steps: [{ id: 's1', run: async () => ({}) }] })`,
       ].join('\n'),
@@ -238,22 +238,22 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     await writeFile(
       filePath,
       [
-        `import { defineHarness } from '@ludd/core'`,
-        `import { customFlag } from '@ludd/agents'`,
+        `import { defineHarness } from '@luddjs/core'`,
+        `import { customFlag } from '@luddjs/agents'`,
         `export default defineHarness({ name: customFlag, steps: [{ id: 's1', run: async () => ({}) }] })`,
       ].join('\n'),
     )
 
     const loaded = await loadHarnessConfig(filePath, {
       virtualModules: {
-        '@ludd/agents': { customFlag: 'overridden-agents' },
+        '@luddjs/agents': { customFlag: 'overridden-agents' },
       },
     })
     expect(loaded.name).toBe('overridden-agents')
   })
 
   it('returns undefined for missing optional packages and rethrows non-not-found errors', async () => {
-    await expect(resolveOptionalPackage('@ludd/definitely-nonexistent-pkg')).resolves.toBeUndefined()
+    await expect(resolveOptionalPackage('@luddjs/definitely-nonexistent-pkg')).resolves.toBeUndefined()
     await expect(resolveOptionalPackage('data:text/javascript,throw new Error("boom")')).rejects.toThrow('boom')
   })
 
@@ -261,7 +261,7 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     const filePath = path.join(tempDir, 'missing-optional.ts')
     await writeFile(
       filePath,
-      `import { defineHarness } from '@ludd/core'\nexport default defineHarness({ name: 'missing-optional', steps: [{ id: 's1', run: async () => ({}) }] })`,
+      `import { defineHarness } from '@luddjs/core'\nexport default defineHarness({ name: 'missing-optional', steps: [{ id: 's1', run: async () => ({}) }] })`,
     )
 
     const spy = vi.spyOn(loaderInternals, 'resolveOptionalPackage').mockResolvedValueOnce(undefined)

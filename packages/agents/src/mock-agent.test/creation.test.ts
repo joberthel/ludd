@@ -1,4 +1,4 @@
-import { isAgentRunner } from '@ludd/core'
+import { isAgentRunner } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 

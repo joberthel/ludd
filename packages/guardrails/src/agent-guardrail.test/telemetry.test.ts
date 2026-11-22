@@ -4,12 +4,12 @@ import type {
   GuardrailExecutionInput,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
+} from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { mockAgent } from '@ludd/agents'
-import { readLedgerEvents, readStreamEvents } from '@ludd/core'
+import { mockAgent } from '@luddjs/agents'
+import { readLedgerEvents, readStreamEvents } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentGuardrail } from '../agent-guardrail.js'
 

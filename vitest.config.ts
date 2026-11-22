@@ -8,11 +8,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@ludd\/([^/]+)$/,
+        find: /^@luddjs\/([^/]+)$/,
         replacement: path.resolve(__dirname, 'packages/$1/src/index.ts'),
       },
       {
-        find: /^@ludd\/([^/]+)\/(.*)$/,
+        find: /^@luddjs\/([^/]+)\/(.*)$/,
         replacement: path.resolve(__dirname, 'packages/$1/src/$2'),
       },
     ],

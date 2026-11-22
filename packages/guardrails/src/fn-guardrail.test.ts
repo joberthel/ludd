@@ -1,5 +1,5 @@
-import type { GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@ludd/core'
-import { isGuardrail } from '@ludd/core'
+import type { GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@luddjs/core'
+import { isGuardrail } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { fnGuardrail } from './fn-guardrail.js'
 

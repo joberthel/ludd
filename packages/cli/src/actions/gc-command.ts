@@ -1,6 +1,6 @@
 import path from 'node:path'
 import process from 'node:process'
-import { gc, parseDurationToMs } from '@ludd/core'
+import { gc, parseDurationToMs } from '@luddjs/core'
 
 export interface GcCommandOptions {
   runId?: string | string[]

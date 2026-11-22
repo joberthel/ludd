@@ -1,4 +1,4 @@
-import { createControlClient } from '@ludd/core'
+import { createControlClient } from '@luddjs/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { abortCommand } from './abort-command.js'
 
@@ -7,8 +7,8 @@ const client = {
   close: vi.fn(async () => {}),
 }
 
-vi.mock('@ludd/core', async importOriginal => ({
-  ...await importOriginal<typeof import('@ludd/core')>(),
+vi.mock('@luddjs/core', async importOriginal => ({
+  ...await importOriginal<typeof import('@luddjs/core')>(),
   createControlClient: vi.fn(async () => client),
 }))
 

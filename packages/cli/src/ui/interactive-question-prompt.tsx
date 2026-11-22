@@ -1,6 +1,6 @@
-import type { InteractiveQuestion, InteractiveSelectQuestion } from '@ludd/core'
+import type { InteractiveQuestion, InteractiveSelectQuestion } from '@luddjs/core'
 import { ConfirmInput, MultiSelect, Select, StatusMessage } from '@inkjs/ui'
-import { normalizeSelectOptions, validateInteractiveAnswer } from '@ludd/core'
+import { normalizeSelectOptions, validateInteractiveAnswer } from '@luddjs/core'
 import { Box, render, Text, useInput } from 'ink'
 import { useState } from 'react'
 

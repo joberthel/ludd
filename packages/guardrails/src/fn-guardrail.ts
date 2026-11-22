@@ -6,7 +6,7 @@ import type {
   OnMaxRetriesExceededAction,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
+} from '@luddjs/core'
 
 export interface FnGuardrailConfig<
   TBody = unknown,

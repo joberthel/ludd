@@ -1,4 +1,4 @@
-import type { AgentTurnInput, ArtifactClient, ProvisionedEnvironment } from '@ludd/core'
+import type { AgentTurnInput, ArtifactClient, ProvisionedEnvironment } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 

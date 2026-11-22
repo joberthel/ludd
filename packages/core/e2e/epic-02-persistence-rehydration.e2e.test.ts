@@ -25,7 +25,7 @@ async function writePipelineConfig(dir: string): Promise<string> {
   const filePath = path.join(dir, 'harness.config.ts')
   const escapedDir = dir.replaceAll('\\', '/')
   const content = [
-    `import { defineHarness } from '@ludd/core'`,
+    `import { defineHarness } from '@luddjs/core'`,
     `import { z } from 'zod'`,
     `import fs from 'node:fs'`,
     `import path from 'node:path'`,

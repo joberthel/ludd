@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@ludd/core'
+import { isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@luddjs/core'
 import { watchForGate } from '../prompts/watch-for-gate.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
 import { getRunUiHost, toHarnessBlueprint } from '../ui/run-ui-bridge.js'

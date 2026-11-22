@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ToolCallEvent } from '@earendil-works/pi-coding-agent'
-import { SandboxViolationError } from '@ludd/core'
+import { SandboxViolationError } from '@luddjs/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createReadOnlyToolCallHandler, readOnlyExtension } from './read-only-extension.js'
 

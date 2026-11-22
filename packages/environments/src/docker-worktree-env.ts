@@ -6,7 +6,7 @@ import type {
   EnvironmentExecResult,
   ProvisionContext,
   ProvisionedEnvironment,
-} from '@ludd/core'
+} from '@luddjs/core'
 import type { DockerMount } from './security/mount-validator.js'
 import path from 'node:path'
 import process from 'node:process'

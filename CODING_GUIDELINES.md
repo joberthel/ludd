@@ -2,7 +2,7 @@
 
 ## Packages
 
-This pnpm monorepo manages multiple related packages within a single repository. They reside inside the central `./packages` folder. Their namespace starts with `@ludd/`.
+This pnpm monorepo manages multiple related packages within a single repository. They reside inside the central `./packages` folder. Their namespace starts with `@luddjs/`.
 
 ## Dependencies
 

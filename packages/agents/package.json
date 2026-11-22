@@ -1,5 +1,5 @@
 {
-  "name": "@ludd/agents",
+  "name": "@luddjs/agents",
   "type": "module",
   "version": "0.0.1",
   "exports": {
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.5.1",
-    "@ludd/core": "workspace:*",
+    "@luddjs/core": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {

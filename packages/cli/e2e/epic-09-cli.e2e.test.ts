@@ -12,7 +12,7 @@ const daemons = new Set<number>()
 function workspace(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ludd-cli-e2e-'))
   workspaces.push(dir)
-  const config = `import { defineHarness } from '@ludd/core'\nconst review = { __kind: 'guardrail', type: 'human_review', prompt: 'Approve e2e?', execute: async () => ({ status: 'pass', body: 'Approved' }) }\nexport default defineHarness({ name: 'e2e-custom', steps: [{ id: 'step', run: async () => ({ ok: true }), beforeStep: [review], afterStep: [review] }] })\n`
+  const config = `import { defineHarness } from '@luddjs/core'\nconst review = { __kind: 'guardrail', type: 'human_review', prompt: 'Approve e2e?', execute: async () => ({ status: 'pass', body: 'Approved' }) }\nexport default defineHarness({ name: 'e2e-custom', steps: [{ id: 'step', run: async () => ({ ok: true }), beforeStep: [review], afterStep: [review] }] })\n`
   fs.writeFileSync(path.join(dir, 'custom.config.ts'), config)
   return dir
 }

@@ -1,9 +1,9 @@
-import { gc } from '@ludd/core'
+import { gc } from '@luddjs/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { gcCommand } from './gc-command.js'
 
-vi.mock('@ludd/core', async importOriginal => ({
-  ...await importOriginal<typeof import('@ludd/core')>(),
+vi.mock('@luddjs/core', async importOriginal => ({
+  ...await importOriginal<typeof import('@luddjs/core')>(),
   gc: vi.fn(async () => ({
     cleanedRunIds: ['a'],
     skippedActiveRunIds: ['b'],

@@ -6,7 +6,7 @@
 | **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@ludd/core`, `@ludd/agents` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/agents` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 2.2, 5.2, 5.4.2, 6, 7.1) |
 
 ## **1\. Context and Problem Statement**
@@ -50,8 +50,8 @@ We adopt **Option C: Scoped Per-Run Filesystem Directory with Atomic `state.json
 ## **4\. Consequences & Accepted Trade-Offs**
 
 * **Positive:** External UIs can render a dashboard of 50 parallel runs by reading tiny `state.json` and `ledger.jsonl` files, only tailing `streams/<sessionId>.jsonl` for the single run currently focused by the user.  
-* **Accepted Trade-Off:** Upgrading `@ludd/core` with a breaking `schemaVersion` bump requires finishing or discarding existing paused runs rather than auto-migrating their `state.json`.
+* **Accepted Trade-Off:** Upgrading `@luddjs/core` with a breaking `schemaVersion` bump requires finishing or discarding existing paused runs rather than auto-migrating their `state.json`.
 
 ## **5\. Revisit Triggers**
 
-This decision will be revisited if `@ludd/core` reaches a stable `v1.0` release where users require long-term backward-compatible state migrations across minor version upgrades.
+This decision will be revisited if `@luddjs/core` reaches a stable `v1.0` release where users require long-term backward-compatible state migrations across minor version upgrades.

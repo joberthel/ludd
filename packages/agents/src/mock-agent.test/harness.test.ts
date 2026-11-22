@@ -1,8 +1,8 @@
-import type { StepContext } from '@ludd/core'
+import type { StepContext } from '@luddjs/core'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { runHarness } from '@ludd/core'
+import { runHarness } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 

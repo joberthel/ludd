@@ -1,4 +1,4 @@
-import { humanReviewGuardrail } from '@ludd/guardrails'
+import { humanReviewGuardrail } from '@luddjs/guardrails'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { defineHarness } from '../define-harness.js'
 

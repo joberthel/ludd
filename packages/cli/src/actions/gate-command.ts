@@ -1,7 +1,7 @@
-import type { GateAction } from '@ludd/core'
+import type { GateAction } from '@luddjs/core'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient } from '@ludd/core'
+import { createControlClient } from '@luddjs/core'
 import { promptForGate } from '../prompts/inline-gate-prompter.js'
 import { parseStringAnswer } from '../prompts/parse-answer.js'
 

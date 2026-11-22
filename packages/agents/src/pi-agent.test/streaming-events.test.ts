@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { readStreamEvents } from '@ludd/core'
+import { readStreamEvents } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { piAgent } from '../pi-agent.js'
 import { fakeSession, turnInput } from './fake-session.js'

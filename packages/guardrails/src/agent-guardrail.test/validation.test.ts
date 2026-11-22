@@ -1,4 +1,4 @@
-import type { AgentRunner, ProvisionedEnvironment } from '@ludd/core'
+import type { AgentRunner, ProvisionedEnvironment } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'

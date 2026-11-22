@@ -1,5 +1,5 @@
 import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { ProvisionedEnvironment } from '@ludd/core'
+import type { ProvisionedEnvironment } from '@luddjs/core'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import { createBashToolDefinition } from '@earendil-works/pi-coding-agent'

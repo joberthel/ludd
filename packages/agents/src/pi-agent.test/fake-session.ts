@@ -1,6 +1,6 @@
-import type { AgentTurnInput } from '@ludd/core'
+import type { AgentTurnInput } from '@luddjs/core'
 import type { PiSession, PiSessionEvent } from '../types/pi-sdk.js'
-import { createDefaultHostEnvironment } from '@ludd/core'
+import { createDefaultHostEnvironment } from '@luddjs/core'
 
 export interface FakeSession extends PiSession {
   prompts: string[]

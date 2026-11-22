@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
-import { startEmbeddedMcpServer } from '@ludd/core'
+import { startEmbeddedMcpServer } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {

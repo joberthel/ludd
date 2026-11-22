@@ -1,8 +1,8 @@
-import type { ControlClient, RunStateSnapshot } from '@ludd/core'
+import type { ControlClient, RunStateSnapshot } from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { RunAlreadyActiveError } from '@ludd/core'
+import { RunAlreadyActiveError } from '@luddjs/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { resumeCommand } from './resume-command.js'
 
@@ -35,7 +35,7 @@ function validState(overrides: Record<string, unknown> = {}) {
 function setup(state?: Record<string, unknown>): string {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'ludd-resume-'))
   directories.push(workspace)
-  fs.writeFileSync(path.join(workspace, 'harness.config.ts'), `import { defineHarness } from '@ludd/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }) }] })\n`)
+  fs.writeFileSync(path.join(workspace, 'harness.config.ts'), `import { defineHarness } from '@luddjs/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }) }] })\n`)
   if (state) {
     const runDir = path.join(workspace, '.harness', 'runs', 'run-1')
     fs.mkdirSync(runDir, { recursive: true })
@@ -57,7 +57,7 @@ it('fails with RunNotFoundError when persisted state is absent', async () => {
 
 it('loads the persisted config path and resumes an inactive run', async () => {
   const workspace = setup(validState({ configPath: 'stored.config.ts' }))
-  fs.writeFileSync(path.join(workspace, 'stored.config.ts'), `import { defineHarness } from '@ludd/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }) }] })\n`)
+  fs.writeFileSync(path.join(workspace, 'stored.config.ts'), `import { defineHarness } from '@luddjs/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }) }] })\n`)
   await expect(resumeCommand({ runId: 'run-1', workspace })).resolves.toBe(0)
   expect(JSON.parse(fs.readFileSync(path.join(workspace, '.harness/runs/run-1/state.json'), 'utf8')).status).toBe('passed')
 })
@@ -90,7 +90,7 @@ it('throws RunAlreadyActiveError with the run ID and active runner PID', async (
 it('resumes a stale PID and returns failure when the workflow fails', async () => {
   const workspace = setup(validState())
   fs.writeFileSync(path.join(workspace, '.harness/runs/run-1/runner.pid'), '999999\n')
-  fs.writeFileSync(path.join(workspace, 'harness.config.ts'), `import { defineHarness } from '@ludd/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => { throw new Error('workflow failed') } }] })\n`)
+  fs.writeFileSync(path.join(workspace, 'harness.config.ts'), `import { defineHarness } from '@luddjs/core'\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => { throw new Error('workflow failed') } }] })\n`)
   await expect(resumeCommand({ runId: 'run-1', workspace })).resolves.toBe(1)
 })
 
@@ -112,7 +112,7 @@ it('uses programmatic detached startup for an inactive run', async () => {
 
 it('attaches to and resolves a waiting gate while resuming in foreground', async () => {
   const workspace = setup(validState({ configPath: 'gate.config.ts' }))
-  fs.writeFileSync(path.join(workspace, 'gate.config.ts'), `import { defineHarness } from '@ludd/core'\nconst review = { __kind: 'guardrail', type: 'human_review', prompt: 'Resume review?', execute: async () => ({ status: 'pass', body: 'ok' }) }\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }), beforeStep: [review] }] })\n`)
+  fs.writeFileSync(path.join(workspace, 'gate.config.ts'), `import { defineHarness } from '@luddjs/core'\nconst review = { __kind: 'guardrail', type: 'human_review', prompt: 'Resume review?', execute: async () => ({ status: 'pass', body: 'ok' }) }\nexport default defineHarness({ name: 'resume-test', steps: [{ id: 'step', run: async () => ({ ok: true }), beforeStep: [review] }] })\n`)
   prompt.mockImplementation(async (rawState: unknown, rawClient: unknown) => {
     const gate = (rawState as RunStateSnapshot).activeGate!
     await (rawClient as ControlClient).resolveGate({ stepId: gate.stepId, guardrailIndex: gate.guardrailIndex, action: 'pass' })

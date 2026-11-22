@@ -6,7 +6,7 @@
 | **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@ludd/core`, `@ludd/agents`, `@ludd/environments`, `@ludd/guardrails` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/agents`, `@luddjs/environments`, `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 3.1, 4.1, 5.5.1, 5.6.1, 5.7.3) |
 
 ## **1\. Context and Problem Statement**
@@ -30,7 +30,7 @@ Provision a fresh container/worktree for every single step and clone the environ
 
 ### **Option B: Decoupled Two-Layer Sandbox Model with Cross-Step Environment Reuse (Chosen)**
 
-Separate logical SDK-level file access modes (mode: 'read-only' \| 'workspace-write') from physical environment isolation (`@ludd/environments` adapters \+ optional `dangerMode`), and track provisioned environments in `state.json` so downstream steps and agentGuardrail instances can reuse them with zero provisioning overhead.
+Separate logical SDK-level file access modes (mode: 'read-only' \| 'workspace-write') from physical environment isolation (`@luddjs/environments` adapters \+ optional `dangerMode`), and track provisioned environments in `state.json` so downstream steps and agentGuardrail instances can reuse them with zero provisioning overhead.
 
 * **Pros:** A single `dockerWorktreeEnv({ id: 'feature-env' })` can be provisioned once in Step 1, used in `read-only` mode for Triage/Spec, switched to `workspace-write` mode in Step 3 (`implement-slices`), and reused in `read-only` mode by `agentGuardrail`—all with zero container re-provisioning or filesystem cloning overhead.  
 * **Cons:** Requires tracking environment IDs and lifecycle state in `state.json`.

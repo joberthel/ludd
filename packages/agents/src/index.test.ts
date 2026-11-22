@@ -8,7 +8,7 @@ import type {
 import { describe, expect, it } from 'vitest'
 import * as agents from './index.js'
 
-describe('@ludd/agents public exports', () => {
+describe('@luddjs/agents public exports', () => {
   it('exports mockAgent factory and stream utilities', () => {
     expect(typeof agents.mockAgent).toBe('function')
     expect(typeof agents.appendStreamEvent).toBe('function')

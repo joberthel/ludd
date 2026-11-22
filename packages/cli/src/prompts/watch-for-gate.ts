@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { createControlClient, readRunState } from '@ludd/core'
+import { createControlClient, readRunState } from '@luddjs/core'
 import { promptForGate } from './inline-gate-prompter.js'
 
 /**

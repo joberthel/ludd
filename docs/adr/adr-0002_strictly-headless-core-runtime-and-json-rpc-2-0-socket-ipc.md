@@ -6,7 +6,7 @@
 | **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@ludd/core` |
+| **Target Packages** | `@luddjs/core` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 2.1, 3, 5.4.1, 5.4.2, 5.5.3, 6, 7.1) |
 
 ## **1\. Context and Problem Statement**
@@ -33,7 +33,7 @@ Run a single global background daemon managing all active runs in memory over a 
 
 ### **Option C: Per-Run Headless Process with Unix Domain Socket JSON-RPC 2.0 IPC & PID Tracking (Chosen)**
 
-Keep `@ludd/core` 100% headless. Each workflow run executes as an independent OS process that listens on a scoped Unix Domain Socket (`.harness/runs/<runId>/control.sock`, or Named Pipe on Windows) and tracks its process liveness via `.harness/runs/<runId>/runner.pid`.
+Keep `@luddjs/core` 100% headless. Each workflow run executes as an independent OS process that listens on a scoped Unix Domain Socket (`.harness/runs/<runId>/control.sock`, or Named Pipe on Windows) and tracks its process liveness via `.harness/runs/<runId>/runner.pid`.
 
 * **Pros:** Complete isolation between concurrent runs; 0% CPU consumption while paused at gates; any frontend (TUI, GUI, CLI) can connect, disconnect, and reconnect at will; stale sockets after crashes are reliably detected via `runner.pid`.  
 * **Cons:** Requires implementing a JSON-RPC 2.0 server/client over Unix sockets and PID liveness checks.
@@ -42,7 +42,7 @@ Keep `@ludd/core` 100% headless. Each workflow run executes as an independent OS
 
 We adopt **Option C: Per-Run Headless Process with Unix Domain Socket JSON-RPC 2.0 IPC & PID Tracking**.
 
-* **Zero UI Dependencies in `@ludd/core`:** The core runtime never renders UI or reads interactive prompts from `stdin`. Resource cleanup (`teardown(runId)`) and batch garbage collection (`gc({ olderThan, status, ... })`) are exposed as programmatic headless APIs.  
+* **Zero UI Dependencies in `@luddjs/core`:** The core runtime never renders UI or reads interactive prompts from `stdin`. Resource cleanup (`teardown(runId)`) and batch garbage collection (`gc({ olderThan, status, ... })`) are exposed as programmatic headless APIs.  
 * **0% CPU Waiting on `control.sock`:** When paused at a `humanReviewGuardrail` or escalation prompt, the Node.js runner awaits an unresolved `Promise` at 0% CPU while listening on `.harness/runs/<runId>/control.sock`.  
 * **Standardized JSON-RPC 2.0 Method Contract:**  
   * `run.status`: Returns the current `state.json` snapshot alongside active gate details.  

@@ -3,8 +3,8 @@ import type {
   GuardrailExecutionInput,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
-import { StepOutputValidationError } from '@ludd/core'
+} from '@luddjs/core'
+import { StepOutputValidationError } from '@luddjs/core'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'

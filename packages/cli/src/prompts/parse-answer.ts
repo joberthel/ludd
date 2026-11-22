@@ -1,5 +1,5 @@
-import type { InteractiveQuestion } from '@ludd/core'
-import { validateInteractiveAnswer } from '@ludd/core'
+import type { InteractiveQuestion } from '@luddjs/core'
+import { validateInteractiveAnswer } from '@luddjs/core'
 
 function parseBooleanInput(raw: string, fallback?: boolean): boolean {
   const normalized = raw.trim().toLowerCase()

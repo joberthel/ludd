@@ -52,8 +52,8 @@ function generateImplementStep(escapedDir: string): string {
 
 function generateHarnessConfigContent(escapedDir: string): string {
   return [
-    `import { defineHarness } from '@ludd/core'`,
-    `import { mockAgent } from '@ludd/agents'`,
+    `import { defineHarness } from '@luddjs/core'`,
+    `import { mockAgent } from '@luddjs/agents'`,
     `import { z } from 'zod'`,
     `import fs from 'node:fs'`,
     `import path from 'node:path'`,

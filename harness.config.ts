@@ -1,8 +1,8 @@
-import type { ProvisionedEnvironment } from '@ludd/core'
-import { piAgent } from '@ludd/agents'
-import { createHarness } from '@ludd/core'
-import { gitWorktreeEnv } from '@ludd/environments'
-import { agentGuardrail, execGuardrail, fnGuardrail, humanReviewGuardrail, sh } from '@ludd/guardrails'
+import type { ProvisionedEnvironment } from '@luddjs/core'
+import { piAgent } from '@luddjs/agents'
+import { createHarness } from '@luddjs/core'
+import { gitWorktreeEnv } from '@luddjs/environments'
+import { agentGuardrail, execGuardrail, fnGuardrail, humanReviewGuardrail, sh } from '@luddjs/guardrails'
 import { z } from 'zod'
 
 const devWorktree = gitWorktreeEnv({

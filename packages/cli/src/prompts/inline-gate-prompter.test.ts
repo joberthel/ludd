@@ -1,4 +1,4 @@
-import type { ControlClient, RunStateSnapshot } from '@ludd/core'
+import type { ControlClient, RunStateSnapshot } from '@luddjs/core'
 import { createInterface } from 'node:readline/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { promptForGate } from './inline-gate-prompter.js'

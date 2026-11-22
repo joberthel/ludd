@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { ForbiddenMountPathError } from '@ludd/core'
+import { ForbiddenMountPathError } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildMountFlags,

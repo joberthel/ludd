@@ -1,4 +1,4 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   clientClose: vi.fn(async () => {}),
 }))
 
-vi.mock('@ludd/core', async importOriginal => ({
-  ...await importOriginal<typeof import('@ludd/core')>(),
+vi.mock('@luddjs/core', async importOriginal => ({
+  ...await importOriginal<typeof import('@luddjs/core')>(),
   createControlClient: mocks.createControlClient,
   loadHarnessConfig: mocks.loadHarnessConfig,
   readRunState: mocks.readRunState,

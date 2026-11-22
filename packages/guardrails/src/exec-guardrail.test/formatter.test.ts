@@ -1,4 +1,4 @@
-import type { ProvisionedEnvironment, StepContext } from '@ludd/core'
+import type { ProvisionedEnvironment, StepContext } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { execGuardrail } from '../exec-guardrail.js'
 

@@ -1,6 +1,6 @@
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient } from '@ludd/core'
+import { createControlClient } from '@luddjs/core'
 
 export interface AbortCommandOptions {
   runId: string

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { isProcessAlive, resolveRunDir, RUNNER_PID_FILE } from '@ludd/core'
+import { isProcessAlive, resolveRunDir, RUNNER_PID_FILE } from '@luddjs/core'
 
 export interface SpawnDetachedRunnerOptions {
   configPath: string

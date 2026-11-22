@@ -2,7 +2,7 @@ import type { AgentTurnInput, AgentTurnResult, StepConfig, StepContext } from '.
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { execGuardrail, humanReviewGuardrail } from '@ludd/guardrails'
+import { execGuardrail, humanReviewGuardrail } from '@luddjs/guardrails'
 import { z } from 'zod'
 
 export interface Epic6TestState {

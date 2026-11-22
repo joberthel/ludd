@@ -12,9 +12,9 @@ export interface LoadHarnessConfigOptions {
 }
 
 const OPTIONAL_WORKSPACE_PACKAGES = [
-  '@ludd/agents',
-  '@ludd/guardrails',
-  '@ludd/environments',
+  '@luddjs/agents',
+  '@luddjs/guardrails',
+  '@luddjs/environments',
 ] as const
 
 function validateConfigPath(configPath: unknown): string {
@@ -74,7 +74,7 @@ export async function loadHarnessConfig(
   }
 
   const virtualModules: Record<string, unknown> = {
-    '@ludd/core': coreModule,
+    '@luddjs/core': coreModule,
     'zod': zodModule,
   }
 

@@ -8,7 +8,7 @@ Accepted
 
 Previously, human-in-the-loop interaction was modeled exclusively through `humanReviewGuardrail` in `beforeStep` and `afterStep`. Guardrails are pass/fail approval gates, which made collecting structured upfront parameters or letting an agent ask clarifying questions mid-turn awkward.
 
-With `@ludd/cli` upgraded to Pastel, Ink, React, and `@inkjs/ui`, the CLI can now render rich interactive terminal controls (`TextInput`, `Select`, `MultiSelect`, `ConfirmInput`) while preserving `@ludd/core`'s strictly headless runtime (ADR-0002) and crash-safe persistence (ADR-0003).
+With `@luddjs/cli` upgraded to Pastel, Ink, React, and `@inkjs/ui`, the CLI can now render rich interactive terminal controls (`TextInput`, `Select`, `MultiSelect`, `ConfirmInput`) while preserving `@luddjs/core`'s strictly headless runtime (ADR-0002) and crash-safe persistence (ADR-0003).
 
 ## Decision
 
@@ -27,7 +27,7 @@ With `@ludd/cli` upgraded to Pastel, Ink, React, and `@inkjs/ui`, the CLI can no
    - Both `initialQuestions` and `ask_user` suspend via `GateWaiter`, persisting `ActiveGateState` with `gateType: 'user_question'` and `question` in `state.json` and emitting `gate.waiting` / `gate.resolved` ledger events.
    - Answered `initialQuestions` are persisted incrementally in `snapshot.activeInteractiveAnswers` so resumed runs continue from the first unanswered question.
    - Users answer detached or foreground questions via the same `ludd gate <runId>` command (including `--answer <value>` for scripted/non-TTY resolution).
-   - In TTY mode, `@ludd/cli` renders `@inkjs/ui` components; in non-TTY / piped stdin mode, it falls back to readline parsing.
+   - In TTY mode, `@luddjs/cli` renders `@inkjs/ui` components; in non-TTY / piped stdin mode, it falls back to readline parsing.
 
 ## Consequences
 

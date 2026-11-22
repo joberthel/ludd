@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient, isProcessAlive, resolveRunDir, RUNNER_PID_FILE, teardownRun } from '@ludd/core'
+import { createControlClient, isProcessAlive, resolveRunDir, RUNNER_PID_FILE, teardownRun } from '@luddjs/core'
 
 export interface TeardownCommandOptions {
   runId: string

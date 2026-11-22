@@ -1,5 +1,5 @@
 {
-  "name": "@ludd/guardrails",
+  "name": "@luddjs/guardrails",
   "type": "module",
   "version": "0.0.1",
   "exports": {
@@ -26,8 +26,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ludd/agents": "workspace:*",
-    "@ludd/core": "workspace:*",
+    "@luddjs/agents": "workspace:*",
+    "@luddjs/core": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -1,8 +1,8 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { createControlClient, getControlSocketPath, isProcessAlive, readRunState, resolveRunDir, RUNNER_PID_FILE } from '@ludd/core'
+import { createControlClient, getControlSocketPath, isProcessAlive, readRunState, resolveRunDir, RUNNER_PID_FILE } from '@luddjs/core'
 
 export interface StatusCommandOptions { runId?: string, workspace?: string, json?: boolean }
 

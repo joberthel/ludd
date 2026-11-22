@@ -4,8 +4,8 @@ import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { gitWorktreeEnv } from '@ludd/environments'
-import { execGuardrail } from '@ludd/guardrails'
+import { gitWorktreeEnv } from '@luddjs/environments'
+import { execGuardrail } from '@luddjs/guardrails'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { gc, runHarness } from '../src/index.js'
 
@@ -14,7 +14,7 @@ let tempDir: string
 function initTestGitRepo(dir: string): void {
   cp.execSync('git init', { cwd: dir })
   cp.execSync('git config user.name "Ludd E2E"', { cwd: dir })
-  cp.execSync('git config user.email "e2e@ludd.dev"', { cwd: dir })
+  cp.execSync('git config user.email "e2e@luddjs.dev"', { cwd: dir })
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true })
   fs.writeFileSync(path.join(dir, 'src', 'app.ts'), '// initial base\nexport const app = "base"\n', 'utf-8')
   cp.execSync('git add .', { cwd: dir })

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { ForbiddenMountPathError, realpathNearest } from '@ludd/core'
+import { ForbiddenMountPathError, realpathNearest } from '@luddjs/core'
 
 export interface DockerMount {
   readonly hostPath: string

@@ -1,4 +1,4 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import {
   createInitialRunTreeState,

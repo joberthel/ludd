@@ -10,8 +10,8 @@ import type {
   OnMaxRetriesExceededAction,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
-import { resolveDynamicProperty } from '@ludd/core'
+} from '@luddjs/core'
+import { resolveDynamicProperty } from '@luddjs/core'
 
 export interface ExecGuardrailConfig<
   TBody = unknown,

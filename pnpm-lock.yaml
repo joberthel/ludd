@@ -185,16 +185,16 @@ importers:
       '@eslint-react/eslint-plugin':
         specifier: ^5.30.5
         version: 5.30.5(eslint@10.14.0(jiti@2.7.0))(typescript@6.0.3)
-      '@ludd/agents':
+      '@luddjs/agents':
         specifier: workspace:*
         version: link:packages/agents
-      '@ludd/core':
+      '@luddjs/core':
         specifier: workspace:*
         version: link:packages/core
-      '@ludd/environments':
+      '@luddjs/environments':
         specifier: workspace:*
         version: link:packages/environments
-      '@ludd/guardrails':
+      '@luddjs/guardrails':
         specifier: workspace:*
         version: link:packages/guardrails
       '@types/node':
@@ -230,7 +230,7 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 1.5.1
         version: 1.5.1(@aws-sdk/credential-provider-node@3.972.94)(@smithy/signature-v4@5.7.5)(ws@8.22.2)(zod@4.6.7)
-      '@ludd/core':
+      '@luddjs/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -249,16 +249,16 @@ importers:
       '@inkjs/ui':
         specifier: ^2.0.0
         version: 2.0.0(ink@8.0.0(@types/react@19.3.0)(react@19.3.1))
-      '@ludd/agents':
+      '@luddjs/agents':
         specifier: workspace:*
         version: link:../agents
-      '@ludd/core':
+      '@luddjs/core':
         specifier: workspace:*
         version: link:../core
-      '@ludd/environments':
+      '@luddjs/environments':
         specifier: workspace:*
         version: link:../environments
-      '@ludd/guardrails':
+      '@luddjs/guardrails':
         specifier: workspace:*
         version: link:../guardrails
       ink:
@@ -305,7 +305,7 @@ importers:
 
   packages/environments:
     dependencies:
-      '@ludd/core':
+      '@luddjs/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -318,10 +318,10 @@ importers:
 
   packages/guardrails:
     dependencies:
-      '@ludd/agents':
+      '@luddjs/agents':
         specifier: workspace:*
         version: link:../agents
-      '@ludd/core':
+      '@luddjs/core':
         specifier: workspace:*
         version: link:../core
       zod:

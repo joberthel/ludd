@@ -8,14 +8,14 @@
 
 | Field | Value / Specification |
 | :---- | :---- |
-| **Architectural Choice Title** | Adopt a headless, code-first TypeScript state machine (`@ludd/*`) with per-run filesystem isolation, JSON-RPC 2.0 Unix socket IPC, and an embedded HTTP/SSE MCP server to deterministically orchestrate AI coding agents. |
+| **Architectural Choice Title** | Adopt a headless, code-first TypeScript state machine (`@luddjs/*`) with per-run filesystem isolation, JSON-RPC 2.0 Unix socket IPC, and an embedded HTTP/SSE MCP server to deterministically orchestrate AI coding agents. |
 | **Status** | `Approved — Ready for Implementation` |
 | **Decision Owner** | Johannes Berthel (Final sign-off & veto authority) |
 | **Decision Needed By** | N/A (Approved) |
-| **Cost of Delay** | Continued reliance on non-deterministic interactive agent sessions; inability to safely parallelize multi-slice feature development; potential API churn across `@ludd/core`, `@ludd/agents`, `@ludd/environments`, and `@ludd/guardrails`. |
-| **Pays For It (Build / Maintenance / On-Call)** | Core Maintainer(s) of `@ludd/*` (Engine, Pi SDK adapter, Docker/Worktree environment adapters, IPC protocol maintenance). |
+| **Cost of Delay** | Continued reliance on non-deterministic interactive agent sessions; inability to safely parallelize multi-slice feature development; potential API churn across `@luddjs/core`, `@luddjs/agents`, `@luddjs/environments`, and `@luddjs/guardrails`. |
+| **Pays For It (Build / Maintenance / On-Call)** | Core Maintainer(s) of `@luddjs/*` (Engine, Pi SDK adapter, Docker/Worktree environment adapters, IPC protocol maintenance). |
 | **Executes** | Core Maintainer(s) & Early Adopter Workflow Authors. |
-| **Reviewers per System Boundary** | 1\. Core State Machine & IPC (`@ludd/core`) — Core Maintainer 2\. Security & Sandbox Isolation (`@ludd/environments`) — Infrastructure Lead 3\. Frontend / TUI / CLI Consumers — TUI Maintainer |
+| **Reviewers per System Boundary** | 1\. Core State Machine & IPC (`@luddjs/core`) — Core Maintainer 2\. Security & Sandbox Isolation (`@luddjs/environments`) — Infrastructure Lead 3\. Frontend / TUI / CLI Consumers — TUI Maintainer |
 | **Related Artifacts** | Original Draft (`ludd — Technical Design Document`); Target ADRs (see Section 10.3). |
 
 ### Epistemic Legend Used in This Document
@@ -59,7 +59,7 @@ To separate established design facts from unproven assumptions and open architec
 
 To prevent scope creep and the Second-System Effect, `ludd` explicitly does not aim to do the following:
 
-1. **Not an LLM or Coding Agent Implementation \[DECISION\]:** `ludd` does not implement its own foundational coding agent loop or LLM prompt routing; it orchestrates external agent SDKs (initially standardizing on the **Pi SDK** via `@ludd/agents`).  
+1. **Not an LLM or Coding Agent Implementation \[DECISION\]:** `ludd` does not implement its own foundational coding agent loop or LLM prompt routing; it orchestrates external agent SDKs (initially standardizing on the **Pi SDK** via `@luddjs/agents`).  
 2. **Not a Proprietary DSL or YAML Workflow Engine \[DECISION\]:** `ludd` will not invent a YAML syntax, expression parser, or proprietary sub-workflow templating language. Composition is handled via native TypeScript (`harness.config.ts`).  
 3. **Not a Distributed Cloud Cluster Scheduler \[DECISION\]:** `ludd` is designed as a single-host (local workstation or dedicated CI VM) orchestrator managing local worktrees, containers, and VMs—not a multi-node Kubernetes cluster orchestrator.  
 4. **No Implicit Git Magic \[DECISION\]:** `ludd` will never perform hidden automatic Git commits, branch rebases, or destructive working tree resets behind the workflow author's back.
@@ -73,7 +73,7 @@ When evaluating design alternatives or resolving implementation ambiguities, con
 1. **Rank 1 — Deterministic Host Authority over Agent Autonomy (`MUST`):** The host orchestrator—never the AI agent—owns state transitions, guardrail execution, and verification verdicts. An agent `CANNOT` bypass an `afterStep` guardrail or self-certify completion without passing host-validated schemas.  
 2. **Rank 2 — Strict Per-Run Isolation & No Shared Mutable State (`MUST`):** Every run `MUST` be fully isolated under `.harness/runs/<runId>/` and isolated execution environments. Concurrent runs `CANNOT` rely on a global lock registry or static host ports.  
 3. **Rank 3 — Zero Implicit Credential Exposure (`MUST`):** Host environment variables, SSH keys, and API tokens `CANNOT` be implicitly inherited by isolated containers or VMs; sensitive host operations (e.g., `git push`, `gh pr create`) `SHOULD` execute via host-override guardrails.  
-4. **Rank 4 — Strictly Headless Core Runtime (`MUST`):** `@ludd/core` `MUST` remain 100% decoupled from terminal UI (Ink/React), CLI rendering, or desktop GUI dependencies, communicating exclusively via `.harness/runs/<runId>/` files and `control.sock` (JSON-RPC 2.0).  
+4. **Rank 4 — Strictly Headless Core Runtime (`MUST`):** `@luddjs/core` `MUST` remain 100% decoupled from terminal UI (Ink/React), CLI rendering, or desktop GUI dependencies, communicating exclusively via `.harness/runs/<runId>/` files and `control.sock` (JSON-RPC 2.0).  
 5. **Rank 5 — Code-First TypeScript & Zod Ergonomics (`SHOULD`):** Workflows `SHOULD` be authored in strictly typed TypeScript (`defineHarness()`) using standard Node.js APIs and `zod` schemas rather than external configuration DSLs.
 
 ---
@@ -101,7 +101,7 @@ When evaluating design alternatives or resolving implementation ambiguities, con
          | Tail JSONL                  | JSON-RPC 2.0                | Tail JSONL
          v                             v                             v
 +-----------------------------------------------------------------------------------+
-| Host Machine: ludd Headless Runner Process (@ludd/core) [Scoped per <runId>]      |
+| Host Machine: ludd Headless Runner Process (@luddjs/core) [Scoped per <runId>]      |
 |                                                                                   |
 |  +-----------------------------+     +-----------------------------------------+  |
 |  | Deterministic State Machine |<--->| .harness/runs/<runId>/                  |  |
@@ -120,9 +120,9 @@ When evaluating design alternatives or resolving implementation ambiguities, con
                                        | Host Network Bridge (HTTP/SSE)
                                        v
 +-----------------------------------------------------------------------------------+
-| Isolated Execution Environment (@ludd/environments: Worktree / Docker / VM)       |
+| Isolated Execution Environment (@luddjs/environments: Worktree / Docker / VM)       |
 |  +-----------------------------------+  +--------------------------------------+  |
-|  | AI Worker (@ludd/agents: Pi SDK)  |  | Guardrail Processes (@ludd/guardrails)| |
+|  | AI Worker (@luddjs/agents: Pi SDK)  |  | Guardrail Processes (@luddjs/guardrails)| |
 |  | - Mode: read-only | workspace-write|  | - execGuardrail (phpstan, phpunit)   | |
 |  | - Optional: dangerMode (in VM/Con)|  | - agentGuardrail / fnGuardrail       | |
 |  +-----------------------------------+  +--------------------------------------+  |
@@ -135,10 +135,10 @@ To eliminate ambiguity during crash recovery and concurrent execution, every dat
 
 | Data Entity | Single Source of Truth (Owner) | Storage Location | Mutability & Access Rules |
 | :---- | :---- | :---- | :---- |
-| **Workflow Definition** | Host Orchestrator (`@ludd/core`) | `harness.config.ts` | Read-only at run initialization; evaluated dynamically via `StepContext` callbacks. |
+| **Workflow Definition** | Host Orchestrator (`@luddjs/core`) | `harness.config.ts` | Read-only at run initialization; evaluated dynamically via `StepContext` callbacks. |
 | **Active Execution Pointer & Environment IDs** | Host State Machine | `.harness/runs/<runId>/state.json` | Mutated atomically by the host orchestrator after every state transition. Authoritative for crash rehydration. |
 | **Audit & Lifecycle History** | Host State Machine | `.harness/runs/<runId>/ledger.jsonl` | Strictly append-only JSON Lines written by the host orchestrator. |
-| **Token-Level Agent Telemetry** | Agent Adapter (`@ludd/agents`) | `.harness/runs/<runId>/streams/<sessionId>.jsonl` | Strictly append-only per-session stream; referenced via pointer event in `ledger.jsonl`. |
+| **Token-Level Agent Telemetry** | Agent Adapter (`@luddjs/agents`) | `.harness/runs/<runId>/streams/<sessionId>.jsonl` | Strictly append-only per-session stream; referenced via pointer event in `ledger.jsonl`. |
 | **Step Artifacts (`spec.md`, `todos.json`) & Offloaded Guardrail Logs** | Embedded Host MCP Server | `.harness/runs/<runId>/artifacts/` & `.harness/runs/<runId>/logs/` | Written/read via MCP tool calls (`put_artifact`, `get_artifact`) and host guardrail offloader; validated against Zod schemas. |
 | **Source Code & Git History** | Provisioned Environment Adapter | Isolated Worktree / Container / VM Filesystem | Modified only by agents in `workspace-write` mode or explicit `execGuardrail` commands. `.harness/runs/` is strictly blacklisted. |
 
@@ -162,7 +162,7 @@ Each workflow is structured into sequential steps governed by a strict Input and
 
 #### 5.4.1 Headless Host Orchestrator and State Machine
 
-* **\[DECISION\]** Each workflow is defined in a dedicated TypeScript configuration file (`harness.config.ts`). Using the `defineHarness()` factory helper from `@ludd/core`, this file exports a strictly typed configuration object containing workflow parameters, cleanup policies, and the sequential `steps` array. A Node.js binary loads this configuration, initializes the state machine, and executes the pipeline deterministically.  
+* **\[DECISION\]** Each workflow is defined in a dedicated TypeScript configuration file (`harness.config.ts`). Using the `defineHarness()` factory helper from `@luddjs/core`, this file exports a strictly typed configuration object containing workflow parameters, cleanup policies, and the sequential `steps` array. A Node.js binary loads this configuration, initializes the state machine, and executes the pipeline deterministically.  
 * **\[DECISION\]** The core execution engine is built on a strictly headless architecture. Because the orchestrator process is completely decoupled from the presentation layer, different frontends—ranging from a standard CLI environment or interactive TUI to a full desktop GUI—can seamlessly plug into and control the same underlying runtime.
 
 #### 5.4.2 State Persistence, Event Ledger, and Stream Splitting (`.harness/runs/<runId>/`)
@@ -205,7 +205,7 @@ Within each isolated run directory, the runner maintains:
 | `ctx.artifacts` | `ArtifactClient` | Helper for `fnGuardrail` or TypeScript `run` callbacks to read/write MCP artifacts directly from host code. |
 
 * **Session Capture & Declarative Reuse \[DECISION\]:** When an agent step finishes, the state machine captures its resulting `sessionId` as part of the step's output. Subsequent steps—or subsequent iterations within a sequential matrix—can declaratively pass a static configuration or a callback (`sessionId: (ctx) => ...`) to either spawn a fresh agent session or resume a prior conversation thread.  
-* **Initial Technology Focus (Pi SDK) \[DECISION\]:** The initial implementation standardizes strictly around the **Pi SDK** (`@ludd/agents`). Additional agent runtimes can be plugged in later via clean adapter interfaces.
+* **Initial Technology Focus (Pi SDK) \[DECISION\]:** The initial implementation standardizes strictly around the **Pi SDK** (`@luddjs/agents`). Additional agent runtimes can be plugged in later via clean adapter interfaces.
 * **`piAgent` Adapter \[DECISION\]:** `piAgent({ mode, prompt, sessionId?, model?, sessionFactory? })` wraps `@earendil-works/pi-coding-agent` behind the unchanged `AgentRunner` contract. Each turn creates a session with `createAgentSession({ cwd: environment.workingDir, sessionManager })`, persisted at `<runDir>/pi-sessions/<sessionId>.jsonl` (resumed when the file exists, so `sessionId: (ctx) => ctx.steps[...].output.sessionId` continues the thread). `message_update` maps to `thought`/`message_chunk` and `tool_execution_*` to `tool_call` events appended to `streams/<sessionId>.jsonl`; the turn resolves only after `agent_settled` (the harness then emits `turn.completed`). On run abort, `AgentTurnInput.signal` fires and the adapter calls `session.abort()`. Unit tests inject a `PiSessionFactory` and never reach a real LLM.
 
 ---
@@ -222,7 +222,7 @@ Within each isolated run directory, the runner maintains:
 ### 5.5.2 Runtime, Database, and Ephemeral Port Isolation
 
 * **\[DECISION\]** Parallel workflow runs require strict isolation of stateful resources such as MySQL or PostgreSQL databases:  
-  * **Declarative Run-Scoped Environment Variables & Container Isolation \[DECISION\]:** Following the *Code-First* (`ADR-0001`) and *Declarative Rather Than Imposed* (`ADR-0008`) principles, `@ludd/environments` does not hardcode database-specific naming magic. Instead, environment adapters accept dynamic `env: (ctx) => Record<string, string>` callbacks so workflow authors can declaratively derive run-scoped database schemas (e.g., `` DB_DATABASE: `test_run_${ctx.runId}` ``) or spin up namespaced Docker Compose networks directly in `harness.config.ts`.  
+  * **Declarative Run-Scoped Environment Variables & Container Isolation \[DECISION\]:** Following the *Code-First* (`ADR-0001`) and *Declarative Rather Than Imposed* (`ADR-0008`) principles, `@luddjs/environments` does not hardcode database-specific naming magic. Instead, environment adapters accept dynamic `env: (ctx) => Record<string, string>` callbacks so workflow authors can declaratively derive run-scoped database schemas (e.g., `` DB_DATABASE: `test_run_${ctx.runId}` ``) or spin up namespaced Docker Compose networks directly in `harness.config.ts`.  
   * **Ephemeral Port Allocation \[DECISION\]:** To avoid port collisions across concurrent runs without requiring a global lock registry, container services operate internally without host port mappings whenever possible, or dynamically bind to OS-assigned free ephemeral ports.  
   * **Automatic Environment Injection \[DECISION\]:** The orchestrator injects dynamic connection parameters (DB URLs, ephemeral ports, MCP server URL, and `MCP_AUTH_TOKEN`) as environment variables into the step's execution context.
 
@@ -230,7 +230,7 @@ Within each isolated run directory, the runner maintains:
 
 * **\[DECISION\]** By default, provisioned environments remain running after workflow termination so developers can inspect state or debug failures:  
   * **Declarative `cleanupPolicy` \[DECISION\]:** Workflows can define a `cleanupPolicy` in `defineHarness()` (e.g., `onSuccess: 'keep' | 'destroy'`, `onFailure: 'keep' | 'destroy'`).  
-  * **Programmatic Headless Teardown & Garbage Collection \[DECISION\]:** Strictly adhering to the headless core principle (Constraint \#4), `@ludd/core` does not bundle or assume a built-in CLI for resource management. Instead, the headless runtime exposes programmatic APIs (and corresponding RPC methods) for single-run teardown (`teardown(runId)`) as well as batch garbage collection (`gc({ olderThan, status, ... })`). When invoked by any external consumer (TUI, GUI, automation script, or future CLI wrapper), `gc()` scans `.harness/runs/`, verifies via `runner.pid` that target runs are inactive, invokes `teardown()` on their associated environment adapters, and prunes the corresponding `.harness/runs/<runId>/` directories from disk.
+  * **Programmatic Headless Teardown & Garbage Collection \[DECISION\]:** Strictly adhering to the headless core principle (Constraint \#4), `@luddjs/core` does not bundle or assume a built-in CLI for resource management. Instead, the headless runtime exposes programmatic APIs (and corresponding RPC methods) for single-run teardown (`teardown(runId)`) as well as batch garbage collection (`gc({ olderThan, status, ... })`). When invoked by any external consumer (TUI, GUI, automation script, or future CLI wrapper), `gc()` scans `.harness/runs/`, verifies via `runner.pid` that target runs are inactive, invokes `teardown()` on their associated environment adapters, and prunes the corresponding `.harness/runs/<runId>/` directories from disk.
 
 ---
 
@@ -242,7 +242,7 @@ Within each isolated run directory, the runner maintains:
   1. **SDK-Level Access Modes (`read-only` vs. `workspace-write`) \[DECISION\]:** Configured directly on the agent instance (`piAgent({ mode: 'read-only' | 'workspace-write' })`). In `read-only` mode (used for triage, specification, or code review), the SDK blocks file modifications while still permitting the agent to write structured artifacts to the host's MCP server. In `workspace-write` mode, the agent can modify code within its assigned workspace.  
   2. **Physical Isolation & `dangerMode` \[DECISION\]:** True physical isolation is achieved by assigning a container or VM environment adapter to the step. Inside an encapsulated container or VM, steps can enable an explicit `dangerMode`, granting the agent administrative privileges inside the disposable sandbox to install system packages or modify build tools without risking the host machine. Protected paths (such as `.harness/runs/`) remain blacklisted at all times.
 
-* **`read-only` SDK Enforcement \[DECISION\]:** `piAgent` read-only sessions are created with `excludeTools: ['write', 'edit', 'bash']` and a `tool_call` extension hook that rejects those tools and routes every `path` argument through `assertSafeWorkspacePath` (`@ludd/agents`). The guard resolves symlinks via `realpath` (nearest existing parent for nonexistent targets), always forbids `.harness/runs` and `.git/hooks`, and rejects workspace escapes unless `dangerMode` is set. Violations throw `SandboxViolationError` (`@ludd/core`). MCP tools remain available.
+* **`read-only` SDK Enforcement \[DECISION\]:** `piAgent` read-only sessions are created with `excludeTools: ['write', 'edit', 'bash']` and a `tool_call` extension hook that rejects those tools and routes every `path` argument through `assertSafeWorkspacePath` (`@luddjs/agents`). The guard resolves symlinks via `realpath` (nearest existing parent for nonexistent targets), always forbids `.harness/runs` and `.git/hooks`, and rejects workspace escapes unless `dangerMode` is set. Violations throw `SandboxViolationError` (`@luddjs/core`). MCP tools remain available.
 
 * **`workspace-write` SDK Enforcement \[DECISION\]:** `piAgent` workspace-write sessions install a `tool_call` extension (`workspaceWriteExtension`) intercepting `read`, `write` and `edit` (their `path` goes through `assertSafeWorkspacePath`; violations throw `SandboxViolationError`) and `bash` (commands referencing `.harness/runs/` or `.git/hooks/` are rejected). The `bash` string matching is **best-effort only** and trivially bypassable (variables, globbing, encoding); the container boundary (ADR-0009 Layer 2) is the real control.
 * **Docker `bash` delegation \[DECISION\]:** `ProvisionedEnvironment.type` is the discriminator (`'docker-worktree'`; no new field needed). `PiSessionFactoryOptions.environment` carries the environment; for `docker-worktree`, `bash` is overridden through `customTools` (`createBashToolDefinition` with custom `BashOperations`) so commands run as `environment.exec(['sh', '-c', command])` inside the container instead of a host shell. Container stdout/stderr are merged into one stream and the Pi timeout (seconds) maps to `timeoutMs`.
@@ -288,7 +288,7 @@ Within each isolated run directory, the runner maintains:
 
 * **`execGuardrail` \[DECISION\]:** Runs commands inside the target environment. To prevent shell-injection or unintended POSIX subshell evaluation (e.g., `$()` or backticks inside double-quoted agent outputs like `commitMessage`), `command` accepts either a direct argv array (`string[]`, executed without shell interpolation), a shell string (`string`), or a callback returning either (`(ctx) => string | string[]`), alongside a safe `sh` template tag helper for escaping interpolated values (e.g., `command: (ctx) => ['git', 'commit', '-m', ctx.step.output.commitMessage]`). By default, exit code 0 maps to `pass` and non-zero maps to `fail`, with raw `stdout`/`stderr` automatically offloaded to the MCP server on failure. An optional custom formatter callback `(result) => { status, body }` can parse CLI output and override the verdict (`pass`, `fail`, `skip`). For large outputs offloaded to MCP, `execGuardrail` supports automatic line-break pagination for plain text as well as configurable JSON array pagination via a key or selector function (`pagination: 'errors' | ((json) => unknown[])`). To protect against hanging processes, `execGuardrail` also supports a configurable timeout in seconds (`timeout?: number`) and a configurable timeout resolution (`onTimeout?: 'fail' | 'skip' | 'pass'`, defaulting to `'fail'`). When the timeout expires, the runner terminates the process tree (`SIGTERM` \-\> `SIGKILL`), offloads partial logs to the MCP server, and returns the configured `onTimeout` verdict.  
 * **`fnGuardrail` (Inline / Custom Function) \[DECISION\]:** Executes arbitrary async TypeScript validation logic directly within the orchestrator context.  
-* **`agentGuardrail` \[DECISION\]:** Spawns an AI verification agent (defaulting to a fresh `sessionId` and reusing the parent step's environment with SDK `mode: 'read-only'` for zero provisioning overhead, while supporting explicit environment overrides or clones when configured). It enforces the standard `{ status: 'pass' | 'fail' | 'skip', body: ... }` output structure, allowing the workflow author to supply a custom prompt and custom Zod schema for the `body` payload. The `agent` option is optional: when omitted, it defaults to `piAgent({ mode, prompt, sessionId: <fresh> })` from `@ludd/agents` (so `@ludd/guardrails` depends on `@ludd/agents`, which depends only on `@ludd/core`; no cycle), and the verdict schema is passed as `outputSchema` so the structured `submit_step_output` path is used. An explicit `agent` overrides the default.  
+* **`agentGuardrail` \[DECISION\]:** Spawns an AI verification agent (defaulting to a fresh `sessionId` and reusing the parent step's environment with SDK `mode: 'read-only'` for zero provisioning overhead, while supporting explicit environment overrides or clones when configured). It enforces the standard `{ status: 'pass' | 'fail' | 'skip', body: ... }` output structure, allowing the workflow author to supply a custom prompt and custom Zod schema for the `body` payload. The `agent` option is optional: when omitted, it defaults to `piAgent({ mode, prompt, sessionId: <fresh> })` from `@luddjs/agents` (so `@luddjs/guardrails` depends on `@luddjs/agents`, which depends only on `@luddjs/core`; no cycle), and the verdict schema is passed as `outputSchema` so the structured `submit_step_output` path is used. An explicit `agent` overrides the default.  
 * **`humanReviewGuardrail` \[DECISION\]:** Pauses execution and emits a `gate.waiting` event to `ledger.jsonl`, waiting for a JSON-RPC resolution on `control.sock`. The user explicitly marks the gate as **Green (`pass`)** to advance or **Red (`fail`) with text feedback**, which feeds the user's answers or revision notes back into the agent session via the standard self-healing loop.
 
 ---
@@ -304,7 +304,7 @@ Within each isolated run directory, the runner maintains:
 | **3\. Stale `control.sock` Socket File After Crash** | On Unix systems, if a process crashes without unlinking `control.sock`, restarting the runner for the same `<runId>` throws `EADDRINUSE`. Frontends scanning `.harness/runs/*/control.sock` cannot tell a live waiting runner from a dead crashed runner. | **\[DECISION\]:** Persist the active runner process ID in a dedicated `.harness/runs/<runId>/runner.pid` file. Before binding `control.sock` or resuming a run (and when frontends scan run directories), verify whether the PID in `runner.pid` is still running (`process.kill(pid, 0)`). If the process is dead, unlink stale `control.sock` and `runner.pid` files and safely restart/rehydrate; if the process is still alive, abort duplicate startup to prevent split-brain execution. |
 | **4\. Non-Idempotent Guardrail Re-Execution** | In Section 7 (`implement-slices`), the final `afterStep` guardrail runs `git add -A && git commit -m ...`. If a subsequent guardrail were placed *after* the commit and failed, restarting the chain from index 0 would attempt `git commit` again on a clean tree and fail with exit code 1\. | **\[DECISION\]:** Handled purely via documentation without framework-imposed linting or magic wrappers. Workflow authors retain full ownership of their pipeline configuration; documentation explicitly notes that side-effecting guardrails (such as `git commit` or `git push`) should be placed at the end of the `afterStep` chain so full-chain restarts from index 0 do not re-trigger them prematurely. |
 | **5\. Runaway Command in `execGuardrail` (Hanging Test)** | A test suite waits on stdin or deadlocks; the headless runner hangs forever without emitting a `gate.waiting` event. | **\[DECISION\]:** `execGuardrail` supports an explicit timeout property in seconds (`timeout?: number`) alongside a configurable timeout verdict (\`onTimeout?: 'fail' |
-| **6\. Host Disk Exhaustion from Kept Environments & Telemetry** | With `cleanupPolicy: { onSuccess: 'keep', onFailure: 'keep' }`, dozens of Docker worktrees, DB volumes, and `streams/<sessionId>.jsonl` files accumulate on disk. | **\[DECISION\]:** Expose a programmatic headless garbage collection API (`gc({ olderThan, ... })`) directly in `@ludd/core` (rather than coupling to a CLI command). External frontends (TUI, GUI, scripts) invoke this headless API to verify process inactivity via `runner.pid`, run `teardown()` on kept environments, and prune old `.harness/runs/<runId>/` directories. |
+| **6\. Host Disk Exhaustion from Kept Environments & Telemetry** | With `cleanupPolicy: { onSuccess: 'keep', onFailure: 'keep' }`, dozens of Docker worktrees, DB volumes, and `streams/<sessionId>.jsonl` files accumulate on disk. | **\[DECISION\]:** Expose a programmatic headless garbage collection API (`gc({ olderThan, ... })`) directly in `@luddjs/core` (rather than coupling to a CLI command). External frontends (TUI, GUI, scripts) invoke this headless API to verify process inactivity via `runner.pid`, run `teardown()` on kept environments, and prune old `.harness/runs/<runId>/` directories. |
 
 ---
 
@@ -336,10 +336,10 @@ Even though `ludd` runs locally, a decoupled architecture with long-running back
 | **Elevation of Privilege** | **Workspace Escape / Symlink Attack on `.harness/runs/`:** An agent in `workspace-write` (or `dangerMode`) creates a symlink inside the workspace pointing to `.harness/runs/<runId>/state.json` or `.git/hooks/` on the host. | **\[DECISION\]:** `.harness/runs/` is blacklisted at the SDK level. Framework-enforced container mount inspection is out of scope for the initial design; instead, official documentation explicitly instructs workflow and environment authors to mount only the isolated workspace/worktree and never bind-mount the host's `.harness/runs/` directory into Docker containers (as all artifact and log communication occurs via HTTP/SSE MCP). |
 | **Information Disclosure** | **Accidental Secret Leakage via Offloaded CLI Logs:** A failing `execGuardrail` dumps environment variables or connection strings into `stderr`, which is stored in MCP and read by the cloud LLM. | **\[DECISION\]:** Host secrets are never implicitly passed into containers (Section 5.6.2). Automated secret-redaction filters inside the MCP log offloader are out of scope for the initial design; instead, documentation explicitly advises workflow authors that if an `execGuardrail` command may print sensitive tokens or credentials to `stdout`/`stderr`, the author is responsible for filtering or masking them within the command or custom formatter callback. |
 
-### 8.2 Testing Strategy for `@ludd/*`
+### 8.2 Testing Strategy for `@luddjs/*`
 
 * **Deterministic Test Harness for the Orchestrator \[DECISION\]:**  
-  1. **Mock Agent Adapter (`mockAgent`):** Implement a deterministic `mockAgent` in `@ludd/agents` that replays scripted responses, tool calls (`put_artifact`), and simulated failures so the state machine, sequential matrix loop, and self-healing retry logic can be unit-tested in milliseconds without calling real LLM APIs.  
+  1. **Mock Agent Adapter (`mockAgent`):** Implement a deterministic `mockAgent` in `@luddjs/agents` that replays scripted responses, tool calls (`put_artifact`), and simulated failures so the state machine, sequential matrix loop, and self-healing retry logic can be unit-tested in milliseconds without calling real LLM APIs.  
   2. **End-to-End Crash-Rehydration Integration Tests:** Automated end-to-end integration tests that terminate the runner process across state transition boundaries (`beforeStep`, mid-`run`, mid-`afterStep` retry, waiting on `control.sock`), rehydrate from `state.json`, and assert identical final `ledger.jsonl` states.  
   3. **Adapter-Specific Testing (No Shared Cross-Adapter Test Suite):** Because execution environments (`hostEnv`, `gitWorktreeEnv`, `dockerWorktreeEnv`, VMs) differ significantly in their underlying mechanics and lifecycle characteristics, a shared cross-adapter contract test suite is intentionally omitted in favor of targeted, adapter-specific tests.
 
@@ -369,14 +369,14 @@ Even though `ludd` runs locally, a decoupled architecture with long-running back
 
 <!-- eslint-skip -->
 ```ts
-import { piAgent } from '@ludd/agents'
-import { defineHarness } from '@ludd/core'
-import { dockerWorktreeEnv, hostEnv } from '@ludd/environments'
+import { piAgent } from '@luddjs/agents'
+import { defineHarness } from '@luddjs/core'
+import { dockerWorktreeEnv, hostEnv } from '@luddjs/environments'
 import {
   agentGuardrail,
   execGuardrail,
   humanReviewGuardrail
-} from '@ludd/guardrails'
+} from '@luddjs/guardrails'
 import { z } from 'zod'
 
 const TodoSliceSchema = z.object({

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { runHarness } from '@ludd/core'
+import { runHarness } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { piAgent } from '../pi-agent.js'
 import { fakeSession } from './fake-session.js'

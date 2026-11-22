@@ -1,5 +1,5 @@
 {
-  "name": "@ludd/cli",
+  "name": "@luddjs/cli",
   "type": "module",
   "version": "0.0.1",
   "bin": {
@@ -13,10 +13,10 @@
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
-    "@ludd/agents": "workspace:*",
-    "@ludd/core": "workspace:*",
-    "@ludd/environments": "workspace:*",
-    "@ludd/guardrails": "workspace:*",
+    "@luddjs/agents": "workspace:*",
+    "@luddjs/core": "workspace:*",
+    "@luddjs/environments": "workspace:*",
+    "@luddjs/guardrails": "workspace:*",
     "ink": "^8.0.0",
     "pastel": "^4.0.1",
     "react": "^19.3.1",

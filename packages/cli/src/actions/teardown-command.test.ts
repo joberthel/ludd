@@ -1,8 +1,8 @@
-import type { ControlClient } from '@ludd/core'
+import type { ControlClient } from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createControlClient, isProcessAlive, resolveRunDir, RUNNER_PID_FILE, teardownRun } from '@ludd/core'
+import { createControlClient, isProcessAlive, resolveRunDir, RUNNER_PID_FILE, teardownRun } from '@luddjs/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { teardownCommand } from './teardown-command.js'
 
@@ -12,8 +12,8 @@ const client = {
   close: vi.fn(async () => {}),
 } as unknown as ControlClient
 
-vi.mock('@ludd/core', async importOriginal => ({
-  ...await importOriginal<typeof import('@ludd/core')>(),
+vi.mock('@luddjs/core', async importOriginal => ({
+  ...await importOriginal<typeof import('@luddjs/core')>(),
   createControlClient: vi.fn(async () => client),
   isProcessAlive: vi.fn(() => false),
   teardownRun: vi.fn(async () => {}),

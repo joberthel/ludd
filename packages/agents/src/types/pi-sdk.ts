@@ -1,5 +1,5 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { AgentAccessMode, ProvisionedEnvironment } from '@ludd/core'
+import type { AgentAccessMode, ProvisionedEnvironment } from '@luddjs/core'
 
 /**
  * Minimal structural view of a Pi SDK `AgentSessionEvent`. Only the fields the

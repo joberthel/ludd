@@ -1,5 +1,5 @@
 import type { ExtensionFactory, ToolCallEvent, ToolCallEventResult } from '@earendil-works/pi-coding-agent'
-import { SandboxViolationError } from '@ludd/core'
+import { SandboxViolationError } from '@luddjs/core'
 import { assertSafeWorkspacePath, normalizeContainerPath } from './workspace-path-guard.js'
 
 /** Tools whose `path` argument is routed through the workspace path guard. */

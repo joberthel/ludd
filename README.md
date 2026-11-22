@@ -4,7 +4,7 @@ A deterministic code harness that orchestrates AI-driven agents.
 
 ## Running the CLI
 
-Build the monorepo first so the `@ludd/cli` binary (`packages/cli/dist/bin.js`) is up to date:
+Build the monorepo first so the `@luddjs/cli` binary (`packages/cli/dist/bin.js`) is up to date:
 
 ```bash
 pnpm build

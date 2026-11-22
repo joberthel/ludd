@@ -15,7 +15,7 @@ import type {
 import { describe, expect, it } from 'vitest'
 import * as core from './index.js'
 
-describe('@ludd/core harness and configuration exports', () => {
+describe('@luddjs/core harness and configuration exports', () => {
   it('exports harness configuration factory and utilities', () => {
     expect(typeof core.defineHarness).toBe('function')
     expect(typeof core.validateHarnessConfig).toBe('function')
@@ -62,7 +62,7 @@ describe('@ludd/core harness and configuration exports', () => {
   })
 })
 
-describe('@ludd/core gc exports', () => {
+describe('@luddjs/core gc exports', () => {
   it('exports gc function and verifies contracts', () => {
     expect(typeof core.gc).toBe('function')
     const opts: GcOptions = {
@@ -80,7 +80,7 @@ describe('@ludd/core gc exports', () => {
   })
 })
 
-describe('@ludd/core dynamic property and legacy exports', () => {
+describe('@luddjs/core dynamic property and legacy exports', () => {
   it('exports resolveDynamicProperty as a function', () => {
     expect(typeof core.resolveDynamicProperty).toBe('function')
   })
@@ -103,7 +103,7 @@ describe('@ludd/core dynamic property and legacy exports', () => {
   })
 })
 
-describe('@ludd/core persistence and execution exports', () => {
+describe('@luddjs/core persistence and execution exports', () => {
   it('exports state store, pid lock, ledger, and stream persistence utilities', () => {
     expect(typeof core.resolveRunDir).toBe('function')
     expect(typeof core.writeRunStateAtomic).toBe('function')
@@ -122,7 +122,7 @@ describe('@ludd/core persistence and execution exports', () => {
   })
 })
 
-describe('@ludd/core IPC exports', () => {
+describe('@luddjs/core IPC exports', () => {
   it('exports control client, server, and socket path helpers', () => {
     expect(typeof core.createControlClient).toBe('function')
     expect(typeof core.startControlServer).toBe('function')
@@ -155,7 +155,7 @@ describe('@ludd/core IPC exports', () => {
   })
 })
 
-describe('@ludd/core typed structures and matrix exports', () => {
+describe('@luddjs/core typed structures and matrix exports', () => {
   it('exports typed stream structures', () => {
     const eventType: AgentStreamEventType = 'turn.started'
     const event: AgentStreamEvent<{ prompt: string }> = {

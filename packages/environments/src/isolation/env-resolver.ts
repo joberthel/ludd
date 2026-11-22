@@ -1,6 +1,6 @@
-import type { DynamicProperty, ProvisionContext, StepContext } from '@ludd/core'
+import type { DynamicProperty, ProvisionContext, StepContext } from '@luddjs/core'
 import process from 'node:process'
-import { resolveDynamicProperty } from '@ludd/core'
+import { resolveDynamicProperty } from '@luddjs/core'
 import { allocateEphemeralPorts } from './port-allocator.js'
 
 export interface DynamicEnvOptions {

@@ -10,7 +10,7 @@ const { createControlClient, readRunState, promptForGate } = vi.hoisted(() => ({
   promptForGate: vi.fn(),
 }))
 
-vi.mock('@ludd/core', () => ({
+vi.mock('@luddjs/core', () => ({
   createControlClient,
   readRunState,
 }))

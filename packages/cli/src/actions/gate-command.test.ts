@@ -1,8 +1,8 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { startControlServer } from '@ludd/core'
+import { startControlServer } from '@luddjs/core'
 import { afterEach, expect, it, vi } from 'vitest'
 import { gateCommand } from './gate-command.js'
 

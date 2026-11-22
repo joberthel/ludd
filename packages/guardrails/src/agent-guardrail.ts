@@ -10,16 +10,16 @@ import type {
   OnMaxRetriesExceededAction,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
+} from '@luddjs/core'
 import { randomUUID } from 'node:crypto'
-import { piAgent } from '@ludd/agents'
+import { piAgent } from '@luddjs/agents'
 import {
   appendLedgerEvent,
   appendStreamEvent,
   isAgentRunner,
   resolveDynamicProperty,
   StepOutputValidationError,
-} from '@ludd/core'
+} from '@luddjs/core'
 import { z } from 'zod'
 
 export interface AgentGuardrailConfig<
@@ -32,7 +32,7 @@ export interface AgentGuardrailConfig<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   bodySchema?: z.ZodType<TBody>
   prompt: DynamicProperty<string, TContext>
-  /** Defaults to `piAgent({ mode, prompt, sessionId: fresh })` from `@ludd/agents`. */
+  /** Defaults to `piAgent({ mode, prompt, sessionId: fresh })` from `@luddjs/agents`. */
   agent?: AgentRunner<any, any>
   environment?: DynamicProperty<ProvisionedEnvironment, TContext>
   pagination?: ExecLogPaginationConfig

@@ -1,4 +1,4 @@
-import type { EnvironmentExecResult, ProvisionedEnvironment } from '@ludd/core'
+import type { EnvironmentExecResult, ProvisionedEnvironment } from '@luddjs/core'
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 import { createEnvironmentBashOperations, environmentBashTool } from './environment-bash.js'

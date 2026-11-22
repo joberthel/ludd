@@ -1,5 +1,5 @@
 {
-  "name": "@ludd/environments",
+  "name": "@luddjs/environments",
   "type": "module",
   "version": "0.0.1",
   "exports": {
@@ -26,7 +26,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@ludd/core": "workspace:*"
+    "@luddjs/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

@@ -9,7 +9,7 @@ let tempDir: string
 async function writeValidHarnessConfig(dir: string): Promise<string> {
   const filePath = path.join(dir, 'harness.config.ts')
   const content = [
-    `import { defineHarness, resolveDynamicProperty } from '@ludd/core'`,
+    `import { defineHarness, resolveDynamicProperty } from '@luddjs/core'`,
     `import { z } from 'zod'`,
     `const planSchema = z.object({ action: z.string(), priority: z.enum(['low', 'high']) })`,
     `const resultSchema = z.object({ applied: z.boolean(), prompt: z.string() })`,
@@ -52,7 +52,7 @@ async function writeValidHarnessConfig(dir: string): Promise<string> {
 async function writeInvalidOutputHarnessConfig(dir: string): Promise<string> {
   const filePath = path.join(dir, 'invalid-output.config.ts')
   const content = [
-    `import { defineHarness } from '@ludd/core'`,
+    `import { defineHarness } from '@luddjs/core'`,
     `import { z } from 'zod'`,
     `export default defineHarness({`,
     `  name: 'failing-schema-workflow',`,

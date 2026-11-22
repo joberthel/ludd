@@ -1,5 +1,5 @@
-import type { GuardrailExecutionInput, StepContext } from '@ludd/core'
-import { isGuardrail } from '@ludd/core'
+import type { GuardrailExecutionInput, StepContext } from '@luddjs/core'
+import { isGuardrail } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { humanReviewGuardrail } from './human-review-guardrail.js'
 

@@ -1,4 +1,4 @@
-import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from '@ludd/agents'
+import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from '@luddjs/agents'
 import fs from 'node:fs'
 import path from 'node:path'
 

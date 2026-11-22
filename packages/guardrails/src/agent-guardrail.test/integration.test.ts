@@ -1,4 +1,4 @@
-import type { AgentRunner, AgentTurnInput } from '@ludd/core'
+import type { AgentRunner, AgentTurnInput } from '@luddjs/core'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,7 +8,7 @@ import {
   readStreamEvents,
   resolveRunDir,
   runHarness,
-} from '@ludd/core'
+} from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'

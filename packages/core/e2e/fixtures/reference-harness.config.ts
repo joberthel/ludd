@@ -1,8 +1,8 @@
-import type { PiSessionFactory } from '@ludd/agents'
+import type { PiSessionFactory } from '@luddjs/agents'
 import type { StepContext } from '../../src/index.js'
-import { piAgent } from '@ludd/agents'
-import { gitWorktreeEnv, hostEnv } from '@ludd/environments'
-import { agentGuardrail, execGuardrail, humanReviewGuardrail } from '@ludd/guardrails'
+import { piAgent } from '@luddjs/agents'
+import { gitWorktreeEnv, hostEnv } from '@luddjs/environments'
+import { agentGuardrail, execGuardrail, humanReviewGuardrail } from '@luddjs/guardrails'
 import { z } from 'zod'
 import { defineHarness } from '../../src/index.js'
 

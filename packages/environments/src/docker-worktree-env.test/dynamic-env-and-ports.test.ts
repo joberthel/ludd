@@ -1,4 +1,4 @@
-import type { StepContext } from '@ludd/core'
+import type { StepContext } from '@luddjs/core'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'

@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "paths": {
-      "@ludd/*": ["./packages/*/src/index.ts"]
+      "@luddjs/*": ["./packages/*/src/index.ts"]
     },
     "noEmit": true
   },

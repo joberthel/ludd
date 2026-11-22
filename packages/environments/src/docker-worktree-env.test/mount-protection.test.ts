@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { ForbiddenMountPathError } from '@ludd/core'
+import { ForbiddenMountPathError } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dockerWorktreeEnv } from '../docker-worktree-env.js'
 import * as hostEnvModule from '../host-env.js'

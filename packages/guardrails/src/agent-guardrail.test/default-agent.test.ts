@@ -1,8 +1,8 @@
-import type { AgentTurnInput, GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@ludd/core'
+import type { AgentTurnInput, GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@luddjs/core'
 import { describe, expect, it, vi } from 'vitest'
 
 const piAgentMock = vi.hoisted(() => vi.fn())
-vi.mock('@ludd/agents', () => ({ piAgent: piAgentMock }))
+vi.mock('@luddjs/agents', () => ({ piAgent: piAgentMock }))
 
 const { agentGuardrail } = await import('../agent-guardrail.js')
 

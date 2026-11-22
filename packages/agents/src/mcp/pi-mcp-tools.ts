@@ -1,7 +1,7 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { Buffer } from 'node:buffer'
 import http from 'node:http'
-import { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST, MCP_TOOLS_LIST } from '@ludd/core'
+import { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST, MCP_TOOLS_LIST } from '@luddjs/core'
 import { z } from 'zod'
 
 /** Name of the in-turn structured-output tool exposed when a step declares an `outputSchema`. */

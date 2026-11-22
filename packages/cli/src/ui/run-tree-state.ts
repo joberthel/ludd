@@ -1,4 +1,4 @@
-import type { RunStateSnapshot } from '@ludd/core'
+import type { RunStateSnapshot } from '@luddjs/core'
 import type { BlueprintGuardrail, HarnessBlueprint, RunUiEntry, UiLogPhase, UiLogScope } from './run-ui-bridge.js'
 
 export type TreeNodeStatus = 'pending' | 'running' | 'waiting' | 'passed' | 'skipped' | 'failed'

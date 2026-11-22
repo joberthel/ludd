@@ -6,11 +6,11 @@ import type {
   AgentTurnResult,
   DynamicProperty,
   StepContext,
-} from '@ludd/core'
+} from '@luddjs/core'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 import path from 'node:path'
 import { createAgentSession, DefaultResourceLoader, getAgentDir, resolveCliModel, SessionManager } from '@earendil-works/pi-coding-agent'
-import { appendStreamEvent, StepOutputValidationError } from '@ludd/core'
+import { appendStreamEvent, StepOutputValidationError } from '@luddjs/core'
 import { createMcpBridgeTools, createSubmitStepOutputTool, MISSING_SUBMISSION_ISSUE } from './mcp/pi-mcp-tools.js'
 import { environmentBashTool } from './security/environment-bash.js'
 import { READ_ONLY_EXCLUDED_TOOLS, readOnlyExtension } from './security/read-only-extension.js'

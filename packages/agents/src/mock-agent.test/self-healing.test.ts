@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { MaxTotalTurnsExceededError, runHarness } from '@ludd/core'
+import { MaxTotalTurnsExceededError, runHarness } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 

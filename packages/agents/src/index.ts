@@ -6,7 +6,7 @@ import type {
   AgentStreamEventType,
   AgentTurnInput,
   AgentTurnResult,
-} from '@ludd/core'
+} from '@luddjs/core'
 import type {
   AgentMidTurnEventType,
   MockAgentConfig,
@@ -24,7 +24,7 @@ export {
   appendStreamEvent,
   readStreamEvents,
   resolveStreamPath,
-} from '@ludd/core'
+} from '@luddjs/core'
 
 export type {
   AgentAccessMode,

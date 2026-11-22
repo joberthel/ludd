@@ -6,7 +6,7 @@
 | **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@ludd/core`, `@ludd/environments`, `@ludd/guardrails` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/environments`, `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 3, 4.2, 5.6.2, 8.1, 9.2) |
 
 ## **1\. Context and Problem Statement**
@@ -42,7 +42,7 @@ We adopt **Option B: Explicit Secret Whitelisting \+ Host-Override Guardrails (`
 ## **4\. Consequences & Accepted Trade-Offs**
 
 * **Positive:** Eliminates accidental credential exfiltration by autonomous agents while still enabling end-to-end automated branch pushing and PR creation.  
-* **Accepted Trade-Off:** As documented in Section 8.1, `@ludd/core` does not implement automatic regex secret-redaction inside the MCP log offloader in v0.1; if a whitelisted secret could be printed by a custom `execGuardrail` command, the workflow author is responsible for masking it in the command or custom formatter callback.
+* **Accepted Trade-Off:** As documented in Section 8.1, `@luddjs/core` does not implement automatic regex secret-redaction inside the MCP log offloader in v0.1; if a whitelisted secret could be printed by a custom `execGuardrail` command, the workflow author is responsible for masking it in the command or custom formatter callback.
 
 ## **5\. Revisit Triggers**
 

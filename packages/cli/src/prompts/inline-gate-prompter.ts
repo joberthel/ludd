@@ -1,7 +1,7 @@
-import type { ControlClient, GateResolveParams, InteractiveQuestion, RunStateSnapshot } from '@ludd/core'
+import type { ControlClient, GateResolveParams, InteractiveQuestion, RunStateSnapshot } from '@luddjs/core'
 import process from 'node:process'
 import { createInterface } from 'node:readline/promises'
-import { normalizeSelectOptions } from '@ludd/core'
+import { normalizeSelectOptions } from '@luddjs/core'
 import { promptInteractiveQuestionInTty } from '../ui/interactive-question-prompt.js'
 import { parseStringAnswer } from './parse-answer.js'
 

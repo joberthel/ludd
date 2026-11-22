@@ -4,7 +4,7 @@ import type {
   GuardrailExecutionInput,
   ProvisionedEnvironment,
   StepContext,
-} from '@ludd/core'
+} from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { execGuardrail } from '../exec-guardrail.js'
 

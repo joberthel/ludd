@@ -6,7 +6,7 @@
 | **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@ludd/core`, `@ludd/environments` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/environments` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 1.1, 3.1, 5.5.1, 9.1, 9.2) |
 
 ## **1\. Context and Problem Statement**

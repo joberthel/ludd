@@ -4,8 +4,8 @@ import type {
   GuardrailExecutionInput,
   GuardrailVerdict,
   StepContext,
-} from '@ludd/core'
-import { resolveDynamicProperty } from '@ludd/core'
+} from '@luddjs/core'
+import { resolveDynamicProperty } from '@luddjs/core'
 
 export interface HumanReviewGuardrailConfig<
   TContext extends StepContext<any, any, any, any> = StepContext,

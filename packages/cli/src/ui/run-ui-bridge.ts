@@ -1,4 +1,4 @@
-import type { HarnessConfig, RunStateSnapshot } from '@ludd/core'
+import type { HarnessConfig, RunStateSnapshot } from '@luddjs/core'
 
 export type UiLogPhase = 'beforeStep' | 'interactive' | 'run' | 'afterStep'
 
