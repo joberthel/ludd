@@ -175,7 +175,15 @@ async function processGuardrailResult(
   params: RunAfterStepGuardrailsParams,
 ): Promise<void> {
   const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
-  emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', { phase: 'afterStep', guardrailIndex: k, attempt })
+  const guardrailNameField = guardrail.name !== undefined
+    ? { guardrailName: guardrail.name }
+    : {}
+  emitGuardrailEvent(runDir, ctx, step.id, 'guardrail.started', {
+    phase: 'afterStep',
+    guardrailIndex: k,
+    attempt,
+    ...guardrailNameField,
+  })
   if (params.rehydratedGate?.guardrailIndex === k && params.rehydratedGate.gateType === 'max_retries_exceeded') {
     const verdict: GuardrailVerdict = {
       status: 'fail',
@@ -199,6 +207,7 @@ async function processGuardrailResult(
       phase: 'afterStep',
       guardrailIndex: k,
       attempt,
+      ...guardrailNameField,
       verdict,
     })
     return
@@ -209,6 +218,7 @@ async function processGuardrailResult(
     phase: 'afterStep',
     guardrailIndex: k,
     attempt,
+    ...guardrailNameField,
     verdict,
   })
   await handleGuardrailFailure(k, guardrail, verdict, params)

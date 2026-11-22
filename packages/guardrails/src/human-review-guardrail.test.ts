@@ -52,6 +52,20 @@ describe('humanReviewGuardrail configuration validation', () => {
     const valid = humanReviewGuardrail({ prompt: 'Review', maxRetries: 3 })
     expect(valid.maxRetries).toBe(3)
   })
+
+  it('validates and preserves optional name property', () => {
+    expect(() => humanReviewGuardrail({ prompt: 'Review', name: '' })).toThrow(
+      'humanReviewGuardrail "name" must be a non-empty string.',
+    )
+    expect(() => humanReviewGuardrail({ prompt: 'Review', name: '   ' })).toThrow(TypeError)
+    expect(() => humanReviewGuardrail({ prompt: 'Review', name: 123 as any })).toThrow(TypeError)
+
+    const named = humanReviewGuardrail({ prompt: 'Review', name: 'design-signoff' })
+    expect(named.name).toBe('design-signoff')
+
+    const unnamed = humanReviewGuardrail({ prompt: 'Review' })
+    expect(unnamed.name).toBeUndefined()
+  })
 })
 
 describe('humanReviewGuardrail creation and execution', () => {

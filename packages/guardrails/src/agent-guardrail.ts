@@ -26,6 +26,7 @@ export interface AgentGuardrailConfig<
   TBody = unknown,
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
+  name?: string
   mode?: AgentAccessMode
   maxRetries?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
@@ -79,6 +80,9 @@ function validateAgentGuardrailConfig<TBody, TContext extends StepContext<any, a
 ): void {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('agentGuardrail configuration must be a non-null object.')
+  }
+  if (config.name !== undefined && (typeof config.name !== 'string' || config.name.trim() === '')) {
+    throw new TypeError('agentGuardrail "name" must be a non-empty string.')
   }
   if (config.agent !== undefined && !isAgentRunner(config.agent)) {
     throw new TypeError('agentGuardrail "agent" must be a valid AgentRunner.')
@@ -229,6 +233,9 @@ export function agentGuardrail<
   return {
     __kind: 'guardrail',
     type: 'agent',
+    ...(config.name !== undefined
+      ? { name: config.name }
+      : {}),
     maxRetries: config.maxRetries,
     onMaxRetriesExceeded: config.onMaxRetriesExceeded,
     environment: config.environment,

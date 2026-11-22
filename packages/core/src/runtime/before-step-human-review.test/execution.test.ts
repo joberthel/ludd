@@ -85,6 +85,7 @@ describe('executeHumanReviewBeforeStepGuardrail resolution with feedback', () =>
     const guardrail: Guardrail = {
       __kind: 'guardrail',
       type: 'human_review',
+      name: 'spec-approval',
       prompt: (c: any) => `Review step ${c.step.id}`,
       execute: async () => ({ status: 'pass' }),
     } as any
@@ -117,7 +118,9 @@ describe('executeHumanReviewBeforeStepGuardrail resolution with feedback', () =>
     const result = await execPromise
     expect(result.verdict.status).toBe('pass')
     expect(result.feedback).toBe('Approved with specific guidelines')
-    expect(readLedgerEvents(tempDir).map(e => e.eventType)).toEqual(['gate.waiting', 'guardrail.passed'])
+    const events = readLedgerEvents(tempDir)
+    expect(events.map(e => e.eventType)).toEqual(['gate.waiting', 'guardrail.passed'])
+    expect(events[1]?.payload.guardrailName).toBe('spec-approval')
   })
 })
 

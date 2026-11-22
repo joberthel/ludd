@@ -198,6 +198,9 @@ async function handleEscalationResolution(
       phase: 'afterStep',
       guardrailIndex: k,
       attempt,
+      ...(guardrail.name !== undefined
+        ? { guardrailName: guardrail.name }
+        : {}),
       verdict: resolvedVerdict,
     })
     return resolvedVerdict

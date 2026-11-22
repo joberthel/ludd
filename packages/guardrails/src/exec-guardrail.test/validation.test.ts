@@ -34,6 +34,20 @@ describe('execGuardrail configuration validation: basic properties', () => {
       command: () => 'git status',
     })).not.toThrow()
   })
+
+  it('validates and preserves optional name property', () => {
+    expect(() => execGuardrail({ command: 'echo ok', name: '' })).toThrow(
+      'execGuardrail "name" must be a non-empty string.',
+    )
+    expect(() => execGuardrail({ command: 'echo ok', name: '   ' })).toThrow(TypeError)
+    expect(() => execGuardrail({ command: 'echo ok', name: 123 as any })).toThrow(TypeError)
+
+    const named = execGuardrail({ command: 'echo ok', name: 'lint' })
+    expect(named.name).toBe('lint')
+
+    const unnamed = execGuardrail({ command: 'echo ok' })
+    expect(unnamed.name).toBeUndefined()
+  })
 })
 
 describe('execGuardrail configuration validation: advanced properties', () => {

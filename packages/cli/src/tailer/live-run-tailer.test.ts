@@ -193,6 +193,43 @@ it('prints error details from ledger failure events', async () => {
   log.mockRestore()
 })
 
+it('includes guardrailName in non-UI stdout fallback when present on guardrail events', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const ledger = path.join(dir, 'ledger.jsonl')
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+  fs.writeFileSync(ledger, [
+    JSON.stringify({
+      eventType: 'guardrail.started',
+      stepId: 's1',
+      payload: { guardrailName: 'typecheck' },
+    }),
+    JSON.stringify({
+      eventType: 'guardrail.passed',
+      stepId: 's1',
+      payload: { guardrailName: 'typecheck' },
+    }),
+    JSON.stringify({
+      eventType: 'guardrail.skipped',
+      stepId: 's1',
+    }),
+    '',
+  ].join('\n'))
+
+  const tailer = new LiveRunTailer(dir, false)
+  tailer.start()
+  await vi.advanceTimersByTimeAsync(100)
+  tailer.stop()
+
+  expect(log.mock.calls).toEqual([
+    ['[guardrail.started] s1 (typecheck)'],
+    ['[guardrail.passed] s1 (typecheck)'],
+    ['[guardrail.skipped] s1'],
+  ])
+  log.mockRestore()
+})
+
 it('streams formatted agent text, tool calls, and structured output by default', async () => {
   vi.useFakeTimers()
   const dir = setup()

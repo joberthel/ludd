@@ -29,10 +29,13 @@ function makeInitialSnapshot(runDir: string): RunStateSnapshot {
   return snapshot
 }
 
-function makeGuardrail(verdict: GuardrailVerdict, options?: { maxRetries?: number }): Guardrail {
+function makeGuardrail(verdict: GuardrailVerdict, options?: { maxRetries?: number, name?: string }): Guardrail {
   return {
     __kind: 'guardrail',
     type: 'fn',
+    ...(options?.name !== undefined
+      ? { name: options.name }
+      : {}),
     maxRetries: options?.maxRetries,
     execute: async () => verdict,
   }
@@ -224,6 +227,51 @@ describe('runAfterStepGuardrails passing and skipped runs', () => {
         'guardrail.started',
         'guardrail.skipped',
       ])
+      expect(events.every(e => e.payload.guardrailName === undefined)).toBe(true)
+    }
+    finally {
+      fs.rmSync(runDir, { recursive: true, force: true })
+    }
+  })
+
+  it('includes guardrailName in started, passed, and skipped ledger events when guardrail.name is set', async () => {
+    const runDir = makeTempDir()
+    try {
+      const snapshot = makeInitialSnapshot(runDir)
+      const step: StepConfig = {
+        id: 's-1',
+        afterStep: [
+          makeGuardrail({ status: 'pass' }, { name: 'typecheck' }),
+          makeGuardrail({ status: 'skip' }, { name: 'e2e' }),
+        ],
+        run: async () => ({}),
+      }
+      const ctx = {
+        runId: 'r-1',
+        environments: {},
+        steps: {},
+        step: { id: 's-1', output: {}, attempt: 1 },
+        matrix: undefined,
+        artifacts: {} as any,
+      }
+
+      await runAfterStepGuardrails({
+        step,
+        ctx,
+        snapshot,
+        runDir,
+        attempt: 1,
+        maxTotalTurns: 5,
+        initialPrompt: '',
+      })
+
+      const events = readLedgerEvents(runDir)
+      expect(events.map(e => [e.eventType, e.payload.guardrailName])).toEqual([
+        ['guardrail.started', 'typecheck'],
+        ['guardrail.passed', 'typecheck'],
+        ['guardrail.started', 'e2e'],
+        ['guardrail.skipped', 'e2e'],
+      ])
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })
@@ -239,7 +287,7 @@ describe('runAfterStepGuardrails deterministic TS callback failures', () => {
       const step: StepConfig = {
         id: 's-1',
         afterStep: [
-          makeGuardrail({ status: 'fail', body: 'lint failed' }, { maxRetries: 3 }),
+          makeGuardrail({ status: 'fail', body: 'lint failed' }, { maxRetries: 3, name: 'lint' }),
         ],
         run: async () => ({}),
       }
@@ -263,6 +311,11 @@ describe('runAfterStepGuardrails deterministic TS callback failures', () => {
       })).rejects.toThrow(GuardrailMaxRetriesExceededError)
 
       expect(readRunState(runDir).activeGuardrailRetries?.['0']).toBe(1)
+      const events = readLedgerEvents(runDir)
+      expect(events.map(e => [e.eventType, e.payload.guardrailName])).toEqual([
+        ['guardrail.started', 'lint'],
+        ['guardrail.failed', 'lint'],
+      ])
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })

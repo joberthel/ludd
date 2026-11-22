@@ -177,6 +177,7 @@ function assertLedgerEvents(runDir: string): void {
   const passedEvent = ledger.find(e => e.eventType === 'guardrail.passed')
   expect(passedEvent).toBeDefined()
   expect(passedEvent?.matrixIndex).toBe(2)
+  expect(passedEvent?.payload.guardrailName).toBe('typecheck')
 }
 
 describe('handleGuardrailEscalation state and ledger emissions', () => {
@@ -187,6 +188,7 @@ describe('handleGuardrailEscalation state and ledger emissions', () => {
     const guardrail: Guardrail = {
       __kind: 'guardrail',
       type: 'exec',
+      name: 'typecheck',
       execute: async () => ({ status: 'fail' }),
     }
     const verdict: GuardrailVerdict = { status: 'fail', body: 'err' }

@@ -49,6 +49,7 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
   const stepId = nonEmptyString(event.stepId) ?? 'step'
   const payload = event.payload ?? {}
   const error = nonEmptyString(payload.error)
+  const guardrailName = nonEmptyString(payload.guardrailName)
   switch (event.eventType ?? '') {
     case 'run.started':
       uiHost.pushEntry({ kind: 'run.started', harnessName: nonEmptyString(payload.harnessName) ?? 'ludd' })
@@ -94,13 +95,35 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
       uiHost.setActivity(`${stepId} · retrying...`)
       break
     case 'guardrail.started':
-      uiHost.setActivity(`${stepId} · running guardrail...`)
+      uiHost.setActivity(
+        guardrailName !== undefined
+          ? `${stepId} · running guardrail ${guardrailName}...`
+          : `${stepId} · running guardrail...`,
+      )
       break
     case 'guardrail.passed':
-      uiHost.pushEntry({ kind: 'guardrail.passed' })
+      uiHost.pushEntry({
+        kind: 'guardrail.passed',
+        ...(guardrailName !== undefined
+          ? { name: guardrailName }
+          : {}),
+      })
+      break
+    case 'guardrail.skipped':
+      uiHost.pushEntry({
+        kind: 'guardrail.skipped',
+        ...(guardrailName !== undefined
+          ? { name: guardrailName }
+          : {}),
+      })
       break
     case 'guardrail.failed':
-      uiHost.pushEntry({ kind: 'guardrail.failed' })
+      uiHost.pushEntry({
+        kind: 'guardrail.failed',
+        ...(guardrailName !== undefined
+          ? { name: guardrailName }
+          : {}),
+      })
       break
     case 'gate.waiting':
       uiHost.setActivity(undefined)
@@ -299,10 +322,16 @@ export class LiveRunTailer {
           const stepSuffix = event.stepId !== undefined && event.stepId !== null && event.stepId !== ''
             ? ` ${event.stepId}`
             : ''
+          const guardrailName = event.eventType?.startsWith('guardrail.') === true
+            ? nonEmptyString(event.payload?.guardrailName)
+            : undefined
+          const guardrailSuffix = guardrailName !== undefined
+            ? ` (${guardrailName})`
+            : ''
           const errorDetail = typeof event.payload?.error === 'string' && event.payload.error.trim() !== ''
             ? `: ${event.payload.error}`
             : ''
-          this.logLine(`[${event.eventType ?? 'event'}]${stepSuffix}${errorDetail}`)
+          this.logLine(`[${event.eventType ?? 'event'}]${stepSuffix}${guardrailSuffix}${errorDetail}`)
         }
         if (event.eventType !== 'agent.stream.linked')
           return

@@ -62,8 +62,24 @@ it('renders every RunUiEntry variant cleanly', () => {
       '✔ guardrail passed',
     ],
     [
+      { kind: 'guardrail.passed', name: 'typecheck' },
+      '✔ guardrail typecheck passed',
+    ],
+    [
+      { kind: 'guardrail.skipped' },
+      '↷ guardrail skipped',
+    ],
+    [
+      { kind: 'guardrail.skipped', name: 'typecheck' },
+      '↷ guardrail typecheck skipped',
+    ],
+    [
       { kind: 'guardrail.failed' },
       '✖ guardrail failed',
+    ],
+    [
+      { kind: 'guardrail.failed', name: 'typecheck' },
+      '✖ guardrail typecheck failed',
     ],
     [
       { kind: 'tool.start', toolName: 'read', argsSummary: 'path=a.ts' },

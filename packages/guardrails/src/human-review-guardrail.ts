@@ -10,6 +10,7 @@ import { resolveDynamicProperty } from '@ludd/core'
 export interface HumanReviewGuardrailConfig<
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
+  name?: string
   prompt: DynamicProperty<string, TContext>
   maxRetries?: number
 }
@@ -28,6 +29,9 @@ function validateHumanReviewConfig<TContext extends StepContext<any, any, any, a
     throw new TypeError('humanReviewGuardrail configuration must be a non-null object.')
   }
   const candidate = config as Record<string, unknown>
+  if (candidate.name !== undefined && (typeof candidate.name !== 'string' || candidate.name.trim() === '')) {
+    throw new TypeError('humanReviewGuardrail "name" must be a non-empty string.')
+  }
   if (typeof candidate.prompt !== 'string' && typeof candidate.prompt !== 'function') {
     throw new TypeError('humanReviewGuardrail "prompt" must be a string or a function.')
   }
@@ -51,6 +55,9 @@ export function humanReviewGuardrail<
   return {
     __kind: 'guardrail',
     type: 'human_review',
+    ...(config.name !== undefined
+      ? { name: config.name }
+      : {}),
     prompt: config.prompt,
     maxRetries: config.maxRetries,
     execute: async (

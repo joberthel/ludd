@@ -156,6 +156,9 @@ async function executeStandardBeforeStepGuardrail(
     phase: 'beforeStep',
     guardrailIndex: k,
     attempt: 1,
+    ...(guardrail.name !== undefined
+      ? { guardrailName: guardrail.name }
+      : {}),
     verdict,
   })
 
@@ -174,6 +177,9 @@ async function executeSingleBeforeStepGuardrail(
     phase: 'beforeStep',
     guardrailIndex: k,
     attempt: 1,
+    ...(guardrail.name !== undefined
+      ? { guardrailName: guardrail.name }
+      : {}),
   })
 
   return guardrail.type === 'human_review'

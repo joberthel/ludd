@@ -100,6 +100,9 @@ export async function executeHumanReviewBeforeStepGuardrail(
     phase: 'beforeStep',
     guardrailIndex: k,
     attempt: 1,
+    ...(guardrail.name !== undefined
+      ? { guardrailName: guardrail.name }
+      : {}),
     verdict,
   })
 

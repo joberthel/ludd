@@ -8,8 +8,9 @@ export type RunUiEntry
     | { kind: 'step.skipped', stepId: string }
     | { kind: 'step.failed', stepId: string, error?: string }
     | { kind: 'step.retry', stepId: string, attempt?: number }
-    | { kind: 'guardrail.passed' }
-    | { kind: 'guardrail.failed' }
+    | { kind: 'guardrail.passed', name?: string }
+    | { kind: 'guardrail.skipped', name?: string }
+    | { kind: 'guardrail.failed', name?: string }
     | { kind: 'tool.start', toolName: string, argsSummary?: string }
     | { kind: 'tool.error', toolName: string }
     | { kind: 'agent.text', text: string }

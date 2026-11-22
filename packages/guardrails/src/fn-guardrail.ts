@@ -12,6 +12,7 @@ export interface FnGuardrailConfig<
   TBody = unknown,
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
+  name?: string
   maxRetries?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   environment?: DynamicProperty<ProvisionedEnvironment, TContext>
@@ -30,6 +31,9 @@ function validateFnGuardrailConfig<TBody, TContext extends StepContext<any, any,
 ): void {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('fnGuardrail configuration must be a non-null object.')
+  }
+  if (config.name !== undefined && (typeof config.name !== 'string' || config.name.trim() === '')) {
+    throw new TypeError('fnGuardrail "name" must be a non-empty string.')
   }
   if (typeof config.run !== 'function') {
     throw new TypeError('fnGuardrail "run" property must be a function.')
@@ -59,7 +63,7 @@ export function fnGuardrail<
 >(
   input: FnGuardrailInput<TBody, TContext>,
 ): Guardrail<TBody, TContext> {
-  const normalized = typeof input === 'function'
+  const normalized: FnGuardrailConfig<TBody, TContext> = typeof input === 'function'
     ? { run: input }
     : input
   validateFnGuardrailConfig(normalized)
@@ -67,6 +71,9 @@ export function fnGuardrail<
   return {
     __kind: 'guardrail',
     type: 'fn',
+    ...(normalized.name !== undefined
+      ? { name: normalized.name }
+      : {}),
     maxRetries: normalized.maxRetries,
     onMaxRetriesExceeded: normalized.onMaxRetriesExceeded,
     environment: normalized.environment,

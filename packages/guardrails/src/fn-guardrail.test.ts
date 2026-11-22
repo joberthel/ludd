@@ -147,4 +147,28 @@ describe('fnGuardrail validation', () => {
     })
     expect(rail.onMaxRetriesExceeded).toBe('prompt_user')
   })
+
+  it('validates and preserves optional name property', () => {
+    expect(() => fnGuardrail({
+      name: '',
+      run: () => ({ status: 'pass' }),
+    })).toThrow('fnGuardrail "name" must be a non-empty string.')
+    expect(() => fnGuardrail({
+      name: '   ',
+      run: () => ({ status: 'pass' }),
+    })).toThrow(TypeError)
+    expect(() => fnGuardrail({
+      name: 42 as any,
+      run: () => ({ status: 'pass' }),
+    })).toThrow(TypeError)
+
+    const named = fnGuardrail({
+      name: 'check-schema',
+      run: () => ({ status: 'pass' }),
+    })
+    expect(named.name).toBe('check-schema')
+
+    const unnamed = fnGuardrail(() => ({ status: 'pass' }))
+    expect(unnamed.name).toBeUndefined()
+  })
 })

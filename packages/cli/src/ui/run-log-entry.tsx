@@ -97,9 +97,29 @@ export function RunLogEntry({ entry }: RunLogEntryProps) {
         </Text>
       )
     case 'guardrail.passed':
-      return <Text color="green">{'  ✔ guardrail passed'}</Text>
+      return (
+        <Text color="green">
+          {`  ✔ guardrail${entry.name !== undefined
+            ? ` ${entry.name}`
+            : ''} passed`}
+        </Text>
+      )
+    case 'guardrail.skipped':
+      return (
+        <Text dimColor>
+          {`  ↷ guardrail${entry.name !== undefined
+            ? ` ${entry.name}`
+            : ''} skipped`}
+        </Text>
+      )
     case 'guardrail.failed':
-      return <Text color="red">{'  ✖ guardrail failed'}</Text>
+      return (
+        <Text color="red">
+          {`  ✖ guardrail${entry.name !== undefined
+            ? ` ${entry.name}`
+            : ''} failed`}
+        </Text>
+      )
     case 'tool.start':
       return (
         <Text dimColor>

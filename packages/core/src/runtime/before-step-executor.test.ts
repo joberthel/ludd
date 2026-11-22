@@ -22,10 +22,13 @@ afterEach(async () => {
   await fs.promises.rm(tempDir, { recursive: true, force: true })
 })
 
-function makeTestRail(status: 'pass' | 'skip' | 'fail', bodyOrLog?: any): Guardrail {
+function makeTestRail(status: 'pass' | 'skip' | 'fail', bodyOrLog?: any, name?: string): Guardrail {
   return {
     __kind: 'guardrail',
     type: 'fn',
+    ...(name !== undefined
+      ? { name }
+      : {}),
     execute: async () => {
       const isLog = typeof bodyOrLog === 'string' && bodyOrLog.includes('\n')
       return {
@@ -252,6 +255,50 @@ describe('runBeforeStepGuardrails sequential execution', () => {
 
     const reloaded = readRunState(tempDir)
     expect(reloaded.logs?.['s-1-1-beforeStep-0']?.totalLines).toBe(2)
+  })
+
+  it('includes guardrailName in beforeStep ledger events only when guardrail.name is set (not object-map keys)', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'r-named-before',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 's-named',
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    }
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const step: StepConfig = {
+      id: 's-named',
+      beforeStep: {
+        namedKey: makeTestRail('pass', 'ok', 'git-status'),
+        unnamedKey: makeTestRail('skip', 'skipped'),
+        failedKey: makeTestRail('fail', 'err', 'policy-check'),
+      },
+      run: async () => ({}),
+    }
+    const ctx = {
+      runId: 'r-named-before',
+      environments: {},
+      steps: {},
+      step: { id: 's-named', output: null, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+
+    await runBeforeStepGuardrails({ step, ctx, snapshot, runDir: tempDir })
+
+    const events = readLedgerEvents(tempDir)
+    expect(events.map(e => [e.eventType, e.payload.guardrailName])).toEqual([
+      ['guardrail.started', 'git-status'],
+      ['guardrail.passed', 'git-status'],
+      ['guardrail.started', undefined],
+      ['guardrail.skipped', undefined],
+      ['guardrail.started', 'policy-check'],
+      ['guardrail.failed', 'policy-check'],
+    ])
   })
 })
 

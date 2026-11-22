@@ -39,6 +39,27 @@ describe('isGuardrail negative checks', () => {
       execute: 'not_a_function',
     })).toBe(false)
   })
+
+  it('returns false when name is non-string or empty/whitespace-only', () => {
+    expect(isGuardrail({
+      __kind: 'guardrail',
+      type: 'fn',
+      name: '',
+      execute: async () => ({ status: 'pass' }),
+    })).toBe(false)
+    expect(isGuardrail({
+      __kind: 'guardrail',
+      type: 'fn',
+      name: '   ',
+      execute: async () => ({ status: 'pass' }),
+    })).toBe(false)
+    expect(isGuardrail({
+      __kind: 'guardrail',
+      type: 'fn',
+      name: 123,
+      execute: async () => ({ status: 'pass' }),
+    })).toBe(false)
+  })
 })
 
 describe('isGuardrail positive checks', () => {
@@ -57,6 +78,7 @@ describe('isGuardrail positive checks', () => {
     expect(isGuardrail({
       __kind: 'guardrail',
       type: 'fn',
+      name: 'typecheck',
       maxRetries: 3,
       onMaxRetriesExceeded: 'prompt_user',
       environment: { id: 'env-1' },

@@ -179,6 +179,7 @@ describe('agentGuardrail validation: pagination and properties', () => {
 
   it('preserves environment and configuration properties', () => {
     const rail = agentGuardrail({
+      name: 'security-review',
       agent: dummyAgent,
       prompt: 'Check environment',
       environment: dummyEnv,
@@ -188,8 +189,20 @@ describe('agentGuardrail validation: pagination and properties', () => {
 
     expect(rail.__kind).toBe('guardrail')
     expect(rail.type).toBe('agent')
+    expect(rail.name).toBe('security-review')
     expect(rail.maxRetries).toBe(2)
     expect(rail.onMaxRetriesExceeded).toBe('abort')
     expect(rail.environment).toBe(dummyEnv)
+  })
+
+  it('validates optional name property', () => {
+    expect(() => agentGuardrail({ agent: dummyAgent, prompt: 'p', name: '' })).toThrow(
+      'agentGuardrail "name" must be a non-empty string.',
+    )
+    expect(() => agentGuardrail({ agent: dummyAgent, prompt: 'p', name: '   ' })).toThrow(TypeError)
+    expect(() => agentGuardrail({ agent: dummyAgent, prompt: 'p', name: 123 as any })).toThrow(TypeError)
+
+    const unnamed = agentGuardrail({ agent: dummyAgent, prompt: 'p' })
+    expect(unnamed.name).toBeUndefined()
   })
 })

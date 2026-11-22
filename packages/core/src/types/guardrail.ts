@@ -30,6 +30,7 @@ export interface GuardrailExecutionInput<TContext = StepContext> {
 export interface Guardrail<TBody = unknown, TContext = StepContext> {
   readonly __kind: 'guardrail'
   readonly type: 'fn' | 'exec' | 'agent' | 'human_review'
+  readonly name?: string
   readonly maxRetries?: number
   readonly onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   readonly environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
@@ -47,5 +48,7 @@ export function isGuardrail(value: unknown): value is Guardrail {
     || candidate.type === 'agent'
     || candidate.type === 'human_review'
   const hasValidExecute = typeof candidate.execute === 'function'
-  return hasValidKind && hasValidType && hasValidExecute
+  const hasValidName = candidate.name === undefined
+    || (typeof candidate.name === 'string' && candidate.name.trim() !== '')
+  return hasValidKind && hasValidType && hasValidExecute && hasValidName
 }

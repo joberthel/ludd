@@ -44,9 +44,19 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
         payload: { sessionId: 'sess-1' },
       }),
       JSON.stringify({ eventType: 'guardrail.started', stepId: 's1' }),
+      JSON.stringify({
+        eventType: 'guardrail.started',
+        stepId: 's1',
+        payload: { guardrailName: 'typecheck' },
+      }),
       JSON.stringify({ eventType: 'gate.waiting', stepId: 's1' }),
       JSON.stringify({ eventType: 'gate.resolved', stepId: 's1' }),
       JSON.stringify({ eventType: 'guardrail.failed', stepId: 's1' }),
+      JSON.stringify({
+        eventType: 'guardrail.failed',
+        stepId: 's1',
+        payload: { guardrailName: 'lint' },
+      }),
       JSON.stringify({
         eventType: 'step.retry',
         stepId: 's1',
@@ -54,6 +64,17 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
       }),
       JSON.stringify({ eventType: 'step.retry', stepId: 's1', payload: {} }),
       JSON.stringify({ eventType: 'guardrail.passed', stepId: 's1' }),
+      JSON.stringify({
+        eventType: 'guardrail.passed',
+        stepId: 's1',
+        payload: { guardrailName: 'typecheck' },
+      }),
+      JSON.stringify({ eventType: 'guardrail.skipped', stepId: 's1' }),
+      JSON.stringify({
+        eventType: 'guardrail.skipped',
+        stepId: 's1',
+        payload: { guardrailName: 'e2e' },
+      }),
       JSON.stringify({ eventType: 'step.skipped', stepId: 's2' }),
       JSON.stringify({ eventType: 'step.passed', stepId: 's1' }),
       JSON.stringify({
@@ -157,9 +178,13 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
       { kind: 'run.resumed', harnessName: undefined },
       { kind: 'step.started', stepId: 's1' },
       { kind: 'guardrail.failed' },
+      { kind: 'guardrail.failed', name: 'lint' },
       { kind: 'step.retry', stepId: 's1', attempt: 2 },
       { kind: 'step.retry', stepId: 's1', attempt: undefined },
       { kind: 'guardrail.passed' },
+      { kind: 'guardrail.passed', name: 'typecheck' },
+      { kind: 'guardrail.skipped' },
+      { kind: 'guardrail.skipped', name: 'e2e' },
       { kind: 'step.skipped', stepId: 's2' },
       { kind: 'step.passed', stepId: 's1' },
       { kind: 'step.failed', stepId: 's3', error: 'err' },
@@ -176,6 +201,7 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
     expect(activities).toContain('s1 · thinking...')
     expect(activities).toContain('s1 · running read_log_page...')
     expect(activities).toContain('s1 · running guardrail...')
+    expect(activities).toContain('s1 · running guardrail typecheck...')
     expect(activities.at(-1)).toBeUndefined()
   }
   finally {

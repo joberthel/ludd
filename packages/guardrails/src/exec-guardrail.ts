@@ -17,6 +17,7 @@ export interface ExecGuardrailConfig<
   TBody = unknown,
   TContext extends StepContext<any, any, any, any> = StepContext,
 > {
+  name?: string
   command: DynamicProperty<string | readonly string[], TContext>
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
   maxRetries?: number
@@ -87,6 +88,9 @@ function validateExecConfig<TBody, TContext extends StepContext<any, any, any, a
 ): void {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
     throw new TypeError('execGuardrail configuration must be a non-null object.')
+  }
+  if (config.name !== undefined && (typeof config.name !== 'string' || config.name.trim() === '')) {
+    throw new TypeError('execGuardrail "name" must be a non-empty string.')
   }
   if (!isValidCommand(config.command)) {
     throw new TypeError(
@@ -185,6 +189,9 @@ export function execGuardrail<
   return {
     __kind: 'guardrail',
     type: 'exec',
+    ...(config.name !== undefined
+      ? { name: config.name }
+      : {}),
     maxRetries: config.maxRetries,
     onMaxRetriesExceeded: config.onMaxRetriesExceeded,
     environment: config.environment,
