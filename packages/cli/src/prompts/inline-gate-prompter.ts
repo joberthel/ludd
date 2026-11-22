@@ -137,19 +137,114 @@ async function resolveUserQuestionReadline(
   }
 }
 
+async function resolveHumanReviewTty(
+  gate: NonNullable<RunStateSnapshot['activeGate']>,
+  signal?: AbortSignal,
+): Promise<GateResolveParams> {
+  const action = await promptInteractiveQuestionInTty({
+    type: 'select',
+    prompt: gate.prompt,
+    options: [
+      { label: 'Pass', value: 'pass' },
+      { label: 'Fail (requires feedback)', value: 'fail' },
+      { label: 'Skip', value: 'skip' },
+      { label: 'Abort', value: 'abort' },
+    ],
+  }, signal) as 'pass' | 'fail' | 'skip' | 'abort'
+  let feedback = ''
+  if (action === 'fail') {
+    while (!feedback.trim()) {
+      feedback = String(await promptInteractiveQuestionInTty({
+        type: 'text',
+        prompt: 'Feedback (required on fail):',
+        placeholder: 'Describe what needs to be fixed',
+      }, signal))
+    }
+  }
+  return {
+    stepId: gate.stepId,
+    guardrailIndex: gate.guardrailIndex,
+    action,
+    ...(feedback
+      ? { feedback }
+      : {}),
+  }
+}
+
+async function resolveRetryGateTty(
+  gate: NonNullable<RunStateSnapshot['activeGate']>,
+  signal?: AbortSignal,
+): Promise<GateResolveParams> {
+  const action = await promptInteractiveQuestionInTty({
+    type: 'select',
+    prompt: gate.prompt,
+    options: [
+      { label: 'Retry', value: 'retry' },
+      { label: 'Pass', value: 'pass' },
+      { label: 'Skip', value: 'skip' },
+      { label: 'Abort', value: 'abort' },
+    ],
+  }, signal) as 'retry' | 'pass' | 'skip' | 'abort'
+  let addRetries: number | undefined
+  if (action === 'retry') {
+    while (true) {
+      const value = await promptInteractiveQuestionInTty({
+        type: 'number',
+        prompt: 'Additional retries:',
+        min: 1,
+        default: 1,
+      }, signal) as number
+      if (Number.isInteger(value) && value > 0) {
+        addRetries = value
+        break
+      }
+    }
+  }
+  const feedback = String(await promptInteractiveQuestionInTty({
+    type: 'text',
+    prompt: 'Feedback hint (optional):',
+    placeholder: 'Press Enter to skip',
+  }, signal))
+  return {
+    stepId: gate.stepId,
+    guardrailIndex: gate.guardrailIndex,
+    action,
+    ...(addRetries !== undefined
+      ? { addRetries }
+      : {}),
+    ...(feedback
+      ? { feedback }
+      : {}),
+  }
+}
+
+async function resolveGateInTty(
+  gate: NonNullable<RunStateSnapshot['activeGate']>,
+  signal?: AbortSignal,
+): Promise<GateResolveParams> {
+  if (gate.gateType === 'user_question' && gate.question !== undefined) {
+    const answer = await promptInteractiveQuestionInTty(gate.question, signal)
+    return {
+      stepId: gate.stepId,
+      guardrailIndex: gate.guardrailIndex,
+      action: 'answer',
+      answer,
+    }
+  }
+  if (gate.gateType === 'human_review') {
+    return resolveHumanReviewTty(gate, signal)
+  }
+  return resolveRetryGateTty(gate, signal)
+}
+
 export async function promptForGate(snapshot: RunStateSnapshot, client: ControlClient, signal?: AbortSignal): Promise<void> {
   const gate = snapshot.activeGate
   if (!gate || signal?.aborted)
     return
-  if (gate.gateType === 'user_question' && gate.question !== undefined && process.stdin.isTTY) {
+  if (process.stdin.isTTY) {
     try {
-      const answer = await promptInteractiveQuestionInTty(gate.question, signal)
-      await client.resolveGate({
-        stepId: gate.stepId,
-        guardrailIndex: gate.guardrailIndex,
-        action: 'answer',
-        answer,
-      })
+      const resolution = await resolveGateInTty(gate, signal)
+      await client.resolveGate(resolution)
     }
     catch (error) {
       if (signal?.aborted && error instanceof Error && error.name === 'AbortError')

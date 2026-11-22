@@ -368,6 +368,43 @@ it('resolves user_question gates via Ink TTY prompter when stdin is a TTY', asyn
 
     promptTty.mockRejectedValueOnce(new Error('tty crash'))
     await expect(promptForGate(qSnap, control)).rejects.toThrow('tty crash')
+
+    // human_review in TTY: pass and fail (re-prompting on blank feedback)
+    promptTty.mockResolvedValueOnce('pass')
+    await promptForGate(snapshot('human_review'), control)
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 1,
+      action: 'pass',
+    })
+
+    promptTty.mockResolvedValueOnce('fail').mockResolvedValueOnce('  ').mockResolvedValueOnce('Needs tests')
+    await promptForGate(snapshot('human_review'), control)
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 1,
+      action: 'fail',
+      feedback: 'Needs tests',
+    })
+
+    // max_retries_exceeded in TTY: retry (re-prompting non-integer) and skip without feedback
+    promptTty.mockResolvedValueOnce('retry').mockResolvedValueOnce(1.5 as unknown as string).mockResolvedValueOnce(2 as unknown as string).mockResolvedValueOnce('Try harder')
+    await promptForGate(snapshot('max_retries_exceeded'), control)
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 1,
+      action: 'retry',
+      addRetries: 2,
+      feedback: 'Try harder',
+    })
+
+    promptTty.mockResolvedValueOnce('skip').mockResolvedValueOnce('')
+    await promptForGate(snapshot('max_retries_exceeded'), control)
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 1,
+      action: 'skip',
+    })
   }
   finally {
     if (origTty)
