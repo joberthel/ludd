@@ -55,14 +55,14 @@ describe('gitWorktreeEnv provisioning branches', () => {
     await env.teardown()
   })
 
-  it('supports custom branchPrefix', async () => {
-    const adapter = gitWorktreeEnv({ id: 'custom-prefix', branchPrefix: 'task' })
+  it('supports custom branchPrefix and trims trailing slashes', async () => {
+    const adapter = gitWorktreeEnv({ id: 'custom-prefix', branchPrefix: 'task/dev/' })
     const runId = 'run-202'
     const env = await adapter.provision({ runId, workspaceDir: tmpDir })
 
-    expect(env.branchName).toBe(`task/${runId}-custom-prefix`)
+    expect(env.branchName).toBe(`task/dev/${runId}-custom-prefix`)
     const branchRes = cp.execSync('git branch --show-current', { cwd: env.workingDir }).toString().trim()
-    expect(branchRes).toBe(`task/${runId}-custom-prefix`)
+    expect(branchRes).toBe(`task/dev/${runId}-custom-prefix`)
 
     await env.teardown()
   })

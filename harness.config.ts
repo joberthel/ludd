@@ -8,7 +8,7 @@ const MODEL = 'gemini-4-hydrogen'
 
 const devWorktree = gitWorktreeEnv({
   id: 'dev-worktree',
-  branchPrefix: 'ludd/dev/',
+  branchPrefix: 'ludd/dev',
 })
 
 export default createHarness('ludd-dev', {

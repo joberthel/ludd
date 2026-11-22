@@ -116,7 +116,7 @@ export function gitWorktreeEnv(options: GitWorktreeEnvOptions): EnvironmentAdapt
     provision: async (context: ProvisionContext) => {
       const { runId, workspaceDir, defaultSignal } = context
       const { workspace, worktreePath } = resolveWorktreePaths(workspaceDir, runId, id)
-      const branchPrefix = options.branchPrefix ?? 'ludd'
+      const branchPrefix = (options.branchPrefix ?? 'ludd').replace(/\/+$/, '')
       const branchName = `${branchPrefix}/${runId}-${id}`
 
       await addGitWorktree(workspace, worktreePath, branchName, options.baseBranch, defaultSignal)
