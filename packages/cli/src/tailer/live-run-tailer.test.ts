@@ -153,3 +153,41 @@ it('does not split multi-byte UTF-8 characters across reads', async () => {
   ])
   log.mockRestore()
 })
+
+it('prints error details from ledger failure events', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const ledger = path.join(dir, 'ledger.jsonl')
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+  fs.writeFileSync(ledger, [
+    JSON.stringify({
+      eventType: 'step.failed',
+      stepId: 'step',
+      payload: { error: 'Provider rejected model' },
+    }),
+    JSON.stringify({
+      eventType: 'run.failed',
+      stepId: null,
+      payload: { error: 'Provider rejected model' },
+    }),
+    JSON.stringify({
+      eventType: 'step.failed',
+      stepId: 'blank',
+      payload: { error: '   ' },
+    }),
+    '',
+  ].join('\n'))
+
+  const tailer = new LiveRunTailer(dir, false)
+  tailer.start()
+  await vi.advanceTimersByTimeAsync(100)
+  tailer.stop()
+
+  expect(log.mock.calls).toEqual([
+    ['[step.failed] step: Provider rejected model'],
+    ['[run.failed]: Provider rejected model'],
+    ['[step.failed] blank'],
+  ])
+  log.mockRestore()
+})

@@ -53,7 +53,10 @@ export class LiveRunTailer {
         const stepSuffix = event.stepId !== undefined && event.stepId !== null && event.stepId !== ''
           ? ` ${event.stepId}`
           : ''
-        console.log(`[${event.eventType ?? 'event'}]${stepSuffix}`)
+        const errorDetail = typeof event.payload?.error === 'string' && event.payload.error.trim() !== ''
+          ? `: ${event.payload.error}`
+          : ''
+        console.log(`[${event.eventType ?? 'event'}]${stepSuffix}${errorDetail}`)
         if (!this.stream)
           return
         if (event.eventType !== 'agent.stream.linked')
