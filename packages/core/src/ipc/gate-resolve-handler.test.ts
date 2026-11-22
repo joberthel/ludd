@@ -203,7 +203,7 @@ describe('createGateResolveHandler minimal resolution', () => {
 
     const result = await handler({
       stepId: 'step-1',
-      action: 'skip',
+      action: 'pass',
     })
 
     expect(result).toEqual({ ok: true })
@@ -212,11 +212,11 @@ describe('createGateResolveHandler minimal resolution', () => {
     expect(events[0]?.payload).toEqual({
       stepId: 'step-1',
       guardrailIndex: 0,
-      action: 'skip',
+      action: 'pass',
     })
   })
 
-  it('rejects action "retry" on human_review gates', async () => {
+  it('accepts action "fail" on human_review gates', async () => {
     const waiter = createGateWaiter()
     const handler = createGateResolveHandler({
       runDir: tempDir,
@@ -224,11 +224,39 @@ describe('createGateResolveHandler minimal resolution', () => {
       gateWaiter: waiter,
     })
 
-    await expect(handler({
+    const result = await handler({
       stepId: 'step-1',
-      action: 'retry',
-    })).rejects.toThrow('Invalid params: action "retry" is not supported for human_review gates')
+      action: 'fail',
+      feedback: 'Needs work',
+    })
+
+    expect(result).toEqual({ ok: true })
+    const events = readLedgerEvents(tempDir)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.payload).toEqual({
+      stepId: 'step-1',
+      guardrailIndex: 0,
+      action: 'fail',
+      feedback: 'Needs work',
+    })
   })
+
+  it.each(['retry', 'skip', 'abort', 'answer'] as const)(
+    'rejects action "%s" on human_review gates',
+    async (action) => {
+      const waiter = createGateWaiter()
+      const handler = createGateResolveHandler({
+        runDir: tempDir,
+        getSnapshot: () => snapshot,
+        gateWaiter: waiter,
+      })
+
+      await expect(handler({
+        stepId: 'step-1',
+        action,
+      })).rejects.toThrow(`Invalid params: action "${action}" is not supported for human_review gates`)
+    },
+  )
 
   it('validates and resolves user_question gates with answer or abort', async () => {
     const waiter = createGateWaiter()

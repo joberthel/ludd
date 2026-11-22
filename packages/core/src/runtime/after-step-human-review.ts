@@ -19,17 +19,10 @@ function resolveResolutionVerdict(
         : resolvedPrompt,
     }
   }
-  if (resolution.action === 'skip') {
-    return { status: 'skip', body: resolution.feedback ?? '' }
-  }
   if (resolution.action === 'fail') {
     return { status: 'fail', body: resolution.feedback ?? '' }
   }
-  throw new Error(
-    resolution.feedback !== undefined && resolution.feedback.trim() !== ''
-      ? `Gate resolution aborted: ${resolution.feedback}`
-      : 'Gate resolution aborted',
-  )
+  throw new Error(`Unsupported human_review gate resolution action: ${resolution.action}`)
 }
 
 function recordActiveGate(

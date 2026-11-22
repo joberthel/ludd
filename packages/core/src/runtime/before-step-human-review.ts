@@ -21,17 +21,10 @@ function resolveResolutionVerdict(
         : resolvedPrompt,
     }
   }
-  if (resolution.action === 'skip') {
-    return { status: 'skip', body: resolution.feedback ?? '' }
-  }
   if (resolution.action === 'fail') {
     return { status: 'fail', body: resolution.feedback ?? '' }
   }
-  throw new Error(
-    resolution.feedback !== undefined && resolution.feedback.trim() !== ''
-      ? `Gate resolution aborted: ${resolution.feedback}`
-      : 'Gate resolution aborted',
-  )
+  throw new Error(`Unsupported human_review gate resolution action: ${resolution.action}`)
 }
 
 function recordActiveGate(
@@ -92,9 +85,7 @@ export async function executeHumanReviewBeforeStepGuardrail(
 
   const eventType: LedgerEventType = verdict.status === 'pass'
     ? 'guardrail.passed'
-    : verdict.status === 'skip'
-      ? 'guardrail.skipped'
-      : 'guardrail.failed'
+    : 'guardrail.failed'
 
   emitBeforeStepEvent(runDir, ctx, step.id, eventType, {
     phase: 'beforeStep',
