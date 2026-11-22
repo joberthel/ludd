@@ -2,6 +2,7 @@ import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
 import type {
   DynamicProperty,
+  EnvironmentAdapter,
   ProvisionedEnvironment,
   StepContext,
   StepContextWithBeforeStep,
@@ -35,7 +36,7 @@ export interface PlainStepDef<
   name?: string
   dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  environment?: DynamicProperty<ProvisionedEnvironment, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   matrix?: never
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
@@ -79,7 +80,7 @@ export interface ItemsMatrixStepDef<
   name?: string
   dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  environment?: DynamicProperty<ProvisionedEnvironment, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   matrix: {
     items: DynamicProperty<readonly TItem[], PriorStepContext<TPriorSteps>>
     itemsFromArtifact?: never
@@ -127,7 +128,7 @@ export interface ArtifactMatrixStepDef<
   dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<
-    ProvisionedEnvironment,
+    ProvisionedEnvironment | EnvironmentAdapter,
     StepContext<
       unknown,
       AccumulatePriorSteps<TPriorSteps>,
@@ -235,7 +236,7 @@ export interface StepTupleEntry<
   TKey extends string = never,
 > {
   id: TId
-  environment?: DynamicProperty<ProvisionedEnvironment, any>
+  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, any>
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   outputSchema?: z.ZodType<TOutput>
