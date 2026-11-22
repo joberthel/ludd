@@ -48,12 +48,11 @@ export function getEffectiveMaxRetries(
   guardrailIndex: number,
   snapshot: RunStateSnapshot,
 ): number {
-  if (guardrail.type === 'human_review' && guardrail.maxRetries === undefined) {
+  if (guardrail.maxRetries === undefined) {
     return Number.POSITIVE_INFINITY
   }
-  const base = guardrail.maxRetries ?? 0
   const extra = snapshot.grantedExtraRetries?.[`${stepId}:${guardrailIndex}`] ?? 0
-  return base + extra
+  return guardrail.maxRetries + extra
 }
 
 export function getEffectiveMaxTotalTurns(

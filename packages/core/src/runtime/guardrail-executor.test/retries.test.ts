@@ -131,7 +131,7 @@ describe('runAfterStepGuardrails anonymous session retry', () => {
 })
 
 describe('runAfterStepGuardrails default maxRetries', () => {
-  it('defaults maxRetries to 0 when undefined on agent guardrail, throwing on first failure', async () => {
+  it('allows unlimited retries when maxRetries is undefined on an agent guardrail', async () => {
     const runDir = makeTempDir()
     try {
       const snapshot = makeInitialSnapshot(runDir)
@@ -160,7 +160,7 @@ describe('runAfterStepGuardrails default maxRetries', () => {
         sessionId: 'sess-1',
         maxTotalTurns: 5,
         initialPrompt: 'do coding',
-      })).rejects.toThrow(GuardrailMaxRetriesExceededError)
+      })).rejects.toThrow(GuardrailRetrySignal)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })

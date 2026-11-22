@@ -51,7 +51,7 @@ describe('getEffectiveMaxRetries', () => {
 
     const snapshot = makeSnapshot({ 'step-1:0': 3 })
     expect(getEffectiveMaxRetries(railWithRetries, 'step-1', 0, snapshot)).toBe(5)
-    expect(getEffectiveMaxRetries(railWithoutRetries, 'step-1', 0, snapshot)).toBe(3)
+    expect(getEffectiveMaxRetries(railWithoutRetries, 'step-1', 0, snapshot)).toBe(Number.POSITIVE_INFINITY)
     expect(getEffectiveMaxRetries(railWithRetries, 'step-1', 1, snapshot)).toBe(2)
   })
 

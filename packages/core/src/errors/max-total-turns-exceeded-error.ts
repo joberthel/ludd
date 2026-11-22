@@ -1,4 +1,4 @@
-export const DEFAULT_MAX_TOTAL_TURNS = 15
+export const DEFAULT_MAX_TOTAL_TURNS = Number.POSITIVE_INFINITY
 
 export class MaxTotalTurnsExceededError extends Error {
   readonly stepId: string

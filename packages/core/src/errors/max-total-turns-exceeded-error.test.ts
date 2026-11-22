@@ -5,8 +5,8 @@ import {
 } from './max-total-turns-exceeded-error.js'
 
 describe('maxTotalTurnsExceededError', () => {
-  it('exposes DEFAULT_MAX_TOTAL_TURNS as 15', () => {
-    expect(DEFAULT_MAX_TOTAL_TURNS).toBe(15)
+  it('exposes DEFAULT_MAX_TOTAL_TURNS as Infinity (unlimited by default)', () => {
+    expect(DEFAULT_MAX_TOTAL_TURNS).toBe(Number.POSITIVE_INFINITY)
   })
 
   it('constructs with stepId and maxTotalTurns without lastError', () => {

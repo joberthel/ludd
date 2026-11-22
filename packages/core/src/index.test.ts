@@ -48,7 +48,7 @@ describe('@ludd/core harness and configuration exports', () => {
     expect(typeof core.isEnvironmentAdapter).toBe('function')
     expect(typeof core.isProvisionedEnvironment).toBe('function')
     expect(typeof core.isGuardrail).toBe('function')
-    expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(15)
+    expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(Number.POSITIVE_INFINITY)
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(typeof core.formatRetryPrompt).toBe('function')
     expect(typeof core.formatArtifactRetryPrompt).toBe('function')
