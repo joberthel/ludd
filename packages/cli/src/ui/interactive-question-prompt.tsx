@@ -1,11 +1,12 @@
 import type { InteractiveQuestion } from '@ludd/core'
-import { ConfirmInput, MultiSelect, Select, StatusMessage, TextInput } from '@inkjs/ui'
+import { ConfirmInput, MultiSelect, Select, StatusMessage } from '@inkjs/ui'
 import { normalizeSelectOptions, validateInteractiveAnswer } from '@ludd/core'
-import { Box, render, Text } from 'ink'
+import { Box, render, Text, useInput } from 'ink'
 import { useState } from 'react'
 
 export interface InteractiveQuestionPromptProps {
   question: InteractiveQuestion
+  isDisabled?: boolean
   onSubmit: (answer: unknown) => void
 }
 
@@ -26,26 +27,137 @@ export function registerTtyPromptHost(host: TtyPromptHost): () => void {
   }
 }
 
+interface PromptTextInputProps {
+  defaultValue?: string
+  placeholder?: string
+  isDisabled?: boolean
+  onSubmit: (value: string) => void
+}
+
+function PromptTextInput({
+  defaultValue,
+  placeholder,
+  isDisabled = false,
+  onSubmit,
+}: PromptTextInputProps) {
+  const initialValue = defaultValue ?? ''
+  const [state, setState] = useState<{ value: string, cursorOffset: number }>(() => ({
+    value: initialValue,
+    cursorOffset: initialValue.length,
+  }))
+
+  useInput((input, key) => {
+    if (
+      key.ctrl
+      || key.meta
+      || key.upArrow
+      || key.downArrow
+      || key.tab
+    ) {
+      return
+    }
+
+    if (key.return) {
+      onSubmit(state.value)
+      return
+    }
+
+    if (key.leftArrow) {
+      setState(prev => ({
+        ...prev,
+        cursorOffset: Math.max(0, prev.cursorOffset - 1),
+      }))
+      return
+    }
+
+    if (key.rightArrow) {
+      setState(prev => ({
+        ...prev,
+        cursorOffset: Math.min(prev.value.length, prev.cursorOffset + 1),
+      }))
+      return
+    }
+
+    if (key.backspace || key.delete) {
+      setState((prev) => {
+        if (prev.cursorOffset === 0) {
+          return prev
+        }
+        return {
+          value: prev.value.slice(0, prev.cursorOffset - 1) + prev.value.slice(prev.cursorOffset),
+          cursorOffset: prev.cursorOffset - 1,
+        }
+      })
+      return
+    }
+
+    if (input.length > 0) {
+      setState(prev => ({
+        value: prev.value.slice(0, prev.cursorOffset) + input + prev.value.slice(prev.cursorOffset),
+        cursorOffset: prev.cursorOffset + input.length,
+      }))
+    }
+  }, { isActive: !isDisabled })
+
+  const { value, cursorOffset } = state
+
+  if (value.length === 0) {
+    if (isDisabled) {
+      return placeholder !== undefined && placeholder.length > 0
+        ? <Text dimColor>{placeholder}</Text>
+        : <Text> </Text>
+    }
+    if (placeholder !== undefined && placeholder.length > 0) {
+      return (
+        <Text>
+          <Text inverse>{placeholder[0]}</Text>
+          <Text dimColor>{placeholder.slice(1)}</Text>
+        </Text>
+      )
+    }
+    return <Text inverse> </Text>
+  }
+
+  if (isDisabled) {
+    return <Text>{value}</Text>
+  }
+
+  const before = value.slice(0, cursorOffset)
+  const cursorChar = value[cursorOffset] ?? ' '
+  const after = value.slice(cursorOffset + 1)
+
+  return (
+    <Text>
+      {before}
+      <Text inverse>{cursorChar}</Text>
+      {after}
+    </Text>
+  )
+}
+
 function renderControl(
   question: InteractiveQuestion,
+  isDisabled: boolean,
   onSubmit: (answer: unknown) => void,
   onError: (message: string | undefined) => void,
 ) {
   if (question.type === 'text') {
     return (
-      <TextInput
+      <PromptTextInput
         defaultValue={question.default}
         placeholder={question.placeholder}
+        isDisabled={isDisabled}
         onSubmit={value => onSubmit(value)}
       />
     )
   }
   if (question.type === 'number') {
     return (
-      <TextInput
+      <PromptTextInput
         defaultValue={question.default !== undefined
           ? String(question.default)
           : undefined}
+        isDisabled={isDisabled}
         onSubmit={(raw) => {
           try {
             const parsed = validateInteractiveAnswer(question, raw)
@@ -65,6 +177,7 @@ function renderControl(
         defaultChoice={question.default === false
           ? 'cancel'
           : 'confirm'}
+        isDisabled={isDisabled}
         onConfirm={() => onSubmit(true)}
         onCancel={() => onSubmit(false)}
       />
@@ -81,6 +194,7 @@ function renderControl(
     return (
       <Select
         options={ordered}
+        isDisabled={isDisabled}
         onChange={value => onSubmit(value)}
       />
     )
@@ -91,18 +205,23 @@ function renderControl(
       defaultValue={question.default !== undefined
         ? [...question.default]
         : undefined}
+      isDisabled={isDisabled}
       onSubmit={values => onSubmit(values)}
     />
   )
 }
 
-export function InteractiveQuestionPrompt({ question, onSubmit }: InteractiveQuestionPromptProps) {
+export function InteractiveQuestionPrompt({
+  question,
+  isDisabled = false,
+  onSubmit,
+}: InteractiveQuestionPromptProps) {
   const [error, setError] = useState<string | undefined>()
 
   return (
     <Box flexDirection="column" marginY={1}>
       <Text bold color="cyan">{question.prompt}</Text>
-      {renderControl(question, onSubmit, setError)}
+      {renderControl(question, isDisabled, onSubmit, setError)}
       {error !== undefined
         ? <StatusMessage variant="error">{error}</StatusMessage>
         : null}

@@ -17,16 +17,13 @@ export function QuestionModal({
   width,
   onSubmit,
 }: QuestionModalProps) {
-  if (minimized) {
-    return null
-  }
-
   const modalWidth = width !== undefined
     ? Math.max(40, Math.min(76, width - 6))
     : 64
 
   return (
     <Box
+      display={minimized ? 'none' : 'flex'}
       position="absolute"
       width="100%"
       height="100%"
@@ -51,6 +48,7 @@ export function QuestionModal({
         </Box>
         <InteractiveQuestionPrompt
           question={prompt.question}
+          isDisabled={minimized}
           onSubmit={onSubmit}
         />
         <Text dimColor>Press Ctrl+B to minimize and inspect logs</Text>
