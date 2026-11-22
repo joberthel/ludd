@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,9 +12,10 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
+      releases_created: ${{ steps.release.outputs.releases_created }}
     steps:
       - name: Run release-please
         id: release
@@ -21,7 +23,7 @@ jobs:
 
   publish:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ !failure() && !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release-please.outputs.releases_created == 'true') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
