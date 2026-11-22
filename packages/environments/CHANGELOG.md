@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.1](https://github.com/joberthel/ludd/compare/environments-v0.1.0...environments-v0.1.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* add repository metadata to package.json files for all packages ([c68dad5](https://github.com/joberthel/ludd/commit/c68dad5fcbb6a93312fc88ea346e255b4330f768))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @luddjs/core bumped to 0.1.1
+
 ## [0.1.0](https://github.com/joberthel/ludd/compare/environments-v0.0.1...environments-v0.1.0) (2026-11-22)
 
 
