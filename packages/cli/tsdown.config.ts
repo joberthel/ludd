@@ -18,6 +18,6 @@ export default defineConfig({
   clean: true,
   dts: true,
   deps: {
-    alwaysBundle: ['@inkjs/ui'],
+    alwaysBundle: [/^@inkjs\/ui/, /^pastel/],
   },
 })
