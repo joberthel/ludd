@@ -125,8 +125,22 @@ function mapEvent(event: PiSessionEvent): MappedEvent | undefined {
   }
 }
 
+function resolveAssistantError(event: PiSessionEvent, previous: string | undefined): string | undefined {
+  if (event.type !== 'message_end' || event.message?.role !== 'assistant') {
+    return previous
+  }
+  if (event.message.stopReason !== 'error') {
+    return undefined
+  }
+  const detail = event.message.errorMessage?.trim()
+  return detail !== undefined && detail.length > 0
+    ? detail
+    : 'Pi agent turn failed with an unknown error.'
+}
+
 async function runTurn(session: PiSession, input: AgentTurnInput<any>): Promise<void> {
   let settle!: () => void
+  let lastAssistantError: string | undefined
   const settled = new Promise<void>((resolve) => {
     settle = resolve
   })
@@ -143,6 +157,7 @@ async function runTurn(session: PiSession, input: AgentTurnInput<any>): Promise<
         ...mapped,
       })
     }
+    lastAssistantError = resolveAssistantError(event, lastAssistantError)
     if (event.type === 'agent_settled') {
       settle()
     }
@@ -163,6 +178,9 @@ async function runTurn(session: PiSession, input: AgentTurnInput<any>): Promise<
       })
     }
     await settled
+    if (!input.signal?.aborted && lastAssistantError !== undefined) {
+      throw new Error(lastAssistantError)
+    }
   }
   finally {
     input.signal?.removeEventListener('abort', onAbort)

@@ -8,6 +8,7 @@ import type { AgentAccessMode, ProvisionedEnvironment } from '@ludd/core'
 export interface PiSessionEvent {
   type: string
   assistantMessageEvent?: { type: string, delta?: string }
+  message?: { role?: string, stopReason?: string, errorMessage?: string }
   toolCallId?: string
   toolName?: string
   args?: unknown
