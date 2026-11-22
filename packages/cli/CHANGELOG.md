@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.1](https://github.com/joberthel/ludd/compare/cli-v0.1.0...cli-v0.1.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* add repository metadata to package.json files for all packages ([c68dad5](https://github.com/joberthel/ludd/commit/c68dad5fcbb6a93312fc88ea346e255b4330f768))
+* restore pastel dependency in package.json and pnpm-lock.yaml ([bde5dbd](https://github.com/joberthel/ludd/commit/bde5dbd23146734b20c34bf36c31823220d3ef37))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @luddjs/agents bumped to 0.1.1
+    * @luddjs/core bumped to 0.1.1
+    * @luddjs/environments bumped to 0.1.1
+    * @luddjs/guardrails bumped to 0.1.1
+
 ## [0.1.0](https://github.com/joberthel/ludd/compare/cli-v0.0.1...cli-v0.1.0) (2026-11-22)
 
 
