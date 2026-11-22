@@ -2,6 +2,7 @@ import antfu from '@antfu/eslint-config'
 
 export default antfu(
   {
+    react: true,
     typescript: {
       tsconfigPath: 'tsconfig.json',
       parserOptions: {
@@ -13,6 +14,7 @@ export default antfu(
       },
     },
     rules: {
+      'react-refresh/only-export-components': 'off',
       'max-lines': [
         'warn',
         { max: 250, skipBlankLines: true, skipComments: true },
@@ -27,6 +29,7 @@ export default antfu(
   {
     files: [
       '**/*.test.ts',
+      '**/*.test.tsx',
     ],
     rules: {
       'ts/no-unsafe-assignment': 'off',

@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { resumeCommand } from '../commands/resume-command.js'
-import { runCommand } from '../commands/run-command.js'
+import { resumeCommand } from '../actions/resume-command.js'
+import { runCommand } from '../actions/run-command.js'
 import { parse, text } from './parse-args.js'
 
 export async function workerCommand(args: string[]): Promise<void> {

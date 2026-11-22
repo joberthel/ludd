@@ -2,19 +2,30 @@
   "name": "@ludd/cli",
   "type": "module",
   "version": "0.0.1",
-  "bin": { "ludd": "./dist/bin.js" },
-  "files": ["dist"],
+  "bin": {
+    "ludd": "./dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@inkjs/ui": "^2.0.0",
     "@ludd/agents": "workspace:*",
     "@ludd/core": "workspace:*",
     "@ludd/environments": "workspace:*",
-    "@ludd/guardrails": "workspace:*"
+    "@ludd/guardrails": "workspace:*",
+    "ink": "^8.0.0",
+    "pastel": "^4.0.1",
+    "react": "^19.3.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
     "typescript": "^6.0.3"
   }
 }

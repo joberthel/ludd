@@ -22,6 +22,7 @@ export default defineConfig({
     globals: true,
     include: [
       'packages/*/src/**/*.test.ts',
+      'packages/*/src/**/*.test.tsx',
       'packages/*/e2e/**/*.e2e.test.ts',
     ],
     coverage: {
@@ -32,9 +33,13 @@ export default defineConfig({
         statements: 100,
         branches: 100,
       },
-      include: ['packages/*/src/**/*.ts'],
+      include: [
+        'packages/*/src/**/*.ts',
+        'packages/*/src/**/*.tsx',
+      ],
       exclude: [
         '**/*.test.ts',
+        '**/*.test.tsx',
         '**/*.test/**',
         '**/*.e2e.test.ts',
       ],
