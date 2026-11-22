@@ -301,6 +301,30 @@ it('resolves user_question gates via readline fallback in non-TTY and retries in
       action: 'answer',
       answer: 'hello',
     })
+
+    const allowOtherSnap: RunStateSnapshot = {
+      ...qSnap,
+      activeGate: {
+        ...qSnap.activeGate!,
+        prompt: 'Pick or type',
+        question: {
+          type: 'select',
+          prompt: 'Pick or type',
+          options: ['a', 'b'],
+          allowOther: true,
+        },
+      },
+    }
+    log.mockClear()
+    question.mockResolvedValueOnce('custom choice')
+    await promptForGate(allowOtherSnap, control)
+    expect(log).toHaveBeenCalledWith('Options: a, b (or enter a custom answer)')
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'custom choice',
+    })
   }
   finally {
     log.mockRestore()
@@ -391,6 +415,19 @@ it('resolves user_question gates via Ink TTY prompter when stdin is a TTY', asyn
 
     promptTty.mockResolvedValueOnce('skip').mockResolvedValueOnce('')
     await promptForGate(snapshot('max_retries_exceeded'), control)
+    expect(promptTty).toHaveBeenCalledWith(
+      {
+        type: 'select',
+        prompt: 'Approve?',
+        options: [
+          { label: 'Retry', value: 'retry' },
+          { label: 'Pass', value: 'pass' },
+          { label: 'Skip', value: 'skip' },
+          { label: 'Abort', value: 'abort' },
+        ],
+      },
+      undefined,
+    )
     expect(control.resolveGate).toHaveBeenLastCalledWith({
       stepId: 'step-a',
       guardrailIndex: 1,

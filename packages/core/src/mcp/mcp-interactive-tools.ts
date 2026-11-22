@@ -47,6 +47,10 @@ export const MCP_INTERACTIVE_TOOLS_LIST = [
         max: { type: 'number', description: 'Optional maximum value (for "number").' },
         placeholder: { type: 'string', description: 'Optional placeholder text (for "text").' },
         default: { description: 'Optional default value matching the question type.' },
+        allowOther: {
+          type: 'boolean',
+          description: 'Allow the user to choose "Other" and type a custom answer (for "select", defaults to true). Set to false to restrict answers to the listed options.',
+        },
       },
       required: ['type', 'prompt'],
     },
@@ -137,10 +141,15 @@ function parseAskUserQuestion(args: Record<string, unknown> | undefined): Intera
       return `Invalid arguments: "${type}" requires a non-empty "options" array.`
     }
     if (type === 'select') {
+      if (args?.allowOther !== undefined && typeof args.allowOther !== 'boolean') {
+        return 'Invalid arguments: "allowOther" must be a boolean.'
+      }
+      const allowOther = args?.allowOther ?? true
       return {
         type: 'select',
         prompt,
         options,
+        allowOther,
         ...(typeof args?.default === 'string'
           ? { default: args.default }
           : {}),

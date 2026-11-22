@@ -67,6 +67,7 @@ const interactiveQuestionSchema = z.discriminatedUnion('type', [
     prompt: z.string(),
     options: z.array(interactiveSelectOptionSchema).min(1),
     default: z.string().optional(),
+    allowOther: z.boolean().optional(),
   }),
   z.object({
     type: z.literal('multi-select'),

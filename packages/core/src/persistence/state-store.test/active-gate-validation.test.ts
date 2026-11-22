@@ -71,6 +71,42 @@ describe('readRunState activeGate valid states', () => {
     expect(parsed.activeGate).toBeNull()
     expect(parsed.activeStepOutput).toEqual({ count: 42, summary: 'done' })
   })
+
+  it('preserves allowOther: true and allowOther: false on user_question select gates', () => {
+    for (const allowOther of [true, false]) {
+      const runDir = writeRawState(tempDir, {
+        schemaVersion: 1,
+        runId: `run-select-${String(allowOther)}`,
+        harnessName: 'test',
+        workflowName: 'test',
+        status: 'waiting_for_gate',
+        activeStepId: 'step-1',
+        activeGate: {
+          stepId: 'step-1',
+          phase: 'run',
+          guardrailIndex: 0,
+          gateType: 'user_question',
+          prompt: 'Pick one',
+          question: {
+            type: 'select',
+            prompt: 'Pick one',
+            options: ['a', 'b'],
+            allowOther,
+          },
+          createdAt: '2026-11-09T20:00:00.000Z',
+        },
+        steps: {},
+        updatedAt: '2026-11-09T20:00:00.000Z',
+      })
+      const parsed = readRunState(runDir)
+      expect(parsed.activeGate?.question).toEqual({
+        type: 'select',
+        prompt: 'Pick one',
+        options: ['a', 'b'],
+        allowOther,
+      })
+    }
+  })
 })
 
 describe('readRunState activeGate invalid states', () => {
@@ -106,6 +142,24 @@ describe('readRunState activeGate invalid states', () => {
         guardrailIndex: -1,
         gateType: 'human_review',
         prompt: 'test',
+        createdAt: '2026-11-09T20:00:00.000Z',
+      },
+    }))).toThrow(ZodError)
+
+    expect(() => readRunState(writeRawState(tempDir, {
+      ...base,
+      activeGate: {
+        stepId: 'step-1',
+        phase: 'run',
+        guardrailIndex: 0,
+        gateType: 'user_question',
+        prompt: 'Pick one',
+        question: {
+          type: 'select',
+          prompt: 'Pick one',
+          options: ['a', 'b'],
+          allowOther: 'yes',
+        },
         createdAt: '2026-11-09T20:00:00.000Z',
       },
     }))).toThrow(ZodError)

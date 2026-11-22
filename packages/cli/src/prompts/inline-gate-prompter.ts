@@ -114,7 +114,10 @@ async function resolveUserQuestionReadline(
 ): Promise<GateResolveParams> {
   if (question.type === 'select' || question.type === 'multi-select') {
     const opts = normalizeSelectOptions(question.options).map(opt => opt.value).join(', ')
-    console.log(`Options: ${opts}`)
+    const suffix = question.type === 'select' && question.allowOther === true
+      ? ' (or enter a custom answer)'
+      : ''
+    console.log(`Options: ${opts}${suffix}`)
   }
   while (true) {
     const raw = await rl.question('Answer: ', { signal })

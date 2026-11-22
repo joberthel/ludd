@@ -51,6 +51,12 @@ export function validateInteractiveAnswer(question: InteractiveQuestion, raw: un
   }
   const allowed = new Set(normalizeSelectOptions(question.options).map(opt => opt.value))
   if (question.type === 'select') {
+    if (question.allowOther === true) {
+      if (typeof raw !== 'string' || (!allowed.has(raw) && raw.trim() === '')) {
+        throw new Error('Expected a non-empty answer.')
+      }
+      return raw
+    }
     if (typeof raw !== 'string' || !allowed.has(raw)) {
       throw new Error(`Expected one of: ${[...allowed].join(', ')}.`)
     }

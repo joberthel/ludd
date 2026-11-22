@@ -1,4 +1,4 @@
-import type { InteractiveQuestion } from '@ludd/core'
+import type { InteractiveQuestion, InteractiveSelectQuestion } from '@ludd/core'
 import { ConfirmInput, MultiSelect, Select, StatusMessage } from '@inkjs/ui'
 import { normalizeSelectOptions, validateInteractiveAnswer } from '@ludd/core'
 import { Box, render, Text, useInput } from 'ink'
@@ -31,6 +31,7 @@ interface PromptTextInputProps {
   defaultValue?: string
   placeholder?: string
   isDisabled?: boolean
+  onEscape?: () => void
   onSubmit: (value: string) => void
 }
 
@@ -38,6 +39,7 @@ function PromptTextInput({
   defaultValue,
   placeholder,
   isDisabled = false,
+  onEscape,
   onSubmit,
 }: PromptTextInputProps) {
   const initialValue = defaultValue ?? ''
@@ -54,6 +56,11 @@ function PromptTextInput({
       || key.downArrow
       || key.tab
     ) {
+      return
+    }
+
+    if (key.escape) {
+      onEscape?.()
       return
     }
 
@@ -135,6 +142,88 @@ function PromptTextInput({
   )
 }
 
+function resolveOtherSentinel(options: ReadonlyArray<{ label: string, value: string }>): string {
+  const existing = new Set(options.map(opt => opt.value))
+  let candidate = '__ludd_other__'
+  let index = 1
+  while (existing.has(candidate)) {
+    candidate = `__ludd_other__${index}`
+    index += 1
+  }
+  return candidate
+}
+
+function SelectPromptControl({
+  question,
+  isDisabled,
+  onSubmit,
+  onError,
+}: {
+  question: InteractiveSelectQuestion
+  isDisabled: boolean
+  onSubmit: (answer: unknown) => void
+  onError: (message: string | undefined) => void
+}) {
+  const [isEnteringOther, setIsEnteringOther] = useState(false)
+  const options = normalizeSelectOptions(question.options)
+  const ordered = question.default !== undefined
+    ? [
+        ...options.filter(opt => opt.value === question.default),
+        ...options.filter(opt => opt.value !== question.default),
+      ]
+    : options
+  const otherSentinel = resolveOtherSentinel(ordered)
+
+  if (isEnteringOther) {
+    return (
+      <Box flexDirection="column">
+        <PromptTextInput
+          placeholder="Type your answer..."
+          isDisabled={isDisabled}
+          onEscape={() => {
+            onError(undefined)
+            setIsEnteringOther(false)
+          }}
+          onSubmit={(value) => {
+            const trimmed = value.trim()
+            try {
+              const validated = validateInteractiveAnswer(question, trimmed)
+              onError(undefined)
+              onSubmit(validated)
+            }
+            catch (err: unknown) {
+              onError((err as Error).message)
+            }
+          }}
+        />
+        <Text dimColor>Enter to submit, Esc to go back</Text>
+      </Box>
+    )
+  }
+
+  const selectOptions = question.allowOther === true
+    ? [
+        ...ordered,
+        { label: 'Other', value: otherSentinel },
+      ]
+    : ordered
+
+  return (
+    <Select
+      options={selectOptions}
+      isDisabled={isDisabled}
+      onChange={(value) => {
+        if (question.allowOther === true && value === otherSentinel) {
+          onError(undefined)
+          setIsEnteringOther(true)
+          return
+        }
+        onSubmit(value)
+      }}
+    />
+  )
+}
+
 function renderControl(
   question: InteractiveQuestion,
   isDisabled: boolean,
@@ -183,22 +272,17 @@ function renderControl(
       />
     )
   }
-  const options = normalizeSelectOptions(question.options)
   if (question.type === 'select') {
-    const ordered = question.default !== undefined
-      ? [
-          ...options.filter(opt => opt.value === question.default),
-          ...options.filter(opt => opt.value !== question.default),
-        ]
-      : options
     return (
-      <Select
-        options={ordered}
+      <SelectPromptControl
+        question={question}
         isDisabled={isDisabled}
-        onChange={value => onSubmit(value)}
+        onSubmit={onSubmit}
+        onError={onError}
       />
     )
   }
+  const options = normalizeSelectOptions(question.options)
   return (
     <MultiSelect
       options={options}

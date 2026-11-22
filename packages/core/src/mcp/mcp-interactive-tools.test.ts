@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ASK_USER_TOOL_NAME, executeAskUserToolCall } from './mcp-interactive-tools.js'
+import { ASK_USER_TOOL_NAME, executeAskUserToolCall, MCP_INTERACTIVE_TOOLS_LIST } from './mcp-interactive-tools.js'
 import { executeToolCall, handleToolsList } from './mcp-tools.js'
 
 describe('mcp interactive ask_user tool', () => {
@@ -9,6 +9,60 @@ describe('mcp interactive ask_user tool', () => {
 
     const withInteractive = handleToolsList(2, true) as { result: { tools: Array<{ name: string }> } }
     expect(withInteractive.result.tools.map(t => t.name)).toContain(ASK_USER_TOOL_NAME)
+    expect(MCP_INTERACTIVE_TOOLS_LIST[0]?.inputSchema.properties).toHaveProperty('allowOther')
+  })
+
+  it('defaults allowOther to true for select, honors explicit boolean, and rejects non-boolean allowOther', async () => {
+    const handler = vi.fn(async () => 'custom')
+
+    await executeAskUserToolCall({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+    }, handler)
+    expect(handler).toHaveBeenLastCalledWith({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: true,
+    })
+
+    await executeAskUserToolCall({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: false,
+    }, handler)
+    expect(handler).toHaveBeenLastCalledWith({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: false,
+    })
+
+    await executeAskUserToolCall({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: true,
+    }, handler)
+    expect(handler).toHaveBeenLastCalledWith({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: true,
+    })
+
+    handler.mockClear()
+    const invalid = await executeAskUserToolCall({
+      type: 'select',
+      prompt: 'Pick one',
+      options: ['a', 'b'],
+      allowOther: 'yes',
+    }, handler)
+    expect(invalid.isError).toBe(true)
+    expect(invalid.content[0]?.text).toContain('allowOther')
+    expect(handler).not.toHaveBeenCalled()
   })
 
   it('rejects calls when interactive mode is not enabled', async () => {

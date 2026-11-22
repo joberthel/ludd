@@ -82,6 +82,14 @@ describe('validateInteractiveAnswer', () => {
     }
     expect(validateInteractiveAnswer(sel, 'b')).toBe('b')
     expect(() => validateInteractiveAnswer(sel, 'z')).toThrow('Expected one of')
+    expect(() => validateInteractiveAnswer({ ...sel, allowOther: false }, 'z')).toThrow('Expected one of')
+
+    const selAllowOther = { ...sel, allowOther: true }
+    expect(validateInteractiveAnswer(selAllowOther, 'b')).toBe('b')
+    expect(validateInteractiveAnswer(selAllowOther, 'custom answer')).toBe('custom answer')
+    expect(() => validateInteractiveAnswer(selAllowOther, '')).toThrow('non-empty')
+    expect(() => validateInteractiveAnswer(selAllowOther, '   ')).toThrow('non-empty')
+    expect(() => validateInteractiveAnswer(selAllowOther, 123)).toThrow('non-empty')
 
     const multi = {
       type: 'multi-select' as const,

@@ -290,4 +290,69 @@ describe('questionModal', () => {
     expect(lines[promptIdx + 2]).toContain('yes')
     unmount()
   })
+
+  it('preserves Other text input mode and typed characters across Ctrl+B minimize/restore', async () => {
+    const onSubmit = vi.fn()
+    const prompt: ActiveTtyPrompt = {
+      question: {
+        type: 'select',
+        prompt: 'Choose strategy',
+        options: ['fast', 'safe'],
+        allowOther: true,
+      },
+      onSubmit,
+    }
+
+    const { lastFrame, stdin, unmount } = render(
+      <ModalHarness prompt={prompt} onSubmit={onSubmit} />,
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    // Navigate down to Other and press Enter
+    stdin.write('\x1B[B')
+    stdin.write('\x1B[B')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Type your answer...')
+    })
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    stdin.write('custom')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('custom')
+    })
+
+    // Minimize via Ctrl+B
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).not.toContain('Choose strategy')
+      expect(lastFrame()).toContain('OVERLAPPING_BACKGROUND_CONTENT')
+    })
+
+    // Keys while minimized must be ignored
+    stdin.write('ignored')
+    stdin.write('\x1B')
+    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    // Restore via Ctrl+B
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Choose strategy')
+      expect(lastFrame()).toContain('custom')
+      expect(lastFrame()).not.toContain('ignored')
+    })
+
+    stdin.write(' plan')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('custom plan')
+    })
+    stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith('custom plan')
+    })
+    unmount()
+  })
 })

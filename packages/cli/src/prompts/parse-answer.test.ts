@@ -30,6 +30,31 @@ describe('parseStringAnswer', () => {
       prompt: 'Q',
       options: ['a', 'b'],
     }, 'b')).toBe('b')
+    expect(() => parseStringAnswer({
+      type: 'select',
+      prompt: 'Q',
+      options: ['a', 'b'],
+      allowOther: false,
+    }, 'custom')).toThrow('Expected one of')
+    expect(parseStringAnswer({
+      type: 'select',
+      prompt: 'Q',
+      options: ['a', 'b'],
+      allowOther: true,
+    }, 'custom')).toBe('custom')
+    expect(parseStringAnswer({
+      type: 'select',
+      prompt: 'Q',
+      options: ['a', 'b'],
+      default: 'a',
+      allowOther: true,
+    }, '')).toBe('a')
+    expect(() => parseStringAnswer({
+      type: 'select',
+      prompt: 'Q',
+      options: ['a', 'b'],
+      allowOther: true,
+    }, '   ')).toThrow('non-empty')
 
     expect(parseStringAnswer({
       type: 'multi-select',

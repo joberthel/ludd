@@ -25,6 +25,7 @@ export interface InteractiveSelectQuestion<TOption extends InteractiveSelectOpti
   readonly prompt: string
   readonly options: readonly TOption[]
   readonly default?: string
+  readonly allowOther?: boolean
 }
 
 export interface InteractiveMultiSelectQuestion<TOption extends InteractiveSelectOption = InteractiveSelectOption> {
@@ -63,11 +64,13 @@ export type InferQuestionAnswer<TQuestion>
       ? number
       : TQuestion extends { readonly type: 'confirm' }
         ? boolean
-        : TQuestion extends { readonly type: 'select', readonly options: readonly (infer TOption)[] }
-          ? ExtractOptionValue<TOption>
-          : TQuestion extends { readonly type: 'multi-select', readonly options: readonly (infer TOption)[] }
-            ? ExtractOptionValue<TOption>[]
-            : unknown
+        : TQuestion extends { readonly type: 'select', readonly allowOther: true }
+          ? string
+          : TQuestion extends { readonly type: 'select', readonly options: readonly (infer TOption)[] }
+            ? ExtractOptionValue<TOption>
+            : TQuestion extends { readonly type: 'multi-select', readonly options: readonly (infer TOption)[] }
+              ? ExtractOptionValue<TOption>[]
+              : unknown
 
 export type InteractiveInitialQuestions<TContext extends StepContext<any, any, any, any> = StepContext>
   = | InteractiveQuestionMap
