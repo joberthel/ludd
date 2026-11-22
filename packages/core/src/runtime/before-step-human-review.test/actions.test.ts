@@ -78,20 +78,6 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-describe('executeHumanReviewBeforeStepGuardrail skip action', () => {
-  it('handles skip action with feedback', async () => {
-    const res = await runWithResolution(tempDir, 'skip', 'Skipped by reviewer')
-    expect(res.verdict.status).toBe('skip')
-    expect(res.verdict.body).toBe('Skipped by reviewer')
-  })
-
-  it('handles skip action without feedback', async () => {
-    const res = await runWithResolution(tempDir, 'skip')
-    expect(res.verdict.status).toBe('skip')
-    expect(res.verdict.body).toBe('')
-  })
-})
-
 describe('executeHumanReviewBeforeStepGuardrail fail action', () => {
   it('handles fail action with feedback', async () => {
     const res = await runWithResolution(tempDir, 'fail', 'Failed validation')
@@ -106,16 +92,13 @@ describe('executeHumanReviewBeforeStepGuardrail fail action', () => {
   })
 })
 
-describe('executeHumanReviewBeforeStepGuardrail abort action', () => {
-  it('throws an error when resolution action is abort with feedback', async () => {
-    await expect(
-      runWithResolution(tempDir, 'abort', 'Operator aborted'),
-    ).rejects.toThrow('Gate resolution aborted: Operator aborted')
-  })
-
-  it('throws an error when resolution action is abort without feedback', async () => {
-    await expect(
-      runWithResolution(tempDir, 'abort'),
-    ).rejects.toThrow('Gate resolution aborted')
-  })
+describe('executeHumanReviewBeforeStepGuardrail unsupported actions', () => {
+  it.each(['skip', 'abort', 'retry', 'answer'] as const)(
+    'throws on unsupported action "%s"',
+    async (action) => {
+      await expect(
+        runWithResolution(tempDir, action),
+      ).rejects.toThrow(`Unsupported human_review gate resolution action: ${action}`)
+    },
+  )
 })

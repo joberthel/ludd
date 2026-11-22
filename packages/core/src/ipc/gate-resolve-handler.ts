@@ -118,10 +118,10 @@ export function createGateResolveHandler(
     const snapshot = context.getSnapshot()
     const activeGate = verifyActiveGate(snapshot, params)
 
-    if (activeGate.gateType === 'human_review' && params.action === 'retry') {
+    if (activeGate.gateType === 'human_review' && params.action !== 'pass' && params.action !== 'fail') {
       throw new JsonRpcResponseError(
         JSON_RPC_INVALID_PARAMS,
-        'Invalid params: action "retry" is not supported for human_review gates',
+        `Invalid params: action "${params.action}" is not supported for human_review gates`,
       )
     }
     if (activeGate.gateType === 'user_question') {

@@ -27,17 +27,13 @@ async function resolveHumanReview(
   rl: ReturnType<typeof createInterface>,
   signal?: AbortSignal,
 ): Promise<GateResolveParams> {
-  const action = await promptAction<'pass' | 'fail' | 'skip' | 'abort'>(
-    'Action [p]ass / [f]ail / [s]kip / [a]bort (pass): ',
+  const action = await promptAction<'pass' | 'fail'>(
+    'Action [p]ass / [f]ail (pass): ',
     {
       p: 'pass',
       pass: 'pass',
       f: 'fail',
       fail: 'fail',
-      s: 'skip',
-      skip: 'skip',
-      a: 'abort',
-      abort: 'abort',
     },
     'pass',
     rl,
@@ -147,10 +143,8 @@ async function resolveHumanReviewTty(
     options: [
       { label: 'Pass', value: 'pass' },
       { label: 'Fail (requires feedback)', value: 'fail' },
-      { label: 'Skip', value: 'skip' },
-      { label: 'Abort', value: 'abort' },
     ],
-  }, signal) as 'pass' | 'fail' | 'skip' | 'abort'
+  }, signal) as 'pass' | 'fail'
   let feedback = ''
   if (action === 'fail') {
     while (!feedback.trim()) {

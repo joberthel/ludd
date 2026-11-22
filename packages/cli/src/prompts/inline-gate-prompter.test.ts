@@ -111,43 +111,23 @@ it('resolves a human review failure with feedback', async () => {
   })
 })
 
-it.each(['a', 'abort'])('resolves a human review abort action (%s)', async (action) => {
-  const control = client()
-  question.mockResolvedValueOnce(action)
-  await promptForGate(snapshot(), control)
-  expect(control.resolveGate).toHaveBeenCalledWith({
-    stepId: 'step-a',
-    guardrailIndex: 1,
-    action: 'abort',
-  })
-  expect(question).toHaveBeenCalledOnce()
-})
-
-it.each(['s', 'skip'])('resolves a human review skip action (%s)', async (action) => {
-  const control = client()
-  question.mockResolvedValueOnce(action)
-  await promptForGate(snapshot(), control)
-  expect(control.resolveGate).toHaveBeenCalledWith({
-    stepId: 'step-a',
-    guardrailIndex: 1,
-    action: 'skip',
-  })
-  expect(question).toHaveBeenCalledOnce()
-})
-
 it('re-prompts on unrecognized human review action until a valid option is entered', async () => {
   const control = client()
   question
-    .mockResolvedValueOnce('deny')
-    .mockResolvedValueOnce('r')
+    .mockResolvedValueOnce('s')
     .mockResolvedValueOnce('skip')
+    .mockResolvedValueOnce('a')
+    .mockResolvedValueOnce('abort')
+    .mockResolvedValueOnce('r')
+    .mockResolvedValueOnce('deny')
+    .mockResolvedValueOnce('pass')
   await promptForGate(snapshot(), control)
   expect(control.resolveGate).toHaveBeenCalledWith({
     stepId: 'step-a',
     guardrailIndex: 1,
-    action: 'skip',
+    action: 'pass',
   })
-  expect(question).toHaveBeenCalledTimes(3)
+  expect(question).toHaveBeenCalledTimes(7)
   expect(close).toHaveBeenCalledOnce()
 })
 
@@ -372,6 +352,17 @@ it('resolves user_question gates via Ink TTY prompter when stdin is a TTY', asyn
     // human_review in TTY: pass and fail (re-prompting on blank feedback)
     promptTty.mockResolvedValueOnce('pass')
     await promptForGate(snapshot('human_review'), control)
+    expect(promptTty).toHaveBeenCalledWith(
+      {
+        type: 'select',
+        prompt: 'Approve?',
+        options: [
+          { label: 'Pass', value: 'pass' },
+          { label: 'Fail (requires feedback)', value: 'fail' },
+        ],
+      },
+      undefined,
+    )
     expect(control.resolveGate).toHaveBeenLastCalledWith({
       stepId: 'step-a',
       guardrailIndex: 1,
