@@ -22,6 +22,9 @@ function ModalHarness({
   return (
     <Box position="relative" width={80} height={20} flexDirection="column">
       <Text>Background logs: build succeeded</Text>
+      <Box flexGrow={1} alignItems="center" justifyContent="center">
+        <Text>OVERLAPPING_BACKGROUND_CONTENT</Text>
+      </Box>
       <QuestionModal
         prompt={prompt}
         contextLabel="implement › afterStep"
@@ -52,6 +55,8 @@ describe('questionModal', () => {
     expect(lastFrame()).toContain('Input Required')
     expect(lastFrame()).toContain('implement › afterStep')
     expect(lastFrame()).toContain('Approve deployment?')
+    expect(lastFrame()).toContain('Background logs: build succeeded')
+    expect(lastFrame()).not.toContain('OVERLAPPING_BACKGROUND_CONTENT')
 
     await new Promise(resolve => setTimeout(resolve, 20))
     // Minimize via Ctrl+B (\x02)
@@ -59,12 +64,14 @@ describe('questionModal', () => {
     await vi.waitFor(() => {
       expect(lastFrame()).not.toContain('Approve deployment?')
       expect(lastFrame()).toContain('Background logs: build succeeded')
+      expect(lastFrame()).toContain('OVERLAPPING_BACKGROUND_CONTENT')
     })
 
     // Restore via Ctrl+B (\x02)
     stdin.write('\x02')
     await vi.waitFor(() => {
       expect(lastFrame()).toContain('Approve deployment?')
+      expect(lastFrame()).not.toContain('OVERLAPPING_BACKGROUND_CONTENT')
     })
 
     // Submit default answer

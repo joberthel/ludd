@@ -38,6 +38,8 @@ export function QuestionModal({
         width={modalWidth}
         borderStyle="double"
         borderColor="yellow"
+        backgroundColor="black"
+        borderBackgroundColor="black"
         paddingX={2}
         paddingY={1}
       >
