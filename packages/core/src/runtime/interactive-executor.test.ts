@@ -276,4 +276,144 @@ describe('interactive runtime execution', () => {
     expect(typeof registered[0]).toBe('function')
     expect(registered[1]).toBeUndefined()
   })
+
+  it('serializes concurrent ask_user calls in FIFO order without overwriting activeGate', async () => {
+    const runDir = makeRunDir()
+    const snapshot = makeSnapshot()
+    const gateWaiter = createGateWaiter()
+    const handler = createInteractiveQuestionHandler({
+      step: {
+        id: 'plan',
+        interactive: true,
+        run: () => 'ok',
+      },
+      snapshot,
+      runDir,
+      gateWaiter,
+    })!
+
+    const first = handler({
+      type: 'select',
+      prompt: 'First question?',
+      options: ['a', 'b'],
+    })
+    const second = handler({
+      type: 'select',
+      prompt: 'Second question?',
+      options: ['x', 'y'],
+    })
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    const firstPersisted = readRunState(runDir)
+    expect(firstPersisted.activeGate?.prompt).toBe('First question?')
+    expect(firstPersisted.activeGate?.guardrailIndex).toBe(0)
+    expect(readLedgerEvents(runDir).filter(e => e.eventType === 'gate.waiting')).toHaveLength(1)
+
+    gateWaiter.resolve({
+      stepId: 'plan',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'b',
+    })
+    expect(await first).toBe('b')
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    const secondPersisted = readRunState(runDir)
+    expect(secondPersisted.activeGate?.prompt).toBe('Second question?')
+    expect(secondPersisted.activeGate?.guardrailIndex).toBe(1)
+    expect(readLedgerEvents(runDir).filter(e => e.eventType === 'gate.waiting')).toHaveLength(2)
+
+    gateWaiter.resolve({
+      stepId: 'plan',
+      guardrailIndex: 1,
+      action: 'answer',
+      answer: 'x',
+    })
+    expect(await second).toBe('x')
+  })
+
+  it('recovers the ask_user queue after a rejected question and preserves maxQuestions budget', async () => {
+    const runDir = makeRunDir()
+    const snapshot = makeSnapshot()
+    const gateWaiter = createGateWaiter()
+    const handler = createInteractiveQuestionHandler({
+      step: {
+        id: 'plan',
+        interactive: { maxQuestions: 2 },
+        run: () => 'ok',
+      },
+      snapshot,
+      runDir,
+      gateWaiter,
+    })!
+
+    const first = handler({ type: 'text', prompt: 'Q1?' })
+    const second = handler({ type: 'text', prompt: 'Q2?' })
+    const third = handler({ type: 'text', prompt: 'Q3?' })
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    gateWaiter.resolve({ stepId: 'plan', guardrailIndex: 0, action: 'abort' })
+    await expect(first).rejects.toThrow('aborted by user')
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(readRunState(runDir).activeGate?.prompt).toBe('Q2?')
+    gateWaiter.resolve({
+      stepId: 'plan',
+      guardrailIndex: 1,
+      action: 'answer',
+      answer: 'second-answer',
+    })
+    expect(await second).toBe('second-answer')
+    await expect(third).rejects.toThrow('Question budget exhausted (2)')
+  })
+
+  it('rejects askInteractiveQuestion without mutating state when a gate is already waiting or aborted', async () => {
+    const runDir = makeRunDir()
+    const snapshot = makeSnapshot()
+    const gateWaiter = createGateWaiter()
+    const first = askInteractiveQuestion({
+      runDir,
+      snapshot,
+      stepId: 'step-1',
+      phase: 'run',
+      questionIndex: 0,
+      question: { type: 'text', prompt: 'Active?' },
+      gateWaiter,
+    })
+
+    await expect(askInteractiveQuestion({
+      runDir,
+      snapshot,
+      stepId: 'step-1',
+      phase: 'run',
+      questionIndex: 1,
+      question: { type: 'text', prompt: 'Collision?' },
+      gateWaiter,
+    })).rejects.toThrow('A gate is already waiting for resolution: step-1 (index 0)')
+    expect(readRunState(runDir).activeGate?.prompt).toBe('Active?')
+    expect(readLedgerEvents(runDir).filter(e => e.eventType === 'gate.waiting')).toHaveLength(1)
+
+    gateWaiter.resolve({
+      stepId: 'step-1',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'ok',
+    })
+    expect(await first).toBe('ok')
+
+    const controller = new AbortController()
+    controller.abort('run cancelled')
+    const abortedWaiter = createGateWaiter(controller.signal)
+    const abortedSnapshot = makeSnapshot()
+    await expect(askInteractiveQuestion({
+      runDir,
+      snapshot: abortedSnapshot,
+      stepId: 'step-1',
+      phase: 'run',
+      questionIndex: 2,
+      question: { type: 'text', prompt: 'After abort?' },
+      gateWaiter: abortedWaiter,
+    })).rejects.toThrow('run cancelled')
+    expect(abortedSnapshot.activeGate).toBeUndefined()
+  })
 })

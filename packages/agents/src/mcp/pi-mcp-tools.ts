@@ -1,4 +1,6 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
+import { Buffer } from 'node:buffer'
+import http from 'node:http'
 import { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST, MCP_TOOLS_LIST } from '@ludd/core'
 import { z } from 'zod'
 
@@ -32,32 +34,62 @@ function textResult(text: string): { content: Array<{ type: 'text', text: string
   }
 }
 
+async function postMcpRequest(
+  options: McpBridgeOptions,
+  payload: string,
+  signal: AbortSignal | undefined,
+): Promise<{ statusCode: number, body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      options.url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload, 'utf8'),
+          'Authorization': `Bearer ${options.authToken}`,
+        },
+        timeout: 0,
+        ...(signal === undefined
+          ? {}
+          : { signal }),
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (chunk: Buffer) => {
+          chunks.push(chunk)
+        })
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode!,
+            body: Buffer.concat(chunks).toString('utf8'),
+          })
+        })
+      },
+    )
+    req.setTimeout(0)
+    req.on('error', reject)
+    req.end(payload)
+  })
+}
+
 async function callMcpTool(
   options: McpBridgeOptions,
   name: string,
   args: unknown,
   signal: AbortSignal | undefined,
 ): Promise<string> {
-  const response = await fetch(options.url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${options.authToken}`,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-    ...(signal === undefined
-      ? {}
-      : { signal }),
+  const payload = JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name, arguments: args },
   })
-  if (!response.ok) {
-    throw new Error(`MCP request failed with HTTP ${response.status}`)
+  const response = await postMcpRequest(options, payload, signal)
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`MCP request failed with HTTP ${response.statusCode}`)
   }
-  const body = (await response.json()) as McpToolCallResponse
+  const body = JSON.parse(response.body) as McpToolCallResponse
   if (body.error !== undefined) {
     throw new Error(body.error.message ?? 'MCP request failed')
   }

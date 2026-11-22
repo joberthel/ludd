@@ -1,8 +1,10 @@
+import type { AddressInfo } from 'node:net'
 import { mkdtemp, rm } from 'node:fs/promises'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { startEmbeddedMcpServer } from '@ludd/core'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   BRIDGE_TOOL_NAMES,
@@ -80,41 +82,62 @@ describe('createMcpBridgeTools (real embedded server)', () => {
   })
 })
 
-describe('createMcpBridgeTools (stubbed fetch)', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
+describe('createMcpBridgeTools (custom HTTP server responses)', () => {
+  let server: http.Server
+  let url: string
+  let nextResponse: unknown = { result: {} }
+  let hangNext = false
+
+  beforeEach(async () => {
+    hangNext = false
+    server = http.createServer((_req, res) => {
+      if (hangNext) {
+        return
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(nextResponse))
+    })
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
+    const addr = server.address() as AddressInfo
+    url = `http://127.0.0.1:${addr.port}/mcp`
   })
 
-  function stub(body: unknown): void {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => body,
-    })))
-  }
+  afterEach(async () => {
+    server.closeAllConnections?.()
+    await new Promise<void>(resolve => server.close(() => resolve()))
+  })
 
   it('surfaces JSON-RPC errors with and without message', async () => {
-    const [tool] = createMcpBridgeTools({ url: 'http://x', authToken: 't' })
-    stub({
+    const [tool] = createMcpBridgeTools({ url, authToken: 't' })
+    nextResponse = {
       error: { message: 'boom' },
-    })
+    }
     await expect(exec(tool)('1', {})).rejects.toThrow('boom')
-    stub({ error: {} })
+    nextResponse = { error: {} }
     await expect(exec(tool)('1', {})).rejects.toThrow('MCP request failed')
   })
 
   it('tolerates results without content or text parts', async () => {
-    const [tool] = createMcpBridgeTools({ url: 'http://x', authToken: 't' })
-    stub({ result: {} })
+    const [tool] = createMcpBridgeTools({ url, authToken: 't' })
+    nextResponse = { result: {} }
     expect((await exec(tool)('1', {})).content[0]?.text).toBe('')
-    stub({
+    nextResponse = {
       result: {
         content: [
           { type: 'image' },
         ],
       },
-    })
+    }
     expect((await exec(tool)('1', {})).content[0]?.text).toBe('')
+  })
+
+  it('aborts an in-flight MCP request when AbortSignal fires', async () => {
+    const [tool] = createMcpBridgeTools({ url, authToken: 't' })
+    hangNext = true
+    const ac = new AbortController()
+    const pending = exec(tool)('1', {}, ac.signal)
+    ac.abort()
+    await expect(pending).rejects.toThrow(/abort/i)
   })
 })
 

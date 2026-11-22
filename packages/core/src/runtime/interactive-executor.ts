@@ -75,6 +75,12 @@ export interface AskInteractiveQuestionParams {
 }
 
 export async function askInteractiveQuestion(params: AskInteractiveQuestionParams): Promise<unknown> {
+  const existingGate = params.gateWaiter.getActiveGate()
+  if (existingGate !== null) {
+    throw new Error(
+      `A gate is already waiting for resolution: ${existingGate.stepId} (index ${existingGate.guardrailIndex})`,
+    )
+  }
   const gate: ActiveGateState = {
     stepId: params.stepId,
     ...(params.matrixIndex !== undefined
@@ -89,6 +95,9 @@ export async function askInteractiveQuestion(params: AskInteractiveQuestionParam
       ? { questionKey: params.questionKey }
       : {}),
     createdAt: new Date().toISOString(),
+  }
+  if (params.gateWaiter.signal?.aborted) {
+    await params.gateWaiter.waitForResolution(gate)
   }
   params.snapshot.status = 'waiting_for_gate'
   params.snapshot.activeGate = gate
@@ -181,26 +190,31 @@ export function createInteractiveQuestionHandler(params: {
     return undefined
   }
   let askedCount = 0
+  let queue: Promise<void> = Promise.resolve()
   return async (question: InteractiveQuestion): Promise<unknown> => {
-    if (config.maxQuestions !== undefined && askedCount >= config.maxQuestions) {
-      throw new Error(
-        `Question budget exhausted (${config.maxQuestions}). Proceed using your best judgment without asking further questions.`,
-      )
-    }
-    if (!params.gateWaiter) {
-      throw new Error(`Step "${params.step.id}" cannot ask user questions without an active gate waiter.`)
-    }
-    const index = askedCount
-    askedCount += 1
-    return askInteractiveQuestion({
-      runDir: params.runDir,
-      snapshot: params.snapshot,
-      stepId: params.step.id,
-      matrixIndex: params.matrixIndex,
-      phase: 'run',
-      questionIndex: index,
-      question,
-      gateWaiter: params.gateWaiter,
+    const run = queue.then(async () => {
+      if (config.maxQuestions !== undefined && askedCount >= config.maxQuestions) {
+        throw new Error(
+          `Question budget exhausted (${config.maxQuestions}). Proceed using your best judgment without asking further questions.`,
+        )
+      }
+      if (!params.gateWaiter) {
+        throw new Error(`Step "${params.step.id}" cannot ask user questions without an active gate waiter.`)
+      }
+      const index = askedCount
+      askedCount += 1
+      return askInteractiveQuestion({
+        runDir: params.runDir,
+        snapshot: params.snapshot,
+        stepId: params.step.id,
+        matrixIndex: params.matrixIndex,
+        phase: 'run',
+        questionIndex: index,
+        question,
+        gateWaiter: params.gateWaiter,
+      })
     })
+    queue = run.then(() => undefined, () => undefined)
+    return run
   }
 }
