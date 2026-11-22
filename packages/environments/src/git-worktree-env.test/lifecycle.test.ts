@@ -58,6 +58,20 @@ describe('gitWorktreeEnv ping health checks', () => {
 
     expect(await env.ping()).toBe(true)
     await env.teardown()
+    const branches = cp.execSync('git branch --list', { cwd: tmpDir }).toString()
+    expect(branches).not.toContain(env.branchName!)
+  })
+
+  it('preserves the worktree branch on teardown when it still has unmerged commits', async () => {
+    const adapter = gitWorktreeEnv({ id: 'unmerged-env' })
+    const env = await adapter.provision({ runId: 'r-unmerged', workspaceDir: tmpDir })
+    fs.writeFileSync(path.join(env.workingDir, 'unmerged.txt'), 'keep me')
+    cp.execSync('git add -A && git commit -m "wip"', { cwd: env.workingDir })
+
+    await env.teardown()
+    expect(fs.existsSync(env.workingDir)).toBe(false)
+    const branches = cp.execSync('git branch --list', { cwd: tmpDir }).toString()
+    expect(branches).toContain(env.branchName!)
   })
 
   it('returns false when worktree directory is deleted', async () => {

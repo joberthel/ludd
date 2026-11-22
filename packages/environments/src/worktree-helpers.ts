@@ -33,6 +33,7 @@ export async function removeGitWorktree(
   workspaceDir: string,
   worktreePath: string,
   signal?: AbortSignal,
+  branchName?: string,
 ): Promise<void> {
   try {
     await execHostEnvCommand(
@@ -52,6 +53,13 @@ export async function removeGitWorktree(
   }
   if (fs.existsSync(worktreePath)) {
     fs.rmSync(worktreePath, { recursive: true, force: true })
+  }
+  if (branchName !== undefined && branchName !== '') {
+    await execHostEnvCommand(
+      workspaceDir,
+      ['git', 'branch', '-d', branchName],
+      { signal },
+    )
   }
 }
 

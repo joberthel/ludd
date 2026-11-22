@@ -101,7 +101,7 @@ function createProvisionedWorktree(
       })
     },
     ping: async (): Promise<boolean> => pingGitWorktree(env.workingDir, defaultSignal),
-    teardown: async (): Promise<void> => removeGitWorktree(workspaceDir, env.workingDir, defaultSignal),
+    teardown: async (): Promise<void> => removeGitWorktree(workspaceDir, env.workingDir, defaultSignal, env.branchName),
   }
   return env
 }
