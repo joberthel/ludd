@@ -5,6 +5,11 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { QuestionModal } from './question-modal.js'
 
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1B\[[0-9;]*m/g, '')
+}
+
 function ModalHarness({
   prompt,
   onSubmit,
@@ -259,5 +264,30 @@ describe('questionModal', () => {
       expect(num.lastFrame()).toContain('9')
     })
     num.unmount()
+  })
+
+  it('renders a blank interior row between the question prompt and the answer input while occluding background content', () => {
+    const prompt: ActiveTtyPrompt = {
+      question: {
+        type: 'text',
+        prompt: 'Approve deployment?',
+        default: 'yes',
+      },
+      onSubmit: vi.fn(),
+    }
+
+    const { lastFrame, unmount } = render(
+      <ModalHarness prompt={prompt} onSubmit={vi.fn()} />,
+    )
+
+    const frame = stripAnsi(lastFrame() ?? '')
+    expect(frame).not.toContain('OVERLAPPING_BACKGROUND_CONTENT')
+
+    const lines = frame.split('\n')
+    const promptIdx = lines.findIndex(line => line.includes('Approve deployment?'))
+    expect(promptIdx).toBeGreaterThanOrEqual(0)
+    expect(lines[promptIdx + 1]?.trim()).toMatch(/^║\s+║$/)
+    expect(lines[promptIdx + 2]).toContain('yes')
+    unmount()
   })
 })

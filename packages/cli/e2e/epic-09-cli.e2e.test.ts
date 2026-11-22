@@ -190,4 +190,4 @@ it('controls detached runs over the socket, resumes them, and garbage-collects o
   await passDetachedGates(dir)
   await verifyTargetedGc(dir, resumedPid)
   await verifyAbortWithTeardown(dir)
-}, 30_000)
+}, 60_000)

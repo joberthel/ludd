@@ -2,6 +2,11 @@ import { render } from 'ink-testing-library'
 import { describe, expect, it, vi } from 'vitest'
 import { InteractiveQuestionPrompt, promptInteractiveQuestionInTty } from './interactive-question-prompt.js'
 
+function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(/\x1B\[[0-9;]*m/g, '')
+}
+
 describe('interactiveQuestionPrompt', () => {
   it('renders and submits text, number (with validation), confirm, select, and multi-select controls', async () => {
     const onText = vi.fn()
@@ -242,5 +247,41 @@ describe('interactiveQuestionPrompt', () => {
     activeNumber.stdin.write('\r')
     await vi.waitFor(() => expect(onNumberActive).toHaveBeenCalledWith(42))
     activeNumber.unmount()
+  })
+
+  it('renders a single empty line between the question prompt and the answer control', () => {
+    const text = render(
+      <InteractiveQuestionPrompt
+        question={{
+          type: 'text',
+          prompt: 'Your name?',
+          default: 'Ada',
+        }}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const textLines = stripAnsi(text.lastFrame() ?? '').split('\n')
+    const textPromptIdx = textLines.findIndex(line => line.includes('Your name?'))
+    expect(textPromptIdx).toBeGreaterThanOrEqual(0)
+    expect(textLines[textPromptIdx + 1]?.trim()).toBe('')
+    expect(textLines[textPromptIdx + 2]).toContain('Ada')
+    text.unmount()
+
+    const select = render(
+      <InteractiveQuestionPrompt
+        question={{
+          type: 'select',
+          prompt: 'Choose one',
+          options: ['alpha', 'beta'],
+        }}
+        onSubmit={vi.fn()}
+      />,
+    )
+    const selectLines = stripAnsi(select.lastFrame() ?? '').split('\n')
+    const selectPromptIdx = selectLines.findIndex(line => line.includes('Choose one'))
+    expect(selectPromptIdx).toBeGreaterThanOrEqual(0)
+    expect(selectLines[selectPromptIdx + 1]?.trim()).toBe('')
+    expect(selectLines[selectPromptIdx + 2]).toContain('alpha')
+    select.unmount()
   })
 })

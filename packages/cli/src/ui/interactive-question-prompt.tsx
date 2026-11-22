@@ -220,7 +220,9 @@ export function InteractiveQuestionPrompt({
 
   return (
     <Box flexDirection="column" marginY={1}>
-      <Text bold color="cyan">{question.prompt}</Text>
+      <Box marginBottom={1}>
+        <Text bold color="cyan">{question.prompt}</Text>
+      </Box>
       {renderControl(question, isDisabled, onSubmit, setError)}
       {error !== undefined
         ? <StatusMessage variant="error">{error}</StatusMessage>
