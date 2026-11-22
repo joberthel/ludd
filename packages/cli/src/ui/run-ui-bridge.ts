@@ -27,12 +27,13 @@ export interface BlueprintStep {
 
 export interface HarnessBlueprint {
   harnessName: string
+  runId?: string
   steps: readonly BlueprintStep[]
 }
 
 export type RunUiEntryPayload
-  = | { kind: 'run.started', harnessName: string }
-    | { kind: 'run.resumed', harnessName?: string }
+  = | { kind: 'run.started', harnessName: string, runId?: string }
+    | { kind: 'run.resumed', harnessName?: string, runId?: string }
     | { kind: 'run.passed' }
     | { kind: 'run.failed', error?: string }
     | { kind: 'step.started', stepId: string }
@@ -66,9 +67,12 @@ export interface RunUiHost {
   setGateWaiting?: (waiting: boolean, scope?: UiLogScope) => void
 }
 
-export function toHarnessBlueprint(config: HarnessConfig): HarnessBlueprint {
+export function toHarnessBlueprint(config: HarnessConfig, runId?: string): HarnessBlueprint {
   return {
     harnessName: config.name,
+    ...(runId !== undefined
+      ? { runId }
+      : {}),
     steps: config.steps.map((step) => {
       let beforeStep: BlueprintGuardrail[] | undefined
       if (Array.isArray(step.beforeStep)) {

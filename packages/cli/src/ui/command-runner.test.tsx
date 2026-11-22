@@ -177,6 +177,7 @@ it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, a
 
     getRunUiHost()!.setBlueprint?.({
       harnessName: 'dash-demo',
+      runId: 'run-dash-123',
       steps: [
         { id: 'triage', hasMatrix: false },
         { id: 'implement', hasMatrix: true },
@@ -201,6 +202,7 @@ it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, a
     await vi.waitFor(() => {
       const frame = lastFrame()!
       expect(frame).toContain('◆ dash-demo')
+      expect(frame).toContain('run-dash-123')
       expect(frame).toContain('Steps')
       expect(frame).toContain('Inspecting repo')
     })
@@ -208,7 +210,6 @@ it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, a
     finish(0)
     await vi.waitFor(() => {
       expect(process.exitCode).toBe(0)
-      expect(lastFrame()).toContain('Press q or Esc to exit')
       expect(lastFrame()).toContain('q/Esc: exit')
     })
     expect(writeSpy).not.toHaveBeenCalledWith('\x1B[?1049l')
@@ -300,6 +301,7 @@ it('handles hydrateSnapshot, guardrails, gates, prompts, and failed summary in d
       expect(process.exitCode).toBe(1)
       const frame = lastFrame()!
       expect(frame).toContain('◆ resume-demo [failed]')
+      expect(frame).toContain('r1')
       expect(frame).toContain('✖ run exploded')
       expect(frame).toContain('q/Esc: exit')
     })

@@ -187,9 +187,14 @@ describe('runDashboard', () => {
     unmount()
   })
 
-  it('renders passed, failed, waiting_for_gate, error footer, activity, and handles resize', async () => {
+  it('renders passed, failed, waiting_for_gate, error footer, runId, and handles resize', async () => {
     const base = createInitialRunTreeState('demo')
-    const passedState = { ...base, runStatus: 'passed' as const, activity: 'finishing...' }
+    const passedState = {
+      ...base,
+      runId: 'run-uuid-9999',
+      runStatus: 'passed' as const,
+      activity: 'finishing...',
+    }
     const { lastFrame, rerender, unmount } = render(
       <RunDashboard
         state={passedState}
@@ -200,11 +205,12 @@ describe('runDashboard', () => {
       />,
     )
     expect(lastFrame()).toContain('[passed]')
-    expect(lastFrame()).toContain('finishing...')
+    expect(lastFrame()).toContain('run-uuid-9999')
+    expect(lastFrame()).not.toContain('finishing...')
 
     rerender(
       <RunDashboard
-        state={{ ...base, runStatus: 'waiting_for_gate' }}
+        state={{ ...base, runId: 'run-uuid-9999', runStatus: 'waiting_for_gate' }}
         dispatch={vi.fn()}
         status="running"
         onPromptSubmit={vi.fn()}
@@ -212,10 +218,11 @@ describe('runDashboard', () => {
       />,
     )
     expect(lastFrame()).toContain('[waiting for gate]')
+    expect(lastFrame()).toContain('run-uuid-9999')
 
     rerender(
       <RunDashboard
-        state={{ ...base, runStatus: 'failed' }}
+        state={{ ...base, runId: 'run-uuid-9999', runStatus: 'failed' }}
         dispatch={vi.fn()}
         status="error"
         errorMessage="step crashed"
@@ -224,7 +231,20 @@ describe('runDashboard', () => {
       />,
     )
     expect(lastFrame()).toContain('[failed]')
+    expect(lastFrame()).toContain('run-uuid-9999')
     expect(lastFrame()).toContain('✖ step crashed')
+
+    // When runId is undefined, right side of header renders nothing
+    rerender(
+      <RunDashboard
+        state={{ ...base, runStatus: 'running' }}
+        dispatch={vi.fn()}
+        status="running"
+        onPromptSubmit={vi.fn()}
+        useAltScreen={false}
+      />,
+    )
+    expect(lastFrame()).not.toContain('run-uuid-9999')
 
     process.stdout.emit('resize')
     unmount()
@@ -350,7 +370,6 @@ describe('runDashboard', () => {
     const done = render(<InteractiveFinishedHarness status="done" />)
     await vi.waitFor(() => {
       const frame = done.lastFrame()!
-      expect(frame).toContain('Press q or Esc to exit')
       expect(frame).toContain('q/Esc: exit')
     })
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -370,7 +389,6 @@ describe('runDashboard', () => {
       const frame = errored.lastFrame()!
       expect(frame).toContain('✖ step crashed')
       expect(frame).toContain('q/Esc: exit')
-      expect(frame).toContain('Press q or Esc to exit')
     })
     await new Promise(resolve => setTimeout(resolve, 20))
     errored.stdin.write('\x1B')

@@ -31,7 +31,7 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
     return spawnDetachedRunner({ configPath: absoluteConfig, runId: id, workspaceDir })
   }
   if (!options.worker && !options.stream) {
-    getRunUiHost()?.setBlueprint?.(toHarnessBlueprint(config))
+    getRunUiHost()?.setBlueprint?.(toHarnessBlueprint(config, id))
   }
   const runDir = resolveRunDir(workspaceDir, id)
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)

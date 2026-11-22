@@ -34,9 +34,11 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
     fs.writeFileSync(path.join(dir, 'ledger.jsonl'), [
       JSON.stringify({
         eventType: 'run.started',
+        runId: 'run-abc',
         payload: { harnessName: 'demo' },
       }),
-      JSON.stringify({ eventType: 'run.resumed', payload: {} }),
+      JSON.stringify({ eventType: 'run.resumed', runId: 'run-def', payload: {} }),
+      JSON.stringify({ eventType: 'run.resumed', runId: '   ', payload: {} }),
       JSON.stringify({ eventType: 'step.started', stepId: 's1' }),
       JSON.stringify({
         eventType: 'agent.stream.linked',
@@ -178,8 +180,9 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
     tailer.stop()
 
     expect(entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'run.started', harnessName: 'demo' }),
+      expect.objectContaining({ kind: 'run.started', harnessName: 'demo', runId: 'run-abc' }),
       expect.objectContaining({ kind: 'run.started', harnessName: 'ludd' }),
+      expect.objectContaining({ kind: 'run.resumed', harnessName: undefined, runId: 'run-def' }),
       expect.objectContaining({ kind: 'run.resumed', harnessName: undefined }),
       expect.objectContaining({
         kind: 'step.started',

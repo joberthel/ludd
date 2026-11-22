@@ -48,7 +48,7 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   }
   if (!options.worker && !options.stream) {
     const uiHost = getRunUiHost()
-    uiHost?.setBlueprint?.(toHarnessBlueprint(config))
+    uiHost?.setBlueprint?.(toHarnessBlueprint(config, options.runId))
     uiHost?.hydrateSnapshot?.(state)
   }
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
