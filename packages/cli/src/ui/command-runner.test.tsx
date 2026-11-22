@@ -3,6 +3,7 @@ import { render } from 'ink-testing-library'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CommandRunner } from './command-runner.js'
 import { promptInteractiveQuestionInTty, registerTtyPromptHost } from './interactive-question-prompt.js'
+import { getRunUiHost } from './run-ui-bridge.js'
 
 const originalExitCode = process.exitCode
 
@@ -124,4 +125,33 @@ it('hosts interactive TTY prompts inside the existing Ink tree and preserves ans
   const unregisterSecond = registerTtyPromptHost(() => {})
   unmount()
   unregisterSecond()
+})
+
+it('registers RunUiHost in TTY mode and renders pushed entries and live activity', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  try {
+    let finish!: (code: number) => void
+    const execute = vi.fn(async () => new Promise<number>((resolve) => {
+      finish = resolve
+    }))
+    const { lastFrame, unmount } = render(<CommandRunner execute={execute} />)
+    await vi.waitFor(() => expect(getRunUiHost()).toBeDefined())
+    getRunUiHost()!.pushEntry({ kind: 'step.started', stepId: 'build' })
+    getRunUiHost()!.setActivity('build · thinking...')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('▸ build')
+      expect(lastFrame()).toContain('build · thinking...')
+    })
+    finish(0)
+    await vi.waitFor(() => expect(process.exitCode).toBe(0))
+    unmount()
+    expect(getRunUiHost()).toBeUndefined()
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
 })
