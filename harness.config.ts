@@ -49,6 +49,7 @@ export default createHarness('ludd-dev', {
     }),
     afterStep: ctx => [
       humanReviewGuardrail({
+        name: 'Plan Review',
         prompt: [
           `Plan summary: ${ctx.step.output.summary}`,
           `Files: ${ctx.step.output.filesToTouch.join(', ') || '(none)'}`,
@@ -63,6 +64,7 @@ export default createHarness('ludd-dev', {
     environment: devWorktree,
     beforeStep: [
       execGuardrail({
+        name: 'Install Dependencies',
         command: 'pnpm install --frozen-lockfile',
       }),
     ],
@@ -80,21 +82,27 @@ export default createHarness('ludd-dev', {
     }),
     afterStep: ctx => [
       execGuardrail({
+        name: 'Build & Typecheck',
         command: 'pnpm build',
       }),
       execGuardrail({
+        name: 'Lint',
         command: 'pnpm lint',
       }),
       execGuardrail({
+        name: 'Test & Coverage',
         command: 'pnpm test:coverage',
       }),
       execGuardrail({
+        name: 'Commitlint',
         command: sh`printf '%s\n' ${ctx.step.output.commitMessage} | pnpm run commitlint`,
       }),
       execGuardrail({
+        name: 'Pinact Check',
         command: 'pinact run --check',
       }),
       agentGuardrail({
+        name: 'Code Review',
         mode: 'read-only',
         agent: piAgent({
           mode: 'read-only',
@@ -109,6 +117,7 @@ export default createHarness('ludd-dev', {
         ].join('\n'),
       }),
       humanReviewGuardrail({
+        name: 'Human Sign-off',
         prompt: [
           `Implementation summary: ${ctx.step.output.summary}`,
           `Worktree: ${ctx.environments['dev-worktree']?.workingDir ?? 'n/a'}`,
@@ -117,6 +126,7 @@ export default createHarness('ludd-dev', {
         ].join('\n'),
       }),
       execGuardrail({
+        name: 'Commit Changes',
         command: sh`git add -A && git commit -m ${ctx.step.output.commitMessage}`,
         maxRetries: 0,
       }),
