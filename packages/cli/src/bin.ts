@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -30,8 +31,17 @@ export async function runCli(argv = process.argv): Promise<void> {
   }
 }
 
+function resolveRealPath(target: string): string {
+  try {
+    return fs.realpathSync(target)
+  }
+  catch {
+    return path.resolve(target)
+  }
+}
+
 export async function bootstrapCli(entrypoint = process.argv[1]): Promise<void> {
-  if (entrypoint && path.resolve(entrypoint) === fileURLToPath(import.meta.url))
+  if (entrypoint && resolveRealPath(entrypoint) === resolveRealPath(fileURLToPath(import.meta.url)))
     await runCli()
 }
 

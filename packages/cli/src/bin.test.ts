@@ -100,3 +100,21 @@ it('only bootstraps when invoked through the CLI entrypoint', async () => {
   await bootstrapCli(path.resolve('packages/cli/src/bin.ts'))
   expect(mocks.pastelRun).toHaveBeenCalledOnce()
 })
+
+it('runs when invoked through a symlink pointing to the bin entrypoint', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ludd-bin-test-'))
+  try {
+    const symlinkPath = path.join(dir, 'ludd')
+    fs.symlinkSync(path.resolve('packages/cli/src/bin.ts'), symlinkPath)
+    args('status')
+    await bootstrapCli(symlinkPath)
+    expect(mocks.pastelRun).toHaveBeenCalledOnce()
+  }
+  finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+it('does not run and falls back cleanly for a non-existent entrypoint path', async () => {
+  args('status')
+  await bootstrapCli('/non-existent/path/to/ludd')
+  expect(mocks.pastelRun).not.toHaveBeenCalled()
+})
