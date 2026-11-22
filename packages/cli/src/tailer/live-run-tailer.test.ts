@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { afterEach, expect, it, vi } from 'vitest'
 import { LiveRunTailer } from './live-run-tailer.js'
 
@@ -189,5 +190,116 @@ it('prints error details from ledger failure events', async () => {
     ['[run.failed]: Provider rejected model'],
     ['[step.failed] blank'],
   ])
+  log.mockRestore()
+})
+
+it('streams formatted agent text, tool calls, and structured output by default', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const streams = path.join(dir, 'streams')
+  fs.mkdirSync(streams)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+  fs.writeFileSync(path.join(dir, 'ledger.jsonl'), `${JSON.stringify({
+    eventType: 'agent.stream.linked',
+    stepId: 'step',
+    payload: { sessionId: 'sess-1' },
+  })}\n`)
+  fs.writeFileSync(path.join(streams, 'sess-1.jsonl'), [
+    '{bad json',
+    JSON.stringify({
+      eventType: 'turn.started',
+      stepId: 'step',
+      payload: { prompt: 'hi' },
+    }),
+    JSON.stringify({ eventType: 'thought' }),
+    JSON.stringify({
+      eventType: 'thought',
+      stepId: 'step',
+      payload: { text: 'internal' },
+    }),
+    JSON.stringify({
+      eventType: 'tool_call',
+      stepId: 'step',
+      payload: {
+        phase: 'start',
+        toolName: 'submit_step_output',
+        args: { guess: 3 },
+      },
+    }),
+    JSON.stringify({
+      eventType: 'tool_call',
+      stepId: 'step',
+      payload: { phase: 'start' },
+    }),
+    JSON.stringify({
+      eventType: 'tool_call',
+      stepId: 'step',
+      payload: { phase: 'end', toolName: 'submit_step_output', isError: false },
+    }),
+    JSON.stringify({
+      eventType: 'tool_call',
+      stepId: 'step',
+      payload: { phase: 'end', toolName: 'read_log_page', isError: true },
+    }),
+    JSON.stringify({
+      eventType: 'message_chunk',
+      stepId: 'step',
+      payload: { text: '' },
+    }),
+    JSON.stringify({
+      eventType: 'message_chunk',
+      stepId: 'step',
+      payload: { text: 'Hello ' },
+    }),
+    JSON.stringify({
+      eventType: 'message_chunk',
+      stepId: 'step',
+      payload: { text: 'world' },
+    }),
+    JSON.stringify({
+      eventType: 'turn.completed',
+      stepId: 'step',
+      payload: {
+        output: { guess: 3 },
+      },
+    }),
+    JSON.stringify({
+      eventType: 'turn.completed',
+      stepId: 'step',
+      payload: { output: 'Hello world' },
+    }),
+    JSON.stringify({
+      eventType: 'turn.started',
+      stepId: 'step',
+      payload: { prompt: 'next' },
+    }),
+    JSON.stringify({
+      eventType: 'turn.completed',
+      payload: { output: 'plain output' },
+    }),
+    '',
+  ].join('\n'))
+
+  const tailer = new LiveRunTailer(dir, false)
+  tailer.start()
+  await vi.advanceTimersByTimeAsync(100)
+  tailer.stop()
+
+  expect(write.mock.calls).toEqual([
+    ['Hello '],
+    ['world'],
+    ['\n'],
+  ])
+  expect(log.mock.calls).toEqual([
+    ['[agent.stream.linked] step'],
+    ['[tool] submit_step_output {"guess":3}'],
+    ['[tool] tool'],
+    ['[tool.error] read_log_page'],
+    ['[agent.output] step: {"guess":3}'],
+    ['[agent.output]: plain output'],
+  ])
+  write.mockRestore()
   log.mockRestore()
 })
