@@ -2,6 +2,11 @@
   "name": "@luddjs/agents",
   "type": "module",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joberthel/ludd.git",
+    "directory": "packages/agents"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

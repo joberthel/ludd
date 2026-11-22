@@ -2,6 +2,11 @@
   "name": "@luddjs/environments",
   "type": "module",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joberthel/ludd.git",
+    "directory": "packages/environments"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
