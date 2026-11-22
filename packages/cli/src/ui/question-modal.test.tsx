@@ -95,4 +95,169 @@ describe('questionModal', () => {
     expect(bare.lastFrame()).toContain('Input Required')
     bare.unmount()
   })
+
+  it('preserves partial text input across Ctrl+B minimize/restore without inserting b or accepting background keys', async () => {
+    const onSubmit = vi.fn()
+    const prompt: ActiveTtyPrompt = {
+      question: {
+        type: 'text',
+        prompt: 'Release notes?',
+        placeholder: 'Enter notes',
+      },
+      onSubmit,
+    }
+
+    const { lastFrame, stdin, unmount } = render(
+      <ModalHarness prompt={prompt} onSubmit={onSubmit} />,
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    stdin.write('hello')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('hello')
+    })
+
+    // Minimize via Ctrl+B (\x02)
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).not.toContain('Release notes?')
+      expect(lastFrame()).toContain('OVERLAPPING_BACKGROUND_CONTENT')
+    })
+
+    // Keys sent while minimized must not mutate input or submit
+    stdin.write('xyz')
+    stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    // Restore via Ctrl+B (\x02)
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Release notes?')
+      expect(lastFrame()).toContain('hello')
+      expect(lastFrame()).not.toContain('hellob')
+      expect(lastFrame()).not.toContain('xyz')
+    })
+
+    stdin.write(' world')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('hello world')
+    })
+
+    stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith('hello world')
+    })
+    unmount()
+  })
+
+  it('preserves select, multi-select, and number validation error state across Ctrl+B minimize/restore', async () => {
+    // Select state preserved
+    const onSelect = vi.fn()
+    const selectPrompt: ActiveTtyPrompt = {
+      question: {
+        type: 'select',
+        prompt: 'Pick environment',
+        options: ['dev', 'staging', 'prod'],
+      },
+      onSubmit: onSelect,
+    }
+
+    const sel = render(<ModalHarness prompt={selectPrompt} onSubmit={onSelect} />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    // Down arrow (\x1B[B) moves selection from dev -> staging
+    sel.stdin.write('\x1B[B')
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    sel.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(sel.lastFrame()).not.toContain('Pick environment')
+    })
+    sel.stdin.write('\x1B[B')
+    sel.stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onSelect).not.toHaveBeenCalled()
+
+    sel.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(sel.lastFrame()).toContain('Pick environment')
+    })
+    sel.stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(onSelect).toHaveBeenCalledWith('staging')
+    })
+    sel.unmount()
+
+    // Multi-select state preserved
+    const onMulti = vi.fn()
+    const multiPrompt: ActiveTtyPrompt = {
+      question: {
+        type: 'multi-select',
+        prompt: 'Pick targets',
+        options: ['web', 'api'],
+      },
+      onSubmit: onMulti,
+    }
+
+    const multi = render(<ModalHarness prompt={multiPrompt} onSubmit={onMulti} />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    // Space toggles 'web'
+    multi.stdin.write(' ')
+    await new Promise(resolve => setTimeout(resolve, 20))
+
+    multi.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(multi.lastFrame()).not.toContain('Pick targets')
+    })
+    multi.stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onMulti).not.toHaveBeenCalled()
+
+    multi.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(multi.lastFrame()).toContain('Pick targets')
+    })
+    multi.stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(onMulti).toHaveBeenCalledWith(['web'])
+    })
+    multi.unmount()
+
+    // Number validation error state preserved
+    const onNumber = vi.fn()
+    const numberPrompt: ActiveTtyPrompt = {
+      question: {
+        type: 'number',
+        prompt: 'Pick 1..5',
+        min: 1,
+        max: 5,
+      },
+      onSubmit: onNumber,
+    }
+
+    const num = render(<ModalHarness prompt={numberPrompt} onSubmit={onNumber} />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    num.stdin.write('9')
+    await vi.waitFor(() => {
+      expect(num.lastFrame()).toContain('9')
+    })
+    num.stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(num.lastFrame()).toContain('at most 5')
+    })
+    expect(onNumber).not.toHaveBeenCalled()
+
+    num.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(num.lastFrame()).not.toContain('Pick 1..5')
+    })
+
+    num.stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(num.lastFrame()).toContain('Pick 1..5')
+      expect(num.lastFrame()).toContain('at most 5')
+      expect(num.lastFrame()).toContain('9')
+    })
+    num.unmount()
+  })
 })

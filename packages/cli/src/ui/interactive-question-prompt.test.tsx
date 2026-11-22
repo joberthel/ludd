@@ -160,4 +160,87 @@ describe('interactiveQuestionPrompt', () => {
     liveController.abort()
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
   })
+
+  it('ignores keystrokes when isDisabled is true and ignores Ctrl+B in text and number inputs', async () => {
+    const onText = vi.fn()
+    const disabledText = render(
+      <InteractiveQuestionPrompt
+        question={{ type: 'text', prompt: 'Disabled?', default: 'keep' }}
+        isDisabled={true}
+        onSubmit={onText}
+      />,
+    )
+    await new Promise(resolve => setTimeout(resolve, 20))
+    disabledText.stdin.write('extra')
+    disabledText.stdin.write('\r')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(onText).not.toHaveBeenCalled()
+    expect(disabledText.lastFrame()).toContain('keep')
+    expect(disabledText.lastFrame()).not.toContain('extra')
+    disabledText.unmount()
+
+    const disabledEmptyPlaceholder = render(
+      <InteractiveQuestionPrompt
+        question={{ type: 'text', prompt: 'Disabled empty?', placeholder: 'Type here' }}
+        isDisabled={true}
+        onSubmit={onText}
+      />,
+    )
+    expect(disabledEmptyPlaceholder.lastFrame()).toContain('Type here')
+    disabledEmptyPlaceholder.unmount()
+
+    const disabledEmptyNoPlaceholder = render(
+      <InteractiveQuestionPrompt
+        question={{ type: 'text', prompt: 'Disabled bare?' }}
+        isDisabled={true}
+        onSubmit={onText}
+      />,
+    )
+    expect(disabledEmptyNoPlaceholder.lastFrame()).toContain('Disabled bare?')
+    disabledEmptyNoPlaceholder.unmount()
+
+    const onTextActive = vi.fn()
+    const activeText = render(
+      <InteractiveQuestionPrompt
+        question={{ type: 'text', prompt: 'Active text?' }}
+        isDisabled={false}
+        onSubmit={onTextActive}
+      />,
+    )
+    await new Promise(resolve => setTimeout(resolve, 20))
+    // Backspace at cursorOffset 0 is a no-op; upArrow and escape are ignored
+    activeText.stdin.write('\x7F')
+    activeText.stdin.write('\x1B[A')
+    activeText.stdin.write('\x1B')
+    await new Promise(resolve => setTimeout(resolve, 60))
+    activeText.stdin.write('abc')
+    await vi.waitFor(() => expect(activeText.lastFrame()).toContain('abc'))
+    // Ctrl+B must not insert 'b'
+    activeText.stdin.write('\x02')
+    // Left arrow, backspace, right arrow, insert
+    activeText.stdin.write('\x1B[D')
+    activeText.stdin.write('\x7F')
+    activeText.stdin.write('\x1B[C')
+    activeText.stdin.write('d')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    activeText.stdin.write('\r')
+    await vi.waitFor(() => expect(onTextActive).toHaveBeenCalledWith('acd'))
+    activeText.unmount()
+
+    const onNumberActive = vi.fn()
+    const activeNumber = render(
+      <InteractiveQuestionPrompt
+        question={{ type: 'number', prompt: 'Active number?' }}
+        isDisabled={false}
+        onSubmit={onNumberActive}
+      />,
+    )
+    await new Promise(resolve => setTimeout(resolve, 20))
+    activeNumber.stdin.write('42')
+    activeNumber.stdin.write('\x02')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    activeNumber.stdin.write('\r')
+    await vi.waitFor(() => expect(onNumberActive).toHaveBeenCalledWith(42))
+    activeNumber.unmount()
+  })
 })

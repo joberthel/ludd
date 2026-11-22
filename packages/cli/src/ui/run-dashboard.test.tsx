@@ -133,6 +133,60 @@ describe('runDashboard', () => {
     unmount()
   })
 
+  it('preserves typed modal input when minimized with Ctrl+B to interact with background panes', async () => {
+    const onPromptSubmit = vi.fn()
+    const prompt: ActiveTtyPrompt = {
+      question: {
+        type: 'text',
+        prompt: 'Commit message?',
+      },
+      onSubmit: onPromptSubmit,
+    }
+
+    const { lastFrame, stdin, unmount } = render(
+      <DashboardHarness activePrompt={prompt} onPromptSubmit={onPromptSubmit} />,
+    )
+
+    expect(lastFrame()).toContain('Commit message?')
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    stdin.write('feat: ship')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('feat: ship')
+    })
+
+    // Minimize modal with Ctrl+B
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Question waiting — press Ctrl+B to answer')
+      expect(lastFrame()).not.toContain('Commit message?')
+    })
+
+    // Interact with background panes while minimized
+    stdin.write('\r')
+    stdin.write('j')
+    stdin.write('\t')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('follow:off')
+    })
+    expect(onPromptSubmit).not.toHaveBeenCalled()
+
+    // Restore modal with Ctrl+B and verify input is intact without 'b' or background keys
+    stdin.write('\x02')
+    await vi.waitFor(() => {
+      expect(lastFrame()).toContain('Commit message?')
+      expect(lastFrame()).toContain('feat: ship')
+      expect(lastFrame()).not.toContain('feat: shipb')
+      expect(lastFrame()).not.toContain('feat: shipj')
+    })
+
+    stdin.write('\r')
+    await vi.waitFor(() => {
+      expect(onPromptSubmit).toHaveBeenCalledWith('feat: ship')
+    })
+    unmount()
+  })
+
   it('renders passed, failed, waiting_for_gate, error footer, activity, and handles resize', async () => {
     const base = createInitialRunTreeState('demo')
     const passedState = { ...base, runStatus: 'passed' as const, activity: 'finishing...' }
