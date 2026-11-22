@@ -160,3 +160,150 @@ it('registers RunUiHost in TTY mode and renders pushed entries and live activity
       delete (process.stdout as { isTTY?: boolean }).isTTY
   }
 })
+
+it('renders split-pane RunDashboard in TTY dashboard mode, manages alt-screen, and prints final summary on exit', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    let finish!: (code: number) => void
+    const execute = vi.fn(async () => new Promise<number>((resolve) => {
+      finish = resolve
+    }))
+    const { lastFrame, unmount } = render(<CommandRunner execute={execute} dashboard={true} />)
+    await vi.waitFor(() => expect(getRunUiHost()).toBeDefined())
+
+    expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049h\x1B[2J\x1B[H')
+
+    getRunUiHost()!.setBlueprint?.({
+      harnessName: 'dash-demo',
+      steps: [
+        { id: 'triage', hasMatrix: false },
+        { id: 'implement', hasMatrix: true },
+      ],
+    })
+    getRunUiHost()!.pushEntry({
+      kind: 'step.started',
+      stepId: 'triage',
+      scope: { stepId: 'triage' },
+    })
+    getRunUiHost()!.pushEntry({
+      kind: 'agent.text',
+      text: 'Inspecting repo',
+      scope: { stepId: 'triage', phase: 'run' },
+    })
+    getRunUiHost()!.pushEntry({
+      kind: 'step.passed',
+      stepId: 'triage',
+      scope: { stepId: 'triage' },
+    })
+
+    await vi.waitFor(() => {
+      const frame = lastFrame()!
+      expect(frame).toContain('◆ dash-demo')
+      expect(frame).toContain('Steps')
+      expect(frame).toContain('Inspecting repo')
+    })
+
+    finish(0)
+    await vi.waitFor(() => {
+      expect(process.exitCode).toBe(0)
+      expect(lastFrame()).toContain('✔ dash-demo — Run passed')
+      expect(lastFrame()).toContain('✔ triage (passed)')
+      expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049l')
+    })
+    unmount()
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
+})
+
+it('handles hydrateSnapshot, guardrails, gates, prompts, and failed summary in dashboard mode', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    const execute = vi.fn(async () => {
+      const host = getRunUiHost()!
+      host.setBlueprint?.({
+        harnessName: 'resume-demo',
+        steps: [
+          { id: 's1', hasMatrix: false },
+          { id: 's2', hasMatrix: false },
+          { id: 's3', hasMatrix: false },
+        ],
+      })
+      host.hydrateSnapshot?.({
+        schemaVersion: 1,
+        runId: 'r1',
+        harnessName: 'resume-demo',
+        workflowName: 'resume-demo',
+        status: 'running',
+        activeStepId: 's2',
+        steps: {
+          s1: { status: 'skipped', output: undefined },
+        },
+        updatedAt: new Date().toISOString(),
+      })
+      host.setActivity('s2 · checking')
+      host.onGuardrailStarted?.({ stepId: 's2', phase: 'afterStep', guardrailIndex: 0 })
+      host.setGateWaiting?.(true, { stepId: 's2', phase: 'afterStep', guardrailIndex: 0 })
+      const ans = await promptInteractiveQuestionInTty({
+        type: 'text',
+        prompt: 'Continue?',
+        default: 'ok',
+      })
+      expect(ans).toBe('ok')
+      host.setGateWaiting?.(false, { stepId: 's2', phase: 'afterStep', guardrailIndex: 0 })
+      host.pushEntry({
+        kind: 'step.failed',
+        stepId: 's2',
+        error: 'bad',
+        scope: { stepId: 's2' },
+      })
+      throw new Error('run exploded')
+    })
+
+    const { lastFrame, stdin, unmount } = render(<CommandRunner execute={execute} dashboard={true} />)
+    await vi.waitFor(() => expect(lastFrame()).toContain('Continue?'))
+    await new Promise(resolve => setTimeout(resolve, 25))
+    stdin.write('\r')
+
+    await vi.waitFor(() => {
+      expect(process.exitCode).toBe(1)
+      const frame = lastFrame()!
+      expect(frame).toContain('✖ resume-demo — Run failed: run exploded')
+      expect(frame).toContain('↷ s1 (skipped)')
+      expect(frame).toContain('✖ s2 (failed)')
+      expect(frame).toContain('○ s3 (pending)')
+    })
+    expect(errSpy).toHaveBeenCalledWith('run exploded')
+    unmount()
+
+    // Non-throwing failure (exit code 1 with run.failed entry, no errorMessage)
+    const failedQuiet = render(
+      <CommandRunner
+        execute={async () => {
+          getRunUiHost()!.pushEntry({ kind: 'run.failed' })
+          return 1
+        }}
+        dashboard={true}
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(failedQuiet.lastFrame()).toContain('✖ ludd — Run failed')
+    })
+    failedQuiet.unmount()
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
+})

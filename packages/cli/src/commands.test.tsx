@@ -169,3 +169,37 @@ it('dispatches teardown and gc commands', async () => {
   await vi.waitFor(() => expect(actions.gc).toHaveBeenLastCalledWith({}))
   c2.unmount()
 })
+
+it('enables dashboard mode for foreground Run and Resume unless --stream or --detach is set', async () => {
+  const origTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true })
+  const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+  try {
+    actions.run.mockImplementation(async () => new Promise<number>(() => {}))
+    const fgRun = render(<Run args={[undefined]} options={{}} />)
+    await vi.waitFor(() => expect(fgRun.lastFrame()).toContain('Steps'))
+    fgRun.unmount()
+
+    const streamRun = render(<Run args={[undefined]} options={{ stream: true }} />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(streamRun.lastFrame()).not.toContain('Steps')
+    streamRun.unmount()
+
+    actions.resume.mockImplementation(async () => new Promise<number>(() => {}))
+    const detachResume = render(<Resume args={['run-a']} options={{ detach: true }} />)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(detachResume.lastFrame()).not.toContain('Steps')
+    detachResume.unmount()
+
+    const fgResume = render(<Resume args={['run-a']} options={{}} />)
+    await vi.waitFor(() => expect(fgResume.lastFrame()).toContain('Steps'))
+    fgResume.unmount()
+    expect(writeSpy).toHaveBeenCalledWith('\x1B[?1049h\x1B[2J\x1B[H')
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdout, 'isTTY', origTty)
+    else
+      delete (process.stdout as { isTTY?: boolean }).isTTY
+  }
+})

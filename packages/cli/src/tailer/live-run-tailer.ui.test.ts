@@ -173,28 +173,97 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
     tailer.stop()
 
     expect(entries).toEqual(expect.arrayContaining([
-      { kind: 'run.started', harnessName: 'demo' },
-      { kind: 'run.started', harnessName: 'ludd' },
-      { kind: 'run.resumed', harnessName: undefined },
-      { kind: 'step.started', stepId: 's1' },
-      { kind: 'guardrail.failed' },
-      { kind: 'guardrail.failed', name: 'lint' },
-      { kind: 'step.retry', stepId: 's1', attempt: 2 },
-      { kind: 'step.retry', stepId: 's1', attempt: undefined },
-      { kind: 'guardrail.passed' },
-      { kind: 'guardrail.passed', name: 'typecheck' },
-      { kind: 'guardrail.skipped' },
-      { kind: 'guardrail.skipped', name: 'e2e' },
-      { kind: 'step.skipped', stepId: 's2' },
-      { kind: 'step.passed', stepId: 's1' },
-      { kind: 'step.failed', stepId: 's3', error: 'err' },
-      { kind: 'run.failed', error: 'err' },
-      { kind: 'run.passed' },
-      { kind: 'agent.text', text: 'Hello world' },
-      { kind: 'tool.start', toolName: 'read_log_page', argsSummary: 'logKey=k1' },
-      { kind: 'tool.error', toolName: 'tool' },
-      { kind: 'agent.output', output: '{"guess":2}' },
-      { kind: 'agent.text', text: 'Trailing text' },
+      expect.objectContaining({ kind: 'run.started', harnessName: 'demo' }),
+      expect.objectContaining({ kind: 'run.started', harnessName: 'ludd' }),
+      expect.objectContaining({ kind: 'run.resumed', harnessName: undefined }),
+      expect.objectContaining({
+        kind: 'step.started',
+        stepId: 's1',
+        scope: { stepId: 's1' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.failed',
+        scope: { stepId: 's1' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.failed',
+        name: 'lint',
+        scope: { stepId: 's1', guardrailName: 'lint' },
+      }),
+      expect.objectContaining({
+        kind: 'step.retry',
+        stepId: 's1',
+        attempt: 2,
+        scope: { stepId: 's1', phase: 'run', attempt: 2 },
+      }),
+      expect.objectContaining({
+        kind: 'step.retry',
+        stepId: 's1',
+        attempt: undefined,
+        scope: { stepId: 's1', phase: 'run' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.passed',
+        scope: { stepId: 's1' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.passed',
+        name: 'typecheck',
+        scope: { stepId: 's1', guardrailName: 'typecheck' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.skipped',
+        scope: { stepId: 's1' },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.skipped',
+        name: 'e2e',
+        scope: { stepId: 's1', guardrailName: 'e2e' },
+      }),
+      expect.objectContaining({
+        kind: 'step.skipped',
+        stepId: 's2',
+        scope: { stepId: 's2' },
+      }),
+      expect.objectContaining({
+        kind: 'step.passed',
+        stepId: 's1',
+        scope: { stepId: 's1' },
+      }),
+      expect.objectContaining({
+        kind: 'step.failed',
+        stepId: 's3',
+        error: 'err',
+        scope: { stepId: 's3' },
+      }),
+      expect.objectContaining({ kind: 'run.failed', error: 'err' }),
+      expect.objectContaining({ kind: 'run.passed' }),
+      expect.objectContaining({
+        kind: 'agent.text',
+        text: 'Hello world',
+        scope: { stepId: 's1', phase: 'run' },
+      }),
+      expect.objectContaining({
+        kind: 'tool.start',
+        toolName: 'read_log_page',
+        argsSummary: 'logKey=k1',
+        scope: { stepId: 's1', phase: 'run' },
+      }),
+      expect.objectContaining({
+        kind: 'tool.error',
+        toolName: 'tool',
+        scope: { stepId: 's1', phase: 'run' },
+      }),
+      expect.objectContaining({
+        kind: 'agent.output',
+        output: '{"guess":2}',
+        scope: { stepId: 's1', phase: 'run' },
+      }),
+      expect.objectContaining({
+        kind: 'agent.text',
+        text: 'Trailing text',
+        scope: { stepId: 's1', phase: 'run' },
+      }),
     ]))
     expect(entries.some(e => e.kind === 'tool.start' && e.toolName === 'ask_user')).toBe(false)
     expect(activities).toContain('s1 · running...')
@@ -203,6 +272,166 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
     expect(activities).toContain('s1 · running guardrail...')
     expect(activities).toContain('s1 · running guardrail typecheck...')
     expect(activities.at(-1)).toBeUndefined()
+  }
+  finally {
+    unregister()
+  }
+})
+
+it('attaches matrixIndex, matrixTotal, phase, guardrailIndex, and attempt scopes to UI entries and callbacks', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const streams = path.join(dir, 'streams')
+  fs.mkdirSync(streams)
+  const entries: RunUiEntry[] = []
+  const startedGuardrails: unknown[] = []
+  const gateChanges: Array<{ waiting: boolean, scope: unknown }> = []
+  const unregister = registerRunUiHost({
+    pushEntry: e => entries.push(e),
+    setActivity: () => {},
+    onGuardrailStarted: scope => startedGuardrails.push(scope),
+    setGateWaiting: (waiting, scope) => gateChanges.push({ waiting, scope }),
+  })
+
+  try {
+    fs.writeFileSync(path.join(dir, 'ledger.jsonl'), [
+      JSON.stringify({
+        eventType: 'guardrail.started',
+        stepId: 'impl',
+        matrixIndex: 1,
+        payload: {
+          phase: 'beforeStep',
+          guardrailIndex: 0,
+          guardrailName: 'diff',
+          attempt: 1,
+          matrixTotal: 3,
+        },
+      }),
+      JSON.stringify({
+        eventType: 'agent.stream.linked',
+        stepId: 'impl',
+        matrixIndex: 1,
+        payload: { sessionId: 'sess-m1', attempt: 2, matrixTotal: 3 },
+      }),
+      JSON.stringify({
+        eventType: 'gate.waiting',
+        stepId: 'impl',
+        matrixIndex: 1,
+        payload: { phase: 'afterStep', guardrailIndex: 0 },
+      }),
+      JSON.stringify({
+        eventType: 'gate.resolved',
+        stepId: 'impl',
+        matrixIndex: 1,
+        payload: { phase: 'afterStep', guardrailIndex: 0 },
+      }),
+      JSON.stringify({
+        eventType: 'gate.waiting',
+        stepId: 'impl',
+        payload: { phase: 'interactive', guardrailIndex: 0 },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.started',
+        payload: { matrixIndex: 0 },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.started',
+      }),
+      JSON.stringify({
+        eventType: 'agent.stream.linked',
+        payload: { sessionId: 'sess-unscoped' },
+      }),
+      '',
+    ].join('\n'))
+
+    fs.writeFileSync(path.join(streams, 'sess-unscoped.jsonl'), [
+      JSON.stringify({ eventType: 'turn.started', payload: {} }),
+      JSON.stringify({
+        eventType: 'message_chunk',
+        payload: { text: 'unscoped' },
+      }),
+      JSON.stringify({
+        eventType: 'turn.completed',
+        payload: { output: 'done' },
+      }),
+      '',
+    ].join('\n'))
+
+    fs.writeFileSync(path.join(streams, 'sess-m1.jsonl'), [
+      JSON.stringify({
+        eventType: 'turn.started',
+        stepId: 'impl',
+        payload: { attempt: 2 },
+      }),
+      JSON.stringify({
+        eventType: 'message_chunk',
+        stepId: 'impl',
+        payload: { text: 'Working on slice 2' },
+      }),
+      '',
+    ].join('\n'))
+
+    const tailer = new LiveRunTailer(dir, false)
+    tailer.start()
+    await vi.advanceTimersByTimeAsync(100)
+    tailer.stop()
+
+    expect(startedGuardrails).toEqual([
+      {
+        stepId: 'impl',
+        matrixIndex: 1,
+        matrixTotal: 3,
+        phase: 'beforeStep',
+        guardrailIndex: 0,
+        guardrailName: 'diff',
+        attempt: 1,
+      },
+      {
+        matrixIndex: 0,
+      },
+      {
+        stepId: 'step',
+      },
+    ])
+    expect(gateChanges).toEqual([
+      {
+        waiting: true,
+        scope: {
+          stepId: 'impl',
+          matrixIndex: 1,
+          phase: 'afterStep',
+          guardrailIndex: 0,
+        },
+      },
+      {
+        waiting: false,
+        scope: {
+          stepId: 'impl',
+          matrixIndex: 1,
+          phase: 'afterStep',
+          guardrailIndex: 0,
+        },
+      },
+      {
+        waiting: true,
+        scope: {
+          stepId: 'impl',
+          phase: 'interactive',
+          guardrailIndex: 0,
+        },
+      },
+    ])
+    expect(entries).toContainEqual({
+      kind: 'agent.text',
+      text: 'Working on slice 2',
+      scope: {
+        stepId: 'impl',
+        matrixIndex: 1,
+        matrixTotal: 3,
+        phase: 'run',
+        attempt: 2,
+      },
+    })
   }
   finally {
     unregister()

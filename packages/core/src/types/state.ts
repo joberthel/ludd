@@ -46,6 +46,7 @@ export interface RunStateSnapshot {
   activeSessionId?: string | null
   activeStepAttempt?: number
   activeMatrixIndex?: number | null
+  activeMatrixTotal?: number | null
   activeMatrixOutputs?: unknown[]
   activeGuardrailRetries?: Record<string, number>
   grantedExtraRetries?: Record<string, number>

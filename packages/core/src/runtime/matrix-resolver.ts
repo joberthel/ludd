@@ -13,6 +13,9 @@ export function persistSliceState(
 ): void {
   snapshot.activeMatrixOutputs = [...outputs]
   snapshot.activeMatrixIndex = index
+  if (index === null) {
+    snapshot.activeMatrixTotal = null
+  }
   snapshot.activeSessionId = null
   snapshot.activeStepAttempt = 1
   snapshot.activeGuardrailRetries = undefined

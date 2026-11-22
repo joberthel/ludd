@@ -1,4 +1,36 @@
-export type RunUiEntry
+import type { HarnessConfig, RunStateSnapshot } from '@ludd/core'
+
+export type UiLogPhase = 'beforeStep' | 'interactive' | 'run' | 'afterStep'
+
+export interface UiLogScope {
+  stepId?: string
+  matrixIndex?: number
+  matrixTotal?: number
+  phase?: UiLogPhase
+  guardrailIndex?: number
+  guardrailName?: string
+  attempt?: number
+}
+
+export interface BlueprintGuardrail {
+  index: number
+  name?: string
+}
+
+export interface BlueprintStep {
+  id: string
+  name?: string
+  hasMatrix: boolean
+  beforeStep?: readonly BlueprintGuardrail[]
+  afterStep?: readonly BlueprintGuardrail[]
+}
+
+export interface HarnessBlueprint {
+  harnessName: string
+  steps: readonly BlueprintStep[]
+}
+
+export type RunUiEntryPayload
   = | { kind: 'run.started', harnessName: string }
     | { kind: 'run.resumed', harnessName?: string }
     | { kind: 'run.passed' }
@@ -17,9 +49,63 @@ export type RunUiEntry
     | { kind: 'agent.output', output: string }
     | { kind: 'prompt.answered', prompt: string, answer: string }
 
+export type RunUiEntry = RunUiEntryPayload & {
+  scope?: UiLogScope
+}
+
 export interface RunUiHost {
   pushEntry: (entry: RunUiEntry) => void
   setActivity: (label: string | undefined) => void
+  setBlueprint?: (blueprint: HarnessBlueprint) => void
+  hydrateSnapshot?: (snapshot: RunStateSnapshot) => void
+  onGuardrailStarted?: (scope: UiLogScope) => void
+  setGateWaiting?: (waiting: boolean, scope?: UiLogScope) => void
+}
+
+export function toHarnessBlueprint(config: HarnessConfig): HarnessBlueprint {
+  return {
+    harnessName: config.name,
+    steps: config.steps.map((step) => {
+      let beforeStep: BlueprintGuardrail[] | undefined
+      if (Array.isArray(step.beforeStep)) {
+        beforeStep = (step.beforeStep as ReadonlyArray<{ name?: string }>).map((guardrail, index) => ({
+          index,
+          ...(guardrail.name !== undefined
+            ? { name: guardrail.name }
+            : {}),
+        }))
+      }
+      else if (typeof step.beforeStep === 'object' && step.beforeStep !== null) {
+        beforeStep = Object.entries(step.beforeStep as Record<string, { name?: string }>).map(([key, guardrail], index) => ({
+          index,
+          name: guardrail.name ?? key,
+        }))
+      }
+
+      const afterStep = Array.isArray(step.afterStep)
+        ? (step.afterStep as ReadonlyArray<{ name?: string }>).map((guardrail, index) => ({
+            index,
+            ...(guardrail.name !== undefined
+              ? { name: guardrail.name }
+              : {}),
+          }))
+        : undefined
+
+      return {
+        id: step.id,
+        ...(step.name !== undefined
+          ? { name: step.name }
+          : {}),
+        hasMatrix: step.matrix !== undefined,
+        ...(beforeStep !== undefined
+          ? { beforeStep }
+          : {}),
+        ...(afterStep !== undefined
+          ? { afterStep }
+          : {}),
+      }
+    }),
+  }
 }
 
 let activeRunUiHost: RunUiHost | undefined

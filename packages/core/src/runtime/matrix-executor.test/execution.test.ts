@@ -21,6 +21,9 @@ describe('executeMatrixStep sequential execution', () => {
     const ctx = createDummyContext()
     const capturedCursors: Array<{ index: number, total: number, item: unknown }> = []
 
+    const snapshot = createDummySnapshot()
+    const seenTotals: Array<number | null | undefined> = []
+
     const step: StepConfig = {
       id: 'step-seq',
       matrix: {
@@ -28,6 +31,7 @@ describe('executeMatrixStep sequential execution', () => {
       },
       outputSchema: z.number(),
       run: (c) => {
+        seenTotals.push(snapshot.activeMatrixTotal)
         if (c.matrix) {
           capturedCursors.push({ ...c.matrix })
           return (c.matrix.item as number) * 2
@@ -40,11 +44,14 @@ describe('executeMatrixStep sequential execution', () => {
       step,
       step.matrix,
       ctx,
-      createDummySnapshot(),
+      snapshot,
       tempDir,
     )
 
     expect(outputs).toEqual([20, 40, 60])
+    expect(seenTotals).toEqual([3, 3, 3])
+    expect(snapshot.activeMatrixTotal).toBeNull()
+    expect(snapshot.activeMatrixIndex).toBeNull()
     expect(capturedCursors).toEqual([
       { index: 0, total: 3, item: 10 },
       { index: 1, total: 3, item: 20 },

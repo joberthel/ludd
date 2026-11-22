@@ -79,6 +79,9 @@ export function emitStepRetry(
     sessionId,
     reason,
     issues,
+    ...(ctx.matrix !== undefined
+      ? { matrixTotal: ctx.matrix.total }
+      : {}),
   })
 }
 
@@ -183,6 +186,9 @@ async function processGuardrailResult(
     guardrailIndex: k,
     attempt,
     ...guardrailNameField,
+    ...(ctx.matrix !== undefined
+      ? { matrixTotal: ctx.matrix.total }
+      : {}),
   })
   if (params.rehydratedGate?.guardrailIndex === k && params.rehydratedGate.gateType === 'max_retries_exceeded') {
     const verdict: GuardrailVerdict = {

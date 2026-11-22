@@ -52,5 +52,5 @@ export default function Resume({ args: [runId], options: opts }: ResumeProps) {
     opts.workspace,
   ])
 
-  return <CommandRunner execute={execute} />
+  return <CommandRunner execute={execute} dashboard={!opts.stream && !opts.detach} />
 }

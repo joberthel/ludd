@@ -123,6 +123,7 @@ export async function executeMatrixStep(
 
   for (let index = startIndex; index < total; index++) {
     snapshot.activeMatrixIndex = index
+    snapshot.activeMatrixTotal = total
     snapshot.activeMatrixOutputs = [...outputs]
     snapshot.updatedAt = new Date().toISOString()
     writeRunStateAtomic(runDir, snapshot)

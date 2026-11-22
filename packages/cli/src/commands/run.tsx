@@ -73,5 +73,5 @@ export default function Run({ args: [positionalConfig], options: opts }: RunProp
     opts.workspace,
   ])
 
-  return <CommandRunner execute={execute} />
+  return <CommandRunner execute={execute} dashboard={!opts.stream && !opts.detach} />
 }

@@ -4,6 +4,7 @@ import process from 'node:process'
 import { isProcessAlive, loadHarnessConfig, readRunState, resolveRunDir, RunAlreadyActiveError, runHarness, RUNNER_PID_FILE, RunNotFoundError } from '@ludd/core'
 import { watchForGate } from '../prompts/watch-for-gate.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
+import { getRunUiHost, toHarnessBlueprint } from '../ui/run-ui-bridge.js'
 
 export interface ResumeCommandOptions {
   runId: string
@@ -44,6 +45,11 @@ export async function resumeCommand(options: ResumeCommandOptions): Promise<numb
   if (options.detach && !options.worker) {
     const { spawnDetachedRunner } = await import('../daemon/spawn-detached-runner.js')
     return spawnDetachedRunner({ configPath: absoluteConfigPath, runId: options.runId, workspaceDir })
+  }
+  if (!options.worker && !options.stream) {
+    const uiHost = getRunUiHost()
+    uiHost?.setBlueprint?.(toHarnessBlueprint(config))
+    uiHost?.hydrateSnapshot?.(state)
   }
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
   tailer.start()

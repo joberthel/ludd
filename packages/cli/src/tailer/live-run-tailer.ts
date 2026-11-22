@@ -1,4 +1,4 @@
-import type { RunUiHost } from '../ui/run-ui-bridge.js'
+import type { RunUiHost, UiLogPhase, UiLogScope } from '../ui/run-ui-bridge.js'
 import { Buffer } from 'node:buffer'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -8,12 +8,14 @@ import { formatToolArgsSummary, getRunUiHost } from '../ui/run-ui-bridge.js'
 interface LedgerRecord {
   eventType?: string
   stepId?: string | null
+  matrixIndex?: number | null
   payload?: Record<string, unknown>
 }
 
 interface StreamRecord {
   eventType?: string
   stepId?: string | null
+  matrixIndex?: number | null
   payload?: Record<string, unknown>
 }
 
@@ -45,56 +47,123 @@ function nonEmptyString(value: unknown): string | undefined {
     : undefined
 }
 
+function parseUiPhase(value: unknown): UiLogPhase | undefined {
+  return value === 'beforeStep' || value === 'interactive' || value === 'run' || value === 'afterStep'
+    ? value
+    : undefined
+}
+
+function buildScope(
+  event: { stepId?: string | null, matrixIndex?: number | null, payload?: Record<string, unknown> },
+  defaultPhase?: UiLogPhase,
+): UiLogScope | undefined {
+  const payload = event.payload ?? {}
+  const stepId = nonEmptyString(event.stepId)
+  const matrixIndex = typeof event.matrixIndex === 'number'
+    ? event.matrixIndex
+    : typeof payload.matrixIndex === 'number'
+      ? payload.matrixIndex
+      : undefined
+  const matrixTotal = typeof payload.matrixTotal === 'number'
+    ? payload.matrixTotal
+    : undefined
+  const phase = parseUiPhase(payload.phase) ?? (stepId !== undefined
+    ? defaultPhase
+    : undefined)
+  const guardrailIndex = typeof payload.guardrailIndex === 'number'
+    ? payload.guardrailIndex
+    : undefined
+  const guardrailName = nonEmptyString(payload.guardrailName)
+  const attempt = typeof payload.attempt === 'number'
+    ? payload.attempt
+    : undefined
+
+  const scope: UiLogScope = {
+    ...(stepId !== undefined
+      ? { stepId }
+      : {}),
+    ...(matrixIndex !== undefined
+      ? { matrixIndex }
+      : {}),
+    ...(matrixTotal !== undefined
+      ? { matrixTotal }
+      : {}),
+    ...(phase !== undefined
+      ? { phase }
+      : {}),
+    ...(guardrailIndex !== undefined
+      ? { guardrailIndex }
+      : {}),
+    ...(guardrailName !== undefined
+      ? { guardrailName }
+      : {}),
+    ...(attempt !== undefined
+      ? { attempt }
+      : {}),
+  }
+  return Object.keys(scope).length > 0
+    ? scope
+    : undefined
+}
+
+function withScope<T extends Record<string, unknown>>(entry: T, scope: UiLogScope | undefined): T & { scope?: UiLogScope } {
+  return scope !== undefined
+    ? { ...entry, scope }
+    : entry
+}
+
 function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
   const stepId = nonEmptyString(event.stepId) ?? 'step'
   const payload = event.payload ?? {}
   const error = nonEmptyString(payload.error)
   const guardrailName = nonEmptyString(payload.guardrailName)
+  const scope = buildScope(event)
   switch (event.eventType ?? '') {
     case 'run.started':
-      uiHost.pushEntry({ kind: 'run.started', harnessName: nonEmptyString(payload.harnessName) ?? 'ludd' })
+      uiHost.pushEntry(withScope({ kind: 'run.started', harnessName: nonEmptyString(payload.harnessName) ?? 'ludd' }, scope))
       break
     case 'run.resumed':
-      uiHost.pushEntry({
+      uiHost.pushEntry(withScope({
         kind: 'run.resumed',
         harnessName: nonEmptyString(payload.harnessName),
-      })
+      }, scope))
       break
     case 'run.passed':
       uiHost.setActivity(undefined)
-      uiHost.pushEntry({ kind: 'run.passed' })
+      uiHost.pushEntry(withScope({ kind: 'run.passed' }, scope))
       break
     case 'run.failed':
       uiHost.setActivity(undefined)
-      uiHost.pushEntry({ kind: 'run.failed', error })
+      uiHost.pushEntry(withScope({ kind: 'run.failed', error }, scope))
       break
     case 'step.started':
-      uiHost.pushEntry({ kind: 'step.started', stepId })
+      uiHost.pushEntry(withScope({ kind: 'step.started', stepId }, scope))
       uiHost.setActivity(`${stepId} · running...`)
       break
     case 'step.passed':
       uiHost.setActivity(undefined)
-      uiHost.pushEntry({ kind: 'step.passed', stepId })
+      uiHost.pushEntry(withScope({ kind: 'step.passed', stepId }, scope))
       break
     case 'step.skipped':
       uiHost.setActivity(undefined)
-      uiHost.pushEntry({ kind: 'step.skipped', stepId })
+      uiHost.pushEntry(withScope({ kind: 'step.skipped', stepId }, scope))
       break
     case 'step.failed':
       uiHost.setActivity(undefined)
-      uiHost.pushEntry({ kind: 'step.failed', stepId, error })
+      uiHost.pushEntry(withScope({ kind: 'step.failed', stepId, error }, scope))
       break
     case 'step.retry':
-      uiHost.pushEntry({
+      uiHost.pushEntry(withScope({
         kind: 'step.retry',
         stepId,
         attempt: typeof payload.attempt === 'number'
           ? payload.attempt
           : undefined,
-      })
+      }, buildScope(event, 'run')))
       uiHost.setActivity(`${stepId} · retrying...`)
       break
     case 'guardrail.started':
+      uiHost.onGuardrailStarted?.(scope ?? { stepId })
       uiHost.setActivity(
         guardrailName !== undefined
           ? `${stepId} · running guardrail ${guardrailName}...`
@@ -102,31 +171,35 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
       )
       break
     case 'guardrail.passed':
-      uiHost.pushEntry({
+      uiHost.pushEntry(withScope({
         kind: 'guardrail.passed',
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
-      })
+      }, scope))
       break
     case 'guardrail.skipped':
-      uiHost.pushEntry({
+      uiHost.pushEntry(withScope({
         kind: 'guardrail.skipped',
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
-      })
+      }, scope))
       break
     case 'guardrail.failed':
-      uiHost.pushEntry({
+      uiHost.pushEntry(withScope({
         kind: 'guardrail.failed',
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
-      })
+      }, scope))
       break
     case 'gate.waiting':
       uiHost.setActivity(undefined)
+      uiHost.setGateWaiting?.(true, scope)
+      break
+    case 'gate.resolved':
+      uiHost.setGateWaiting?.(false, scope)
       break
     default:
       break
@@ -139,6 +212,7 @@ export class LiveRunTailer {
   private readonly streams = new Set<string>()
   private readonly streamedTextSessions = new Set<string>()
   private readonly uiTextBuffers = new Map<string, string>()
+  private readonly sessionScopes = new Map<string, UiLogScope>()
   private needsNewline = false
 
   constructor(private readonly runDir: string, private readonly stream: boolean) {}
@@ -170,7 +244,7 @@ export class LiveRunTailer {
     const buffered = this.uiTextBuffers.get(sessionId)?.trim()
     this.uiTextBuffers.delete(sessionId)
     if (buffered !== undefined && buffered.length > 0) {
-      uiHost.pushEntry({ kind: 'agent.text', text: buffered })
+      uiHost.pushEntry(withScope({ kind: 'agent.text', text: buffered }, this.sessionScopes.get(sessionId)))
     }
   }
 
@@ -223,7 +297,18 @@ export class LiveRunTailer {
 
   private handleStreamEventForUi(sessionId: string, event: StreamRecord, uiHost: RunUiHost): void {
     const payload = event.payload ?? {}
-    const stepId = nonEmptyString(event.stepId) ?? 'step'
+    const existingScope = this.sessionScopes.get(sessionId)
+    const eventScope = buildScope(event, 'run')
+    const mergedScope: UiLogScope | undefined = existingScope || eventScope
+      ? {
+          ...existingScope,
+          ...eventScope,
+        }
+      : undefined
+    if (mergedScope !== undefined) {
+      this.sessionScopes.set(sessionId, mergedScope)
+    }
+    const stepId = mergedScope?.stepId ?? nonEmptyString(event.stepId) ?? 'step'
     if (event.eventType === 'turn.started') {
       this.streamedTextSessions.delete(sessionId)
       this.uiTextBuffers.delete(sessionId)
@@ -241,16 +326,16 @@ export class LiveRunTailer {
         return
       this.flushUiBuffer(sessionId, uiHost)
       if (payload.phase === 'start') {
-        uiHost.pushEntry({
+        uiHost.pushEntry(withScope({
           kind: 'tool.start',
           toolName,
           argsSummary: formatToolArgsSummary(payload.args),
-        })
+        }, mergedScope))
         uiHost.setActivity(`${stepId} · running ${toolName}...`)
       }
       else if (payload.phase === 'end') {
         if (payload.isError === true)
-          uiHost.pushEntry({ kind: 'tool.error', toolName })
+          uiHost.pushEntry(withScope({ kind: 'tool.error', toolName }, mergedScope))
         uiHost.setActivity(`${stepId} · thinking...`)
       }
       return
@@ -260,10 +345,10 @@ export class LiveRunTailer {
       if (payload.output !== undefined && payload.output !== '') {
         if (typeof payload.output === 'string' && this.streamedTextSessions.has(sessionId))
           return
-        uiHost.pushEntry({
+        uiHost.pushEntry(withScope({
           kind: 'agent.output',
           output: formatOutputValue(payload.output),
-        })
+        }, mergedScope))
       }
     }
   }
@@ -336,8 +421,13 @@ export class LiveRunTailer {
         if (event.eventType !== 'agent.stream.linked')
           return
         const sessionId = event.payload?.sessionId
-        if (typeof sessionId === 'string')
+        if (typeof sessionId === 'string') {
           this.streams.add(sessionId)
+          const linkedScope = buildScope(event, 'run')
+          if (linkedScope !== undefined) {
+            this.sessionScopes.set(sessionId, linkedScope)
+          }
+        }
       }
       catch { /* Ignore incomplete JSONL records. */ }
     })

@@ -180,6 +180,9 @@ async function executeSingleBeforeStepGuardrail(
     ...(guardrail.name !== undefined
       ? { guardrailName: guardrail.name }
       : {}),
+    ...(ctx.matrix !== undefined
+      ? { matrixTotal: ctx.matrix.total }
+      : {}),
   })
 
   return guardrail.type === 'human_review'

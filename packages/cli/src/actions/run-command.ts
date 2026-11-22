@@ -5,6 +5,7 @@ import process from 'node:process'
 import { loadHarnessConfig, resolveRunDir, RunAlreadyExistsError, runHarness } from '@ludd/core'
 import { watchForGate } from '../prompts/watch-for-gate.js'
 import { LiveRunTailer } from '../tailer/live-run-tailer.js'
+import { getRunUiHost, toHarnessBlueprint } from '../ui/run-ui-bridge.js'
 
 export interface RunCommandOptions {
   configPath?: string
@@ -28,6 +29,9 @@ export async function runCommand(options: RunCommandOptions): Promise<number> {
   if (options.detach && !options.worker) {
     const { spawnDetachedRunner } = await import('../daemon/spawn-detached-runner.js')
     return spawnDetachedRunner({ configPath: absoluteConfig, runId: id, workspaceDir })
+  }
+  if (!options.worker && !options.stream) {
+    getRunUiHost()?.setBlueprint?.(toHarnessBlueprint(config))
   }
   const runDir = resolveRunDir(workspaceDir, id)
   const tailer = new LiveRunTailer(runDir, options.stream ?? false)
