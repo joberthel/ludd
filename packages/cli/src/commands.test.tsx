@@ -103,6 +103,7 @@ it('dispatches gate, abort, teardown, and gc commands', async () => {
         action: 'retry',
         feedback: 'More',
         addRetries: 2,
+        answer: '7',
       }}
     />,
   )
@@ -112,6 +113,7 @@ it('dispatches gate, abort, teardown, and gc commands', async () => {
     action: 'retry',
     feedback: 'More',
     addRetries: 2,
+    answer: '7',
   }))
   g1.unmount()
 

@@ -20,6 +20,8 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
    * in-turn (e.g. `piAgent`'s `submit_step_output` tool).
    */
   outputSchema?: z.ZodType
+  /** True when the step has `interactive` mode enabled and `ask_user` MCP tool should be exposed. */
+  interactive?: boolean
   /** Fires when the run is aborted (e.g. via IPC `run.abort`). */
   signal?: AbortSignal
 }

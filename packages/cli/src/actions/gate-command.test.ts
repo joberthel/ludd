@@ -141,6 +141,22 @@ it('requires feedback when failing a human review and forwards optional fields o
   try {
     await expect(gateCommand({ runId: 'gate-run', workspace, action: 'fail' })).rejects.toThrow('Feedback is required')
     await expect(gateCommand({ runId: 'gate-run', workspace, action: 'pass' })).resolves.toBe(0)
+    await expect(gateCommand({ runId: 'gate-run', workspace, answer: 'raw-answer' })).resolves.toBe(0)
+    snapshot.activeGate = {
+      stepId: 'review',
+      phase: 'interactive',
+      guardrailIndex: 0,
+      gateType: 'user_question',
+      prompt: 'Pick a number',
+      question: {
+        type: 'number',
+        prompt: 'Pick a number',
+        min: 1,
+        max: 10,
+      },
+      createdAt: new Date().toISOString(),
+    }
+    await expect(gateCommand({ runId: 'gate-run', workspace, answer: '6' })).resolves.toBe(0)
   }
   finally { await server.close() }
 })

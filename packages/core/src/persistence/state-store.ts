@@ -40,14 +40,62 @@ const environmentDescriptorSchema = z.object({
   injectedEnv: z.record(z.string(), z.string()).optional(),
 })
 
+const interactiveSelectOptionSchema = z.union([
+  z.string(),
+  z.object({
+    label: z.string(),
+    value: z.string(),
+  }),
+])
+
+const interactiveQuestionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('text'),
+    prompt: z.string(),
+    default: z.string().optional(),
+    placeholder: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('number'),
+    prompt: z.string(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    default: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal('select'),
+    prompt: z.string(),
+    options: z.array(interactiveSelectOptionSchema).min(1),
+    default: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('multi-select'),
+    prompt: z.string(),
+    options: z.array(interactiveSelectOptionSchema).min(1),
+    default: z.array(z.string()).optional(),
+  }),
+  z.object({
+    type: z.literal('confirm'),
+    prompt: z.string(),
+    default: z.boolean().optional(),
+  }),
+])
+
 const activeGateStateSchema = z.object({
   stepId: z.string(),
   matrixIndex: z.number().int().nonnegative().optional(),
-  phase: z.enum(['beforeStep', 'afterStep']),
+  phase: z.enum([
+    'beforeStep',
+    'interactive',
+    'run',
+    'afterStep',
+  ]),
   guardrailIndex: z.number().int().nonnegative(),
-  gateType: z.enum(['human_review', 'max_retries_exceeded']),
+  gateType: z.enum(['human_review', 'max_retries_exceeded', 'user_question']),
   prompt: z.string(),
   logKey: z.string().optional(),
+  question: interactiveQuestionSchema.optional(),
+  questionKey: z.string().optional(),
   createdAt: z.string(),
 })
 
@@ -67,6 +115,7 @@ export const runStateSnapshotSchema = z.object({
   activeGate: activeGateStateSchema.nullable().optional(),
   activeStepOutput: z.unknown().optional(),
   activeBeforeStepResults: z.unknown().optional(),
+  activeInteractiveAnswers: z.record(z.string(), z.unknown()).optional(),
   activeSessionId: z.string().nullable().optional(),
   activeStepAttempt: z.number().optional(),
   activeMatrixIndex: z.number().int().nonnegative().nullable().optional(),

@@ -2,6 +2,7 @@ import process from 'node:process'
 import { render } from 'ink-testing-library'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CommandRunner } from './command-runner.js'
+import { promptInteractiveQuestionInTty, registerTtyPromptHost } from './interactive-question-prompt.js'
 
 const originalExitCode = process.exitCode
 
@@ -69,4 +70,58 @@ it('ignores late resolution or rejection after unmount', async () => {
   rejectRun(new Error('late'))
   await Promise.resolve()
   expect(process.exitCode).toBeUndefined()
+})
+
+it('hosts interactive TTY prompts inside the existing Ink tree and preserves answered history', async () => {
+  const answers: unknown[] = []
+  const execute = vi.fn(async () => {
+    answers.push(await promptInteractiveQuestionInTty({
+      type: 'text',
+      prompt: 'Favorite color?',
+      default: 'blue',
+    }))
+    answers.push(await promptInteractiveQuestionInTty({
+      type: 'confirm',
+      prompt: 'Proceed?',
+      default: true,
+    }))
+    answers.push(await promptInteractiveQuestionInTty({
+      type: 'confirm',
+      prompt: 'Skip?',
+      default: false,
+    }))
+    answers.push(await promptInteractiveQuestionInTty({
+      type: 'multi-select',
+      prompt: 'Tags?',
+      options: ['a', 'b'],
+      default: ['a', 'b'],
+    }))
+    return 0
+  })
+  const { lastFrame, stdin, unmount } = render(<CommandRunner execute={execute} />)
+  await vi.waitFor(() => expect(lastFrame()).toContain('Favorite color?'))
+  stdin.write('\r')
+  await vi.waitFor(() => expect(lastFrame()).toContain('Proceed?'))
+  stdin.write('y')
+  await vi.waitFor(() => expect(lastFrame()).toContain('Skip?'))
+  stdin.write('n')
+  await vi.waitFor(() => expect(lastFrame()).toContain('Tags?'))
+  stdin.write('\r')
+  await vi.waitFor(() => expect(process.exitCode).toBe(0))
+  expect(answers).toEqual([
+    'blue',
+    true,
+    false,
+    ['a', 'b'],
+  ])
+  expect(lastFrame()).toContain('Favorite color?')
+  expect(lastFrame()).toContain('blue')
+  expect(lastFrame()).toContain('Proceed?')
+  expect(lastFrame()).toContain('yes')
+  expect(lastFrame()).toContain('Skip?')
+  expect(lastFrame()).toContain('no')
+  expect(lastFrame()).toContain('a, b')
+  const unregisterSecond = registerTtyPromptHost(() => {})
+  unmount()
+  unregisterSecond()
 })

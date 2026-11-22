@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createControlClient } from '@ludd/core'
 import { promptForGate } from '../prompts/inline-gate-prompter.js'
+import { parseStringAnswer } from '../prompts/parse-answer.js'
 
 export interface GateCommandOptions {
   runId: string
@@ -10,6 +11,7 @@ export interface GateCommandOptions {
   action?: GateAction
   feedback?: string
   addRetries?: number
+  answer?: string
 }
 
 export async function gateCommand(options: GateCommandOptions): Promise<number> {
@@ -20,6 +22,18 @@ export async function gateCommand(options: GateCommandOptions): Promise<number> 
     if (state.status !== 'waiting_for_gate' || !state.activeGate) {
       console.error(`Run ${options.runId} is not currently waiting at a gate`)
       return 1
+    }
+    if (options.answer !== undefined) {
+      const parsedAnswer = state.activeGate.question !== undefined
+        ? parseStringAnswer(state.activeGate.question, options.answer)
+        : options.answer
+      await client.resolveGate({
+        stepId: state.activeGate.stepId,
+        guardrailIndex: state.activeGate.guardrailIndex,
+        action: 'answer',
+        answer: parsedAnswer,
+      })
+      return 0
     }
     if (options.action === undefined) {
       await promptForGate(state, client)

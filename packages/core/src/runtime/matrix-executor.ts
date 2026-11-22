@@ -8,6 +8,7 @@ import type { RehydratedAgentState } from './agent-executor.js'
 import type { GateWaiter } from './gate-waiter.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { runBeforeStepGuardrails } from './before-step-executor.js'
+import { runInitialInteractiveQuestions } from './interactive-executor.js'
 import { assertMatrixConfig, persistSliceState, resolveMatrixItems } from './matrix-resolver.js'
 import { executeStepRun } from './step-run-executor.js'
 
@@ -79,6 +80,14 @@ export async function executeSingleSlice(
     logStore,
     gateWaiter,
   )
+
+  await runInitialInteractiveQuestions({
+    step,
+    ctx,
+    snapshot,
+    runDir,
+    gateWaiter,
+  })
 
   return executeStepRun(step, {
     ctx,

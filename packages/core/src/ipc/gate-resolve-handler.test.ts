@@ -229,4 +229,43 @@ describe('createGateResolveHandler minimal resolution', () => {
       action: 'retry',
     })).rejects.toThrow('Invalid params: action "retry" is not supported for human_review gates')
   })
+
+  it('validates and resolves user_question gates with answer or abort', async () => {
+    const waiter = createGateWaiter()
+    const questionSnapshot = {
+      ...snapshot,
+      activeGate: {
+        stepId: 'step-1',
+        phase: 'interactive' as const,
+        guardrailIndex: 0,
+        gateType: 'user_question' as const,
+        prompt: 'Pick a number',
+        question: {
+          type: 'number' as const,
+          prompt: 'Pick a number',
+          min: 1,
+          max: 10,
+        },
+        questionKey: 'max',
+        createdAt: new Date().toISOString(),
+      },
+    }
+    const handler = createGateResolveHandler({
+      runDir: tempDir,
+      getSnapshot: () => questionSnapshot,
+      gateWaiter: waiter,
+    })
+
+    await expect(handler({ stepId: 'step-1', action: 'pass' }))
+      .rejects
+      .toThrow('not supported for user_question gates')
+    await expect(handler({ stepId: 'step-1', action: 'answer' }))
+      .rejects
+      .toThrow('answer is required')
+
+    const result = await handler({ stepId: 'step-1', action: 'answer', answer: 8 })
+    expect(result).toEqual({ ok: true })
+    const events = readLedgerEvents(tempDir)
+    expect(events.at(-1)?.payload).toMatchObject({ action: 'answer', answer: 8 })
+  })
 })

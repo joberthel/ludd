@@ -12,6 +12,7 @@ const VALID_ACTIONS: readonly GateAction[] = [
   'retry',
   'skip',
   'abort',
+  'answer',
 ]
 
 export interface GateResolveHandlerContext {
@@ -80,6 +81,9 @@ export function validateGateResolveParams(raw: unknown): GateResolveParams {
     guardrailIndex,
     feedback: obj.feedback,
     addRetries,
+    ...(obj.answer !== undefined
+      ? { answer: obj.answer }
+      : {}),
   }
 }
 
@@ -120,6 +124,20 @@ export function createGateResolveHandler(
         'Invalid params: action "retry" is not supported for human_review gates',
       )
     }
+    if (activeGate.gateType === 'user_question') {
+      if (params.action !== 'answer' && params.action !== 'abort') {
+        throw new JsonRpcResponseError(
+          JSON_RPC_INVALID_PARAMS,
+          `Invalid params: action "${params.action}" is not supported for user_question gates`,
+        )
+      }
+      if (params.action === 'answer' && params.answer === undefined) {
+        throw new JsonRpcResponseError(
+          JSON_RPC_INVALID_PARAMS,
+          'Invalid params: answer is required when resolving a user_question gate',
+        )
+      }
+    }
 
     appendLedgerEvent(context.runDir, {
       schemaVersion: 1,
@@ -137,6 +155,9 @@ export function createGateResolveHandler(
           : {}),
         ...(params.addRetries !== undefined
           ? { addRetries: params.addRetries }
+          : {}),
+        ...(params.answer !== undefined
+          ? { answer: params.answer }
           : {}),
       },
     })

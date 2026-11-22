@@ -1,6 +1,9 @@
-import type { ArtifactClient } from '../types/artifact.js'
+import type { ArtifactClient, AskUserHandler } from '../types/artifact.js'
 import type { LogStore } from '../types/log.js'
+import { ASK_USER_TOOL_NAME, executeAskUserToolCall, MCP_INTERACTIVE_TOOLS_LIST } from './mcp-interactive-tools.js'
 import { executeLogToolCall, MCP_LOG_TOOLS_LIST } from './mcp-log-tools.js'
+
+export { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST }
 
 export interface McpToolResult {
   content: Array<{ type: 'text', text: string }>
@@ -143,6 +146,7 @@ export async function executeToolCall(
   args: Record<string, unknown> | undefined,
   store: ArtifactClient,
   logStore?: LogStore,
+  askUserHandler?: AskUserHandler,
 ): Promise<McpToolResult> {
   if (toolName === 'put_artifact') {
     return handlePutArtifact(args, store)
@@ -152,6 +156,9 @@ export async function executeToolCall(
   }
   if (toolName === 'list_artifacts') {
     return handleListArtifacts(store)
+  }
+  if (toolName === ASK_USER_TOOL_NAME) {
+    return executeAskUserToolCall(args, askUserHandler)
   }
   if (toolName === 'read_log_page' || toolName === 'read_log_lines' || toolName === 'search_log') {
     if (!logStore) {
@@ -184,12 +191,17 @@ export function handleInitialize(id: unknown): Record<string, unknown> {
   }
 }
 
-export function handleToolsList(id: unknown): Record<string, unknown> {
+export function handleToolsList(id: unknown, includeInteractive = false): Record<string, unknown> {
   return {
     jsonrpc: '2.0',
     id,
     result: {
-      tools: MCP_TOOLS_LIST,
+      tools: includeInteractive
+        ? [
+            ...MCP_TOOLS_LIST,
+            ...MCP_INTERACTIVE_TOOLS_LIST,
+          ]
+        : MCP_TOOLS_LIST,
     },
   }
 }

@@ -266,15 +266,16 @@ export function defineHarness<
   S0Out = any,
   S0Art = any,
   const S0BeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet | ((ctx: import('./types/context.js').StepContext) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+  const S0Interactive extends import('./types/interactive.js').StepInteractiveConfig<any> = boolean,
   TName extends string = string,
 >(config: {
   name: TName
   cleanupPolicy?: CleanupPolicy
-  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep>]
+  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
 }): {
   name: TName
   cleanupPolicy?: CleanupPolicy
-  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep>]
+  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
 }
 
 // Fallback overload preserving step configuration
@@ -299,11 +300,12 @@ export interface HarnessBuilder<
       SArt = any,
       const SBeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
         | ((ctx: import('./types/inference.js').PriorStepContext<TSteps>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
+      const SInteractive extends import('./types/interactive.js').StepInteractiveConfig<any> = boolean,
     >(
-      step: PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep>,
+      step: PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep, SInteractive>,
     ): HarnessBuilder<
       TName,
-      readonly [...TSteps, PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep>]
+      readonly [...TSteps, PlainStepDef<TSteps, SId, SOut, SArt, SBeforeStep, SInteractive>]
     >
     <
       SId extends string,

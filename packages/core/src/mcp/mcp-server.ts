@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
+import type { ArtifactClient, AskUserHandler, EmbeddedMcpServer } from '../types/artifact.js'
 import type { LogStore } from '../types/log.js'
 import { Buffer } from 'node:buffer'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -93,13 +93,14 @@ async function dispatchJsonRpc(
   body: Record<string, unknown>,
   store: ArtifactClient,
   logStore: LogStore,
+  askUserHandler?: AskUserHandler,
 ): Promise<Record<string, unknown>> {
   const { id, method, params } = body
   if (method === 'initialize') {
     return handleInitialize(id)
   }
   if (method === 'tools/list') {
-    return handleToolsList(id)
+    return handleToolsList(id, askUserHandler !== undefined)
   }
   if (method === 'tools/call') {
     const p = typeof params === 'object' && params !== null
@@ -111,7 +112,7 @@ async function dispatchJsonRpc(
     const args = typeof p?.arguments === 'object' && p.arguments !== null
       ? (p.arguments as Record<string, unknown>)
       : undefined
-    const toolResult = await executeToolCall(toolName, args, store, logStore)
+    const toolResult = await executeToolCall(toolName, args, store, logStore, askUserHandler)
     return { jsonrpc: '2.0', id, result: toolResult }
   }
   return {
@@ -136,6 +137,7 @@ async function handleJsonRpcPost(
   res: ServerResponse,
   store: ArtifactClient,
   logStore: LogStore,
+  askUserHandler?: AskUserHandler,
 ): Promise<void> {
   let bodyText: string
   try {
@@ -179,13 +181,13 @@ async function handleJsonRpcPost(
   }
 
   if (parsed.id === undefined) {
-    await dispatchJsonRpc(parsed, store, logStore)
+    await dispatchJsonRpc(parsed, store, logStore, askUserHandler)
     res.writeHead(204)
     res.end()
     return
   }
 
-  const response = await dispatchJsonRpc(parsed, store, logStore)
+  const response = await dispatchJsonRpc(parsed, store, logStore, askUserHandler)
   sendJson(res, 200, response)
 }
 
@@ -196,6 +198,7 @@ export async function handleIncomingRequest(
   store: ArtifactClient,
   logStore: LogStore,
   sseConnections: Set<ServerResponse>,
+  askUserHandler?: AskUserHandler,
 ): Promise<void> {
   if (!verifyAuthToken(req.headers.authorization, token)) {
     sendJson(res, 401, { error: 'Unauthorized' })
@@ -220,7 +223,7 @@ export async function handleIncomingRequest(
   }
 
   if (req.method === 'POST' && (pathname === '/mcp' || pathname === '/message')) {
-    await handleJsonRpcPost(req, res, store, logStore)
+    await handleJsonRpcPost(req, res, store, logStore, askUserHandler)
     return
   }
 
@@ -242,10 +245,12 @@ export async function startEmbeddedMcpServer(
   const logStore = resolvedOpts?.logStore ?? createLogStore(runDir)
   const host = resolvedOpts?.host ?? '127.0.0.1'
   const sseConnections = new Set<ServerResponse>()
+  let askUserHandler: AskUserHandler | undefined
 
   const server = http.createServer((req, res) => {
-    void handleIncomingRequest(req, res, token, store, logStore, sseConnections)
+    void handleIncomingRequest(req, res, token, store, logStore, sseConnections, askUserHandler)
   })
+  server.requestTimeout = 0
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
@@ -266,6 +271,9 @@ export async function startEmbeddedMcpServer(
     url: serverUrl,
     port,
     authToken: token,
+    setAskUserHandler: (handler: AskUserHandler | undefined): void => {
+      askUserHandler = handler
+    },
     close: async (): Promise<void> => {
       for (const conn of sseConnections) {
         conn.end()

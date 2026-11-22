@@ -45,7 +45,7 @@ export interface JsonRpcErrorResponse {
 
 export type JsonRpcResponse<T = unknown> = JsonRpcSuccessResponse<T> | JsonRpcErrorResponse
 
-export type GateAction = 'pass' | 'fail' | 'retry' | 'skip' | 'abort'
+export type GateAction = 'pass' | 'fail' | 'retry' | 'skip' | 'abort' | 'answer'
 
 export interface GateResolveParams {
   stepId: string
@@ -53,6 +53,7 @@ export interface GateResolveParams {
   action: GateAction
   feedback?: string
   addRetries?: number
+  answer?: unknown
 }
 
 export interface GateResolveResult {

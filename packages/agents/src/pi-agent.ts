@@ -241,7 +241,11 @@ async function executePiTurn<TOutput>(
   const customTools = [
     ...(input.mcpServerUrl === ''
       ? []
-      : createMcpBridgeTools({ url: input.mcpServerUrl, authToken: input.mcpAuthToken })),
+      : createMcpBridgeTools({
+          url: input.mcpServerUrl,
+          authToken: input.mcpAuthToken,
+          interactive: input.interactive,
+        })),
     ...(submit === undefined
       ? []
       : [submit.tool]),

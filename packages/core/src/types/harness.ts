@@ -9,6 +9,7 @@ import type {
 import type { ArtifactValidationRule } from './artifact.js'
 import type { DynamicProperty, EnvironmentAdapter, ProvisionedEnvironment, StepContext, StepResult } from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
+import type { StepInteractiveConfig } from './interactive.js'
 
 export { isGuardrail } from './guardrail.js'
 export type { OnMaxRetriesExceededAction } from './guardrail.js'
@@ -129,6 +130,7 @@ export interface StepConfig<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: BeforeStepGuardrails<TMatrixContext>
+  interactive?: StepInteractiveConfig<TMatrixContext>
   afterStep?: AfterStepGuardrails<TContext>
   run: StepRunFn<TOutput, TContext> | StepRunFactory<TContext> | AgentRunner<TOutput, TContext>
 }

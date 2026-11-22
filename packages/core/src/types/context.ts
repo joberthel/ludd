@@ -37,6 +37,9 @@ export interface StepContext<
 /** Context passed after this step's beforeStep guardrails have completed. */
 export type StepContextWithBeforeStep<TContext, TBeforeStep> = TContext & { beforeStep: TBeforeStep }
 
+/** Context passed after this step's initial interactive questions have been answered. */
+export type StepContextWithInteractive<TContext, TInteractive> = TContext & { interactive: TInteractive }
+
 export type DynamicProperty<T, TContext = StepContext>
   = | T
     | ((ctx: TContext) => T | Promise<T>)

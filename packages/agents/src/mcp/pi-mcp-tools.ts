@@ -1,19 +1,21 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import { MCP_TOOLS_LIST } from '@ludd/core'
+import { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST, MCP_TOOLS_LIST } from '@ludd/core'
 import { z } from 'zod'
 
 /** Name of the in-turn structured-output tool exposed when a step declares an `outputSchema`. */
 export const SUBMIT_STEP_OUTPUT_TOOL = 'submit_step_output'
 
-/** Names of every bridge tool (MCP-forwarding tools plus `submit_step_output`). */
+/** Names of every bridge tool (MCP-forwarding tools plus `submit_step_output` and `ask_user`). */
 export const BRIDGE_TOOL_NAMES: readonly string[] = [
   ...MCP_TOOLS_LIST.map(tool => tool.name),
+  ASK_USER_TOOL_NAME,
   SUBMIT_STEP_OUTPUT_TOOL,
 ]
 
 export interface McpBridgeOptions {
   url: string
   authToken: string
+  interactive?: boolean
 }
 
 interface McpToolCallResponse {
@@ -73,7 +75,13 @@ async function callMcpTool(
  * as failed and the model can react.
  */
 export function createMcpBridgeTools(options: McpBridgeOptions): ToolDefinition[] {
-  return MCP_TOOLS_LIST.map(tool => ({
+  const tools = options.interactive === true
+    ? [
+        ...MCP_TOOLS_LIST,
+        ...MCP_INTERACTIVE_TOOLS_LIST,
+      ]
+    : MCP_TOOLS_LIST
+  return tools.map(tool => ({
     name: tool.name,
     label: tool.name,
     description: tool.description,

@@ -50,6 +50,24 @@ describe('createMcpBridgeTools (real embedded server)', () => {
     }
   })
 
+  it('exposes ask_user only when interactive is true and forwards answers from the server handler', async () => {
+    const server = await startEmbeddedMcpServer(dir)
+    try {
+      server.setAskUserHandler?.(async q => `answered:${q.prompt}`)
+      const nonInteractive = createMcpBridgeTools({ url: server.url, authToken: server.authToken })
+      expect(nonInteractive.map(t => t.name)).not.toContain('ask_user')
+
+      const interactive = createMcpBridgeTools({ url: server.url, authToken: server.authToken, interactive: true })
+      const askTool = interactive.find(t => t.name === 'ask_user')
+      expect(askTool).toBeDefined()
+      const res = await exec(askTool)('1', { type: 'text', prompt: 'Hello?' })
+      expect(res.content[0]?.text).toBe('answered:Hello?')
+    }
+    finally {
+      await server.close()
+    }
+  })
+
   it('fails on a wrong token (HTTP 401)', async () => {
     const server = await startEmbeddedMcpServer(dir)
     try {

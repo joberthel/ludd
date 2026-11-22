@@ -24,6 +24,7 @@ export const options = z.object({
     'retry',
     'skip',
     'abort',
+    'answer',
   ]).optional().describe(option({
     description: 'Gate resolution action',
   })),
@@ -32,6 +33,9 @@ export const options = z.object({
   })),
   addRetries: z.number().int().positive().optional().describe(option({
     description: 'Additional retries to grant',
+  })),
+  answer: z.string().optional().describe(option({
+    description: 'Answer value for a waiting interactive user question',
   })),
 })
 
@@ -55,10 +59,14 @@ export default function Gate({ args: [runId], options: opts }: GateProps) {
     ...(opts.addRetries !== undefined
       ? { addRetries: opts.addRetries }
       : {}),
+    ...(opts.answer !== undefined
+      ? { answer: opts.answer }
+      : {}),
   }), [
     runId,
     opts.action,
     opts.addRetries,
+    opts.answer,
     opts.feedback,
     opts.workspace,
   ])

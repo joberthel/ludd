@@ -3,13 +3,17 @@ import { createInterface } from 'node:readline/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { promptForGate } from './inline-gate-prompter.js'
 
-const { question, close } = vi.hoisted(() => ({
+const { question, close, promptTty } = vi.hoisted(() => ({
   question: vi.fn<(...args: string[]) => Promise<string>>(),
   close: vi.fn(),
+  promptTty: vi.fn(async () => 'tty-answer'),
 }))
 
 vi.mock('node:readline/promises', () => ({
   createInterface: vi.fn(() => ({ question, close })),
+}))
+vi.mock('../ui/interactive-question-prompt.js', () => ({
+  promptInteractiveQuestionInTty: promptTty,
 }))
 
 function snapshot(gateType: 'human_review' | 'max_retries_exceeded' = 'human_review'): RunStateSnapshot {
@@ -268,4 +272,107 @@ it('rethrows non-abort errors from question', async () => {
   question.mockRejectedValueOnce(new Error('stdin failed'))
   await expect(promptForGate(snapshot(), control, controller.signal)).rejects.toThrow('stdin failed')
   expect(close).toHaveBeenCalledOnce()
+})
+
+it('resolves user_question gates via readline fallback in non-TTY and retries invalid input', async () => {
+  const control = client()
+  const origTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+  Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true })
+  const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+  try {
+    const qSnap: RunStateSnapshot = {
+      ...snapshot(),
+      activeGate: {
+        stepId: 'step-a',
+        phase: 'interactive',
+        guardrailIndex: 0,
+        gateType: 'user_question',
+        prompt: 'Pick one',
+        question: {
+          type: 'select',
+          prompt: 'Pick one',
+          options: ['a', 'b'],
+        },
+        createdAt: new Date().toISOString(),
+      },
+    }
+    question.mockResolvedValueOnce('invalid').mockResolvedValueOnce('b')
+    await promptForGate(qSnap, control)
+    expect(control.resolveGate).toHaveBeenCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'b',
+    })
+
+    const textSnap: RunStateSnapshot = {
+      ...qSnap,
+      activeGate: {
+        ...qSnap.activeGate!,
+        prompt: 'Enter text',
+        question: { type: 'text', prompt: 'Enter text' },
+      },
+    }
+    question.mockResolvedValueOnce('hello')
+    await promptForGate(textSnap, control)
+    expect(control.resolveGate).toHaveBeenLastCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'hello',
+    })
+  }
+  finally {
+    log.mockRestore()
+    if (origTty)
+      Object.defineProperty(process.stdin, 'isTTY', origTty)
+    else
+      delete (process.stdin as { isTTY?: boolean }).isTTY
+  }
+})
+
+it('resolves user_question gates via Ink TTY prompter when stdin is a TTY', async () => {
+  const control = client()
+  const origTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+  Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true })
+  try {
+    const qSnap: RunStateSnapshot = {
+      ...snapshot(),
+      activeGate: {
+        stepId: 'step-a',
+        phase: 'run',
+        guardrailIndex: 0,
+        gateType: 'user_question',
+        prompt: 'Name?',
+        question: { type: 'text', prompt: 'Name?' },
+        createdAt: new Date().toISOString(),
+      },
+    }
+    promptTty.mockResolvedValueOnce('Alice')
+    await promptForGate(qSnap, control)
+    expect(control.resolveGate).toHaveBeenCalledWith({
+      stepId: 'step-a',
+      guardrailIndex: 0,
+      action: 'answer',
+      answer: 'Alice',
+    })
+
+    const controller = new AbortController()
+    const abortErr = new Error('aborted')
+    abortErr.name = 'AbortError'
+    promptTty.mockImplementationOnce(async () => {
+      controller.abort()
+      throw abortErr
+    })
+    await expect(promptForGate(qSnap, control, controller.signal)).resolves.toBeUndefined()
+
+    promptTty.mockRejectedValueOnce(new Error('tty crash'))
+    await expect(promptForGate(qSnap, control)).rejects.toThrow('tty crash')
+  }
+  finally {
+    if (origTty)
+      Object.defineProperty(process.stdin, 'isTTY', origTty)
+    else
+      delete (process.stdin as { isTTY?: boolean }).isTTY
+  }
 })

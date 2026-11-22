@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { InteractiveQuestion } from './interactive.js'
 
 export interface ArtifactClient {
   put: (key: string, content: string) => Promise<void>
@@ -8,10 +9,13 @@ export interface ArtifactClient {
   list?: () => Promise<string[]>
 }
 
+export type AskUserHandler = (question: InteractiveQuestion) => Promise<unknown>
+
 export interface EmbeddedMcpServer {
   readonly url: string
   readonly port: number
   readonly authToken: string
+  setAskUserHandler?: (handler: AskUserHandler | undefined) => void
   close: () => Promise<void>
 }
 

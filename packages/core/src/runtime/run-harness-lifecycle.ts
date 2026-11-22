@@ -57,6 +57,7 @@ export function clearActiveAndPersist(runDir: string, snapshot: RunStateSnapshot
   snapshot.activeGate = null
   snapshot.activeStepOutput = undefined
   snapshot.activeBeforeStepResults = undefined
+  snapshot.activeInteractiveAnswers = undefined
   persistSnapshot(runDir, snapshot)
 }
 

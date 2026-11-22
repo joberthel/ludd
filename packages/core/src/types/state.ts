@@ -1,4 +1,5 @@
 import type { StepResult } from './context.js'
+import type { InteractiveQuestion } from './interactive.js'
 import type { LogMetadata } from './log.js'
 
 export type RunStatus = 'running' | 'waiting_for_gate' | 'passed' | 'failed'
@@ -6,11 +7,13 @@ export type RunStatus = 'running' | 'waiting_for_gate' | 'passed' | 'failed'
 export interface ActiveGateState {
   stepId: string
   matrixIndex?: number
-  phase: 'beforeStep' | 'afterStep'
+  phase: 'beforeStep' | 'interactive' | 'run' | 'afterStep'
   guardrailIndex: number
-  gateType: 'human_review' | 'max_retries_exceeded'
+  gateType: 'human_review' | 'max_retries_exceeded' | 'user_question'
   prompt: string
   logKey?: string
+  question?: InteractiveQuestion
+  questionKey?: string
   createdAt: string
 }
 
@@ -39,6 +42,7 @@ export interface RunStateSnapshot {
   activeGate?: ActiveGateState | null
   activeStepOutput?: unknown
   activeBeforeStepResults?: unknown
+  activeInteractiveAnswers?: Record<string, unknown>
   activeSessionId?: string | null
   activeStepAttempt?: number
   activeMatrixIndex?: number | null

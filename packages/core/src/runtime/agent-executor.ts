@@ -28,6 +28,7 @@ import {
   GuardrailRetrySignal,
   runAfterStepGuardrails,
 } from './guardrail-executor.js'
+import { createInteractiveQuestionHandler } from './interactive-executor.js'
 
 export type RehydratedAgentState = RehydratedAgentPromptState
 export { createAgentStepOutput, formatRetryPrompt, resolveInitialPrompt, validateStepOutput }
@@ -104,7 +105,7 @@ interface AgentTurnExecutionScope {
   initialPrompt: string
   maxTotalTurns: number
   environment: ProvisionedEnvironment
-  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
+  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken' | 'setAskUserHandler'>
   logStore?: LogStore
   gateWaiter?: GateWaiter
   activeGate?: ActiveGateState | null
@@ -169,6 +170,9 @@ async function runTurnLoopAttempt(
     ...(scope.step.outputSchema === undefined
       ? {}
       : { outputSchema: scope.step.outputSchema }),
+    ...(scope.step.interactive !== undefined && scope.step.interactive !== false
+      ? { interactive: true }
+      : {}),
     signal: scope.gateWaiter?.signal,
   })
   emitTurnCompleted(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, turnResult.output, attempt)
@@ -197,7 +201,7 @@ export async function executeAgentStep(
   snapshot: RunStateSnapshot,
   runDir: string,
   rehydration?: RehydratedAgentState,
-  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
+  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken' | 'setAskUserHandler'>,
   environment?: ProvisionedEnvironment,
   logStore?: LogStore,
   beforeStepNotification?: string,
@@ -232,12 +236,25 @@ export async function executeAgentStep(
     activeStepOutput: rehydration?.activeStepOutput,
   }
 
-  while (true) {
-    const outcome = await runTurnLoopAttempt(scope, currentPrompt, attempt)
-    if (outcome.success) {
-      return outcome.result
+  const askUserHandler = createInteractiveQuestionHandler({
+    step,
+    snapshot,
+    runDir,
+    matrixIndex: ctx.matrix?.index,
+    gateWaiter,
+  })
+  mcpServer?.setAskUserHandler?.(askUserHandler)
+  try {
+    while (true) {
+      const outcome = await runTurnLoopAttempt(scope, currentPrompt, attempt)
+      if (outcome.success) {
+        return outcome.result
+      }
+      currentPrompt = outcome.nextPrompt
+      attempt += 1
     }
-    currentPrompt = outcome.nextPrompt
-    attempt += 1
+  }
+  finally {
+    mcpServer?.setAskUserHandler?.(undefined)
   }
 }

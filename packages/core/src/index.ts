@@ -44,7 +44,7 @@ export {
   sanitizeLogKey,
 } from './mcp/log-store.js'
 export { startEmbeddedMcpServer } from './mcp/mcp-server.js'
-export { MCP_TOOLS_LIST } from './mcp/mcp-tools.js'
+export { ASK_USER_TOOL_NAME, MCP_INTERACTIVE_TOOLS_LIST, MCP_TOOLS_LIST } from './mcp/mcp-tools.js'
 export { appendLedgerEvent, readLedgerEvents } from './persistence/ledger-writer.js'
 export {
   acquireRunPidLock,
@@ -115,6 +115,13 @@ export {
   runAfterStepGuardrails,
 } from './runtime/guardrail-executor.js'
 export {
+  askInteractiveQuestion,
+  createInteractiveQuestionHandler,
+  resolveInteractiveOptions,
+  runInitialInteractiveQuestions,
+  validateInteractiveAnswer,
+} from './runtime/interactive-executor.js'
+export {
   executeMatrixStep,
   resolveMatrixItems,
 } from './runtime/matrix-executor.js'
@@ -135,12 +142,15 @@ export type {
   ArtifactClient,
   ArtifactValidationIssue,
   ArtifactValidationRule,
+  AskUserHandler,
   EmbeddedMcpServer,
 } from './types/artifact.js'
 export type {
   DynamicProperty,
   MatrixCursor,
   StepContext,
+  StepContextWithBeforeStep,
+  StepContextWithInteractive,
   StepResult,
   StepStatus,
 } from './types/context.js'
@@ -153,7 +163,6 @@ export {
   type ProvisionContext,
   type ProvisionedEnvironment,
 } from './types/environment.js'
-
 export {
   type ExecLogPaginationConfig,
   type ExecLogPaginationSelector,
@@ -165,6 +174,7 @@ export {
   isGuardrail,
   type OnMaxRetriesExceededAction,
 } from './types/guardrail.js'
+
 export {
   type AccumulateArtifactItemMap,
   type AccumulatePriorSteps,
@@ -196,6 +206,22 @@ export {
   type StepTupleEntry,
   type TypedStep,
 } from './types/harness.js'
+export {
+  type InferQuestionAnswer,
+  type InteractiveAnswers,
+  type InteractiveConfirmQuestion,
+  type InteractiveInitialQuestions,
+  type InteractiveMultiSelectQuestion,
+  type InteractiveNumberQuestion,
+  type InteractiveQuestion,
+  type InteractiveQuestionMap,
+  type InteractiveSelectOption,
+  type InteractiveSelectQuestion,
+  type InteractiveStepOptions,
+  type InteractiveTextQuestion,
+  normalizeSelectOptions,
+  type StepInteractiveConfig,
+} from './types/interactive.js'
 export {
   type ControlClient,
   type ControlRpcHandlers,

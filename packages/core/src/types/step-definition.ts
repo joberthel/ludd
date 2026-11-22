@@ -1,6 +1,12 @@
 import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
-import type { DynamicProperty, ProvisionedEnvironment, StepContext, StepContextWithBeforeStep } from './context.js'
+import type {
+  DynamicProperty,
+  ProvisionedEnvironment,
+  StepContext,
+  StepContextWithBeforeStep,
+  StepContextWithInteractive,
+} from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
 import type { AfterStepGuardrails, BeforeStepGuardrails, BeforeStepResults, StepRunFactory, StepRunFn } from './harness.js'
 import type {
@@ -10,6 +16,12 @@ import type {
   InferSingleStepOutput,
   PriorStepContext,
 } from './inference.js'
+import type { InteractiveAnswers, StepInteractiveConfig } from './interactive.js'
+
+type StepExecutionContext<TContext, TBeforeStep, TInteractive> = StepContextWithInteractive<
+  StepContextWithBeforeStep<TContext, BeforeStepResults<TBeforeStep>>,
+  InteractiveAnswers<TInteractive>
+>
 
 export interface PlainStepDef<
   TPriorSteps extends readonly unknown[],
@@ -17,6 +29,7 @@ export interface PlainStepDef<
   TOutput = any,
   TArtifacts = any,
   TBeforeStep = readonly Guardrail<any, any>[],
+  TInteractive = boolean,
 > {
   id: TId
   name?: string
@@ -29,18 +42,28 @@ export interface PlainStepDef<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+  interactive?: TInteractive & StepInteractiveConfig<
+    StepContextWithBeforeStep<
+      StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>,
+      BeforeStepResults<TBeforeStep>
+    >
+  >
   afterStep?: AfterStepGuardrails<
-    StepContextWithBeforeStep<StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      unknown,
-      false
-    >, BeforeStepResults<TBeforeStep>>
+    StepExecutionContext<
+      StepContext<
+        InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: PlainStepDef<TPriorSteps, TId, TOutput, TArtifacts>['run'] }>,
+        AccumulatePriorSteps<TPriorSteps>,
+        unknown,
+        false
+      >,
+      TBeforeStep,
+      TInteractive
+    >
   >
   run:
-    | StepRunFn<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
-    | StepRunFactory<StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
-    | AgentRunner<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, BeforeStepResults<TBeforeStep>>>
+    | StepRunFn<any, StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, TBeforeStep, TInteractive>>
+    | StepRunFactory<StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, TBeforeStep, TInteractive>>
+    | AgentRunner<any, StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>, TBeforeStep, TInteractive>>
 }
 
 export interface ItemsMatrixStepDef<
@@ -50,6 +73,7 @@ export interface ItemsMatrixStepDef<
   TArtifacts = any,
   TItem = any,
   TBeforeStep = readonly Guardrail<any, any>[],
+  TInteractive = boolean,
 > {
   id: TId
   name?: string
@@ -65,18 +89,28 @@ export interface ItemsMatrixStepDef<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+  interactive?: TInteractive & StepInteractiveConfig<
+    StepContextWithBeforeStep<
+      StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>,
+      BeforeStepResults<TBeforeStep>
+    >
+  >
   afterStep?: AfterStepGuardrails<
-    StepContextWithBeforeStep<StepContext<
-      InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
-      AccumulatePriorSteps<TPriorSteps>,
-      TItem,
-      true
-    >, BeforeStepResults<TBeforeStep>>
+    StepExecutionContext<
+      StepContext<
+        InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ItemsMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TItem>['run'] }>,
+        AccumulatePriorSteps<TPriorSteps>,
+        TItem,
+        true
+      >,
+      TBeforeStep,
+      TInteractive
+    >
   >
   run:
-    | StepRunFn<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
-    | StepRunFactory<StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
-    | AgentRunner<any, StepContextWithBeforeStep<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, BeforeStepResults<TBeforeStep>>>
+    | StepRunFn<any, StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, TBeforeStep, TInteractive>>
+    | StepRunFactory<StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, TBeforeStep, TInteractive>>
+    | AgentRunner<any, StepExecutionContext<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>, TBeforeStep, TInteractive>>
 }
 
 export interface ArtifactMatrixStepDef<
@@ -86,6 +120,7 @@ export interface ArtifactMatrixStepDef<
   TArtifacts = any,
   TKey extends string = string,
   TBeforeStep = readonly Guardrail<any, any>[],
+  TInteractive = boolean,
 > {
   id: TId
   name?: string
@@ -116,10 +151,10 @@ export interface ArtifactMatrixStepDef<
       true
     >
   >
-  afterStep?: AfterStepGuardrails<
+  interactive?: TInteractive & StepInteractiveConfig<
     StepContextWithBeforeStep<
       StepContext<
-        InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
+        unknown,
         AccumulatePriorSteps<TPriorSteps>,
         InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
         true
@@ -127,40 +162,55 @@ export interface ArtifactMatrixStepDef<
       BeforeStepResults<TBeforeStep>
     >
   >
+  afterStep?: AfterStepGuardrails<
+    StepExecutionContext<
+      StepContext<
+        InferSingleStepOutput<{ outputSchema?: z.ZodType<TOutput>, run: ArtifactMatrixStepDef<TPriorSteps, TId, TOutput, TArtifacts, TKey>['run'] }>,
+        AccumulatePriorSteps<TPriorSteps>,
+        InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+        true
+      >,
+      TBeforeStep,
+      TInteractive
+    >
+  >
   run:
     | StepRunFn<
       any,
-      StepContextWithBeforeStep<
+      StepExecutionContext<
         StepContext<
           unknown,
           AccumulatePriorSteps<TPriorSteps>,
           InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
           true
         >,
-        BeforeStepResults<TBeforeStep>
+        TBeforeStep,
+        TInteractive
       >
     >
     | StepRunFactory<
-      StepContextWithBeforeStep<
+      StepExecutionContext<
         StepContext<
           unknown,
           AccumulatePriorSteps<TPriorSteps>,
           InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
           true
         >,
-        BeforeStepResults<TBeforeStep>
+        TBeforeStep,
+        TInteractive
       >
     >
     | AgentRunner<
       any,
-      StepContextWithBeforeStep<
+      StepExecutionContext<
         StepContext<
           unknown,
           AccumulatePriorSteps<TPriorSteps>,
           InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
           true
         >,
-        BeforeStepResults<TBeforeStep>
+        TBeforeStep,
+        TInteractive
       >
     >
 }
