@@ -1,0 +1,7 @@
+{
+  "packages/core": "0.0.1",
+  "packages/agents": "0.0.1",
+  "packages/environments": "0.0.1",
+  "packages/guardrails": "0.0.1",
+  "packages/cli": "0.0.1"
+}
