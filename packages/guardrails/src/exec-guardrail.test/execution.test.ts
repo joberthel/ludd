@@ -81,6 +81,7 @@ describe('execGuardrail basic execution', () => {
     expect(capturedOpts?.env?.MCP_SERVER_URL).toBe('http://localhost:3000')
     expect(capturedOpts?.env?.MCP_AUTH_TOKEN).toBe('token-abc')
     expect(verdict.status).toBe('pass')
+    expect(verdict.rawLog).toBe('success')
     expect(verdict.pagination).toBe('errors')
     expect(verdict.logFormat).toBe('json')
   })
@@ -111,6 +112,7 @@ describe('execGuardrail dynamic resolution and failure mapping', () => {
     expect(capturedCmd).toBe('git checkout feat')
     expect(capturedTimeout).toBe(5000)
     expect(verdict.status).toBe('pass')
+    expect(verdict.rawLog).toBeUndefined()
   })
 
   it('maps non-zero exit code to fail and combines stdout and stderr into rawLog', async () => {

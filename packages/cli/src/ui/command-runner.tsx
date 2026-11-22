@@ -93,6 +93,7 @@ export function CommandRunner({ execute, spinnerLabel, dashboard = false }: Comm
     if (isDashboard) {
       return registerRunUiHost({
         pushEntry: entry => dispatch({ type: 'PUSH_ENTRY', entry }),
+        upsertEntry: (streamKey, entry) => dispatch({ type: 'UPSERT_ENTRY', streamKey, entry }),
         setActivity: label => dispatch({ type: 'SET_ACTIVITY', activity: label }),
         setBlueprint: blueprint => dispatch({ type: 'SET_BLUEPRINT', blueprint }),
         hydrateSnapshot: snapshot => dispatch({ type: 'HYDRATE_SNAPSHOT', snapshot }),

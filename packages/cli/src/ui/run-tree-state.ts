@@ -61,6 +61,7 @@ export type RunTreeAction
   = | { type: 'SET_BLUEPRINT', blueprint: HarnessBlueprint }
     | { type: 'HYDRATE_SNAPSHOT', snapshot: RunStateSnapshot }
     | { type: 'PUSH_ENTRY', entry: RunUiEntry }
+    | { type: 'UPSERT_ENTRY', streamKey: string, entry: RunUiEntry }
     | { type: 'GUARDRAIL_STARTED', scope: UiLogScope }
     | { type: 'SET_GATE_WAITING', waiting: boolean, scope?: UiLogScope }
     | { type: 'SET_ACTIVITY', activity: string | undefined }
@@ -649,6 +650,9 @@ function handlePushEntry(state: RunTreeState, entry: RunUiEntry): RunTreeState {
       nextState = withActiveNode(nextState, runPhaseNodeId(entry.stepId, scope?.matrixIndex))
       break
     }
+    case 'guardrail.started':
+      nextState = handleGuardrailEvent(applyScopeProgress(nextState, scope), scope, 'running', entry.name)
+      break
     case 'guardrail.passed':
       nextState = handleGuardrailEvent(nextState, scope, 'passed', entry.name)
       break
@@ -660,6 +664,7 @@ function handlePushEntry(state: RunTreeState, entry: RunUiEntry): RunTreeState {
       break
     case 'tool.start':
     case 'tool.error':
+    case 'agent.thought':
     case 'agent.text':
     case 'agent.output': {
       nextState = applyScopeProgress(nextState, scope)
@@ -684,6 +689,18 @@ function handlePushEntry(state: RunTreeState, entry: RunUiEntry): RunTreeState {
   }
 
   return nextState
+}
+
+function handleUpsertEntry(state: RunTreeState, streamKey: string, entry: RunUiEntry): RunTreeState {
+  const existingIndex = state.entries.findIndex(e => e.streamKey === streamKey)
+  if (existingIndex !== -1) {
+    const existing = state.entries[existingIndex]
+    const updated: KeyedRunUiEntry = { ...entry, id: existing.id, streamKey }
+    const entries = [...state.entries]
+    entries[existingIndex] = updated
+    return { ...state, entries }
+  }
+  return handlePushEntry(state, { ...entry, streamKey })
 }
 
 function handleGateWaiting(state: RunTreeState, waiting: boolean, scope?: UiLogScope): RunTreeState {
@@ -734,6 +751,8 @@ export function runTreeReducer(state: RunTreeState, action: RunTreeAction): RunT
       return handleHydrateSnapshot(state, action.snapshot)
     case 'PUSH_ENTRY':
       return handlePushEntry(state, action.entry)
+    case 'UPSERT_ENTRY':
+      return handleUpsertEntry(state, action.streamKey, action.entry)
     case 'GUARDRAIL_STARTED':
       return handleGuardrailEvent(applyScopeProgress(state, action.scope), action.scope, 'running')
     case 'SET_GATE_WAITING':
@@ -1005,4 +1024,48 @@ export function getNodeBreadcrumb(state: RunTreeState, nodeId: string): string {
     return `${state.harnessName} › ${step?.name ?? stepId}${slicePart} › ${phase} #${Number(indexRaw) + 1}`
   }
   return state.harnessName
+}
+
+export function getNodeStatus(state: RunTreeState, nodeId: string): TreeNodeStatus | RunOverallStatus {
+  if (nodeId === 'run') {
+    return state.runStatus
+  }
+  if (nodeId.startsWith('step:')) {
+    const stepId = nodeId.slice('step:'.length)
+    return state.steps.find(s => s.id === stepId)?.status ?? 'pending'
+  }
+  if (nodeId.startsWith('slice:')) {
+    const [, stepId, indexRaw] = nodeId.split(':')
+    const matrixIndex = Number(indexRaw)
+    const step = state.steps.find(s => s.id === stepId)
+    return step?.slices.find(sl => sl.matrixIndex === matrixIndex)?.status ?? 'pending'
+  }
+  if (nodeId.startsWith('run:')) {
+    const [, stepId, matrixPart] = nodeId.split(':')
+    const step = state.steps.find(s => s.id === stepId)
+    if (!step) {
+      return 'pending'
+    }
+    if (matrixPart !== undefined && matrixPart !== 'single') {
+      const slice = step.slices.find(sl => sl.matrixIndex === Number(matrixPart))
+      return slice?.runNode.status ?? 'pending'
+    }
+    return step.runNode.status
+  }
+  if (nodeId.startsWith('guardrail:')) {
+    const [, stepId, matrixPart, phaseRaw, indexRaw] = nodeId.split(':')
+    const step = state.steps.find(s => s.id === stepId)
+    if (!step) {
+      return 'pending'
+    }
+    const phase = phaseRaw === 'beforeStep'
+      ? 'beforeStep'
+      : 'afterStep'
+    const gIndex = Number(indexRaw)
+    const target = matrixPart !== undefined && matrixPart !== 'single'
+      ? step.slices.find(sl => sl.matrixIndex === Number(matrixPart))
+      : step
+    return target?.[phase].find(g => g.guardrailIndex === gIndex)?.status ?? 'pending'
+  }
+  return state.runStatus
 }

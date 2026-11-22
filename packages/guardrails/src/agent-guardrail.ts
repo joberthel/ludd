@@ -108,6 +108,7 @@ function emitPreExecutionTelemetry(
   sessionId: string,
   prompt: string,
   mode: AgentAccessMode,
+  guardrailName?: string,
 ): void {
   if (!input.runDir) {
     return
@@ -119,7 +120,16 @@ function emitPreExecutionTelemetry(
     stepId: input.stepId,
     matrixIndex: input.ctx.matrix?.index,
     eventType: 'agent.stream.linked',
-    payload: { sessionId, streamPath: `streams/${sessionId}.jsonl`, attempt: input.attempt },
+    payload: {
+      sessionId,
+      streamPath: `streams/${sessionId}.jsonl`,
+      attempt: input.attempt,
+      phase: input.phase,
+      guardrailIndex: input.guardrailIndex,
+      ...(guardrailName !== undefined
+        ? { guardrailName }
+        : {}),
+    },
   })
   appendStreamEvent(input.runDir, sessionId, {
     schemaVersion: 1,
@@ -193,7 +203,13 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     ? await resolveDynamicProperty(config.environment, input.ctx)
     : input.environment
 
-  emitPreExecutionTelemetry(input as GuardrailExecutionInput<StepContext>, sessionId, prompt, mode)
+  emitPreExecutionTelemetry(
+    input as GuardrailExecutionInput<StepContext>,
+    sessionId,
+    prompt,
+    mode,
+    config.name,
+  )
   const verdictSchema = z.object({
     status: z.enum(['pass', 'fail', 'skip']),
     body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,

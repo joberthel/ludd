@@ -158,6 +158,11 @@ it('dispatches formatted ledger and stream events to the registered RunUiHost', 
         stepId: 's1',
         payload: { text: 'internal' },
       }),
+      JSON.stringify({
+        eventType: 'message_chunk',
+        stepId: 's1',
+        payload: { text: 'after thought' },
+      }),
       JSON.stringify({ eventType: 'turn.started', stepId: 's1' }),
       JSON.stringify({
         eventType: 'message_chunk',
@@ -432,6 +437,251 @@ it('attaches matrixIndex, matrixTotal, phase, guardrailIndex, and attempt scopes
         attempt: 2,
       },
     })
+  }
+  finally {
+    unregister()
+  }
+})
+
+it('streams live thoughts via upsertEntry, scopes agentGuardrail streams, and forwards guardrail verdicts', async () => {
+  vi.useFakeTimers()
+  const dir = setup()
+  const streams = path.join(dir, 'streams')
+  fs.mkdirSync(streams)
+  const pushed: RunUiEntry[] = []
+  const upserts = new Map<string, RunUiEntry[]>()
+  const unregister = registerRunUiHost({
+    pushEntry: e => pushed.push(e),
+    upsertEntry: (key, e) => {
+      const list = upserts.get(key) ?? []
+      list.push(e)
+      upserts.set(key, list)
+    },
+    setActivity: () => {},
+  })
+
+  try {
+    fs.writeFileSync(path.join(dir, 'ledger.jsonl'), [
+      JSON.stringify({
+        eventType: 'guardrail.started',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          guardrailName: 'arch',
+        },
+      }),
+      JSON.stringify({
+        eventType: 'agent.stream.linked',
+        stepId: 'review',
+        payload: {
+          sessionId: 'guardrail-sess-1',
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          guardrailName: 'arch',
+        },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.passed',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          guardrailName: 'typecheck',
+          verdict: {
+            status: 'pass',
+            rawLog: '0 errors',
+            logKey: 'typecheck-0',
+          },
+        },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.failed',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 1,
+          guardrailName: 'lint',
+          verdict: {
+            status: 'fail',
+            body: 'Command timed out',
+            rawLog: 'partial stderr',
+          },
+        },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.skipped',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 2,
+          guardrailName: 'e2e',
+          verdict: {
+            status: 'skip',
+            body: { reason: 'no changes' },
+          },
+        },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.passed',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 3,
+          verdict: {
+            status: 'pass',
+            body: 'same',
+            rawLog: 'same',
+          },
+        },
+      }),
+      JSON.stringify({
+        eventType: 'guardrail.passed',
+        stepId: 'review',
+        payload: {
+          phase: 'afterStep',
+          guardrailIndex: 4,
+          verdict: {
+            status: 'pass',
+            logKey: 'only-key',
+          },
+        },
+      }),
+      '',
+    ].join('\n'))
+
+    fs.writeFileSync(path.join(streams, 'guardrail-sess-1.jsonl'), [
+      JSON.stringify({ eventType: 'turn.started', stepId: 'review', payload: {} }),
+      JSON.stringify({
+        eventType: 'thought',
+        stepId: 'review',
+        payload: { text: 'First ' },
+      }),
+      '',
+    ].join('\n'))
+
+    const tailer = new LiveRunTailer(dir, false)
+    tailer.start()
+    await vi.advanceTimersByTimeAsync(100)
+
+    const liveThoughtUpdates = upserts.get('thought:guardrail-sess-1:0')
+    expect(liveThoughtUpdates).toBeDefined()
+    expect(liveThoughtUpdates?.[0]).toEqual({
+      kind: 'agent.thought',
+      text: 'First',
+      streaming: true,
+      scope: {
+        stepId: 'review',
+        phase: 'afterStep',
+        guardrailIndex: 0,
+        guardrailName: 'arch',
+      },
+    })
+
+    // Append second thought delta, message_chunk, tool_call, second thought segment, and completion
+    fs.appendFileSync(path.join(streams, 'guardrail-sess-1.jsonl'), [
+      JSON.stringify({
+        eventType: 'thought',
+        stepId: 'review',
+        payload: { text: 'part' },
+      }),
+      JSON.stringify({
+        eventType: 'message_chunk',
+        stepId: 'review',
+        payload: { text: '   ' },
+      }),
+      JSON.stringify({
+        eventType: 'message_chunk',
+        stepId: 'review',
+        payload: { text: 'Verdict: ok' },
+      }),
+      JSON.stringify({
+        eventType: 'tool_call',
+        stepId: 'review',
+        payload: {
+          phase: 'start',
+          toolName: 'read_file',
+          args: { path: 'a.ts' },
+        },
+      }),
+      JSON.stringify({
+        eventType: 'thought',
+        stepId: 'review',
+        payload: { text: '   ' },
+      }),
+      JSON.stringify({
+        eventType: 'thought',
+        stepId: 'review',
+        payload: { text: 'second' },
+      }),
+      JSON.stringify({ eventType: 'unknown.event', stepId: 'review', payload: {} }),
+      JSON.stringify({ eventType: 'turn.completed', stepId: 'review', payload: {} }),
+      '',
+    ].join('\n'))
+
+    await vi.advanceTimersByTimeAsync(100)
+    tailer.stop()
+
+    expect(upserts.get('thought:guardrail-sess-1:0')?.at(-1)).toEqual({
+      kind: 'agent.thought',
+      text: 'First part',
+      streaming: false,
+      scope: {
+        stepId: 'review',
+        phase: 'afterStep',
+        guardrailIndex: 0,
+        guardrailName: 'arch',
+      },
+    })
+    expect(upserts.get('text:guardrail-sess-1:0')?.at(-1)).toEqual({
+      kind: 'agent.text',
+      text: 'Verdict: ok',
+      scope: {
+        stepId: 'review',
+        phase: 'afterStep',
+        guardrailIndex: 0,
+        guardrailName: 'arch',
+      },
+    })
+
+    expect(pushed).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'guardrail.started',
+        name: 'arch',
+        scope: {
+          stepId: 'review',
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          guardrailName: 'arch',
+        },
+      }),
+      expect.objectContaining({
+        kind: 'tool.start',
+        toolName: 'read_file',
+        scope: {
+          stepId: 'review',
+          phase: 'afterStep',
+          guardrailIndex: 0,
+          guardrailName: 'arch',
+        },
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.passed',
+        name: 'typecheck',
+        output: '0 errors',
+        logKey: 'typecheck-0',
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.failed',
+        name: 'lint',
+        output: 'Command timed out\npartial stderr',
+      }),
+      expect.objectContaining({
+        kind: 'guardrail.skipped',
+        name: 'e2e',
+        output: JSON.stringify({ reason: 'no changes' }, null, 2),
+      }),
+    ]))
   }
   finally {
     unregister()

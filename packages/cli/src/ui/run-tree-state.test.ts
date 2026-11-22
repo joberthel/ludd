@@ -5,6 +5,7 @@ import {
   flattenVisibleTree,
   getLogsForNode,
   getNodeBreadcrumb,
+  getNodeStatus,
   guardrailNodeId,
   runPhaseNodeId,
   runTreeReducer,
@@ -966,5 +967,112 @@ describe('runTreeReducer & tree selectors', () => {
       },
     })
     expect(failed.runStatus).toBe('failed')
+  })
+
+  it('supports UPSERT_ENTRY in place, handles agent.thought & guardrail.started, and resolves getNodeStatus', () => {
+    let state = createInitialRunTreeState('flow')
+    state = runTreeReducer(state, {
+      type: 'SET_BLUEPRINT',
+      blueprint: {
+        harnessName: 'flow',
+        steps: [
+          {
+            id: 's1',
+            hasMatrix: false,
+            afterStep: [
+              { index: 0, name: 'lint' },
+            ],
+          },
+          {
+            id: 's2',
+            hasMatrix: true,
+            beforeStep: [
+              { index: 0, name: 'prep' },
+            ],
+          },
+        ],
+      },
+    })
+
+    expect(getNodeStatus(state, 'run')).toBe('running')
+    expect(getNodeStatus(state, stepNodeId('s1'))).toBe('pending')
+    expect(getNodeStatus(state, runPhaseNodeId('s1', undefined))).toBe('pending')
+    expect(getNodeStatus(state, guardrailNodeId('s1', undefined, 'afterStep', 0))).toBe('pending')
+
+    state = runTreeReducer(state, {
+      type: 'UPSERT_ENTRY',
+      streamKey: 'thought:sess:0',
+      entry: {
+        kind: 'agent.thought',
+        text: 'Thinking',
+        streaming: true,
+        scope: { stepId: 's1', phase: 'run' },
+      },
+    })
+    expect(state.entries).toHaveLength(1)
+    expect(getNodeStatus(state, runPhaseNodeId('s1', undefined))).toBe('running')
+
+    state = runTreeReducer(state, {
+      type: 'UPSERT_ENTRY',
+      streamKey: 'thought:sess:0',
+      entry: {
+        kind: 'agent.thought',
+        text: 'Thinking more',
+        streaming: false,
+        scope: { stepId: 's1', phase: 'run' },
+      },
+    })
+    expect(state.entries).toHaveLength(1)
+    expect(state.entries[0]).toMatchObject({
+      id: 0,
+      streamKey: 'thought:sess:0',
+      kind: 'agent.thought',
+      text: 'Thinking more',
+      streaming: false,
+    })
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: {
+        kind: 'guardrail.started',
+        name: 'lint',
+        scope: { stepId: 's1', phase: 'afterStep', guardrailIndex: 0 },
+      },
+    })
+    expect(getNodeStatus(state, guardrailNodeId('s1', undefined, 'afterStep', 0))).toBe('running')
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: {
+        kind: 'guardrail.passed',
+        name: 'lint',
+        scope: { stepId: 's1', phase: 'afterStep', guardrailIndex: 0 },
+      },
+    })
+    expect(getNodeStatus(state, guardrailNodeId('s1', undefined, 'afterStep', 0))).toBe('passed')
+
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: {
+        kind: 'guardrail.started',
+        name: 'prep',
+        scope: {
+          stepId: 's2',
+          matrixIndex: 0,
+          phase: 'beforeStep',
+          guardrailIndex: 0,
+        },
+      },
+    })
+    expect(getNodeStatus(state, sliceNodeId('s2', 0))).toBe('pending')
+    expect(getNodeStatus(state, guardrailNodeId('s2', 0, 'beforeStep', 0))).toBe('running')
+    expect(getNodeStatus(state, runPhaseNodeId('s2', 0))).toBe('pending')
+    expect(getNodeStatus(state, stepNodeId('missing'))).toBe('pending')
+    expect(getNodeStatus(state, sliceNodeId('missing', 0))).toBe('pending')
+    expect(getNodeStatus(state, runPhaseNodeId('missing', undefined))).toBe('pending')
+    expect(getNodeStatus(state, runPhaseNodeId('s2', 99))).toBe('pending')
+    expect(getNodeStatus(state, guardrailNodeId('missing', undefined, 'afterStep', 0))).toBe('pending')
+    expect(getNodeStatus(state, guardrailNodeId('s2', 99, 'beforeStep', 0))).toBe('pending')
+    expect(getNodeStatus(state, 'unknown-node')).toBe('running')
   })
 })

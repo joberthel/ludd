@@ -167,6 +167,9 @@ async function resolveExecutionVerdict<TBody>(
   if (result.exitCode === 0) {
     return {
       status: 'pass',
+      ...(combinedOutput !== ''
+        ? { rawLog: combinedOutput }
+        : {}),
       pagination: config.pagination,
       logFormat: resolveLogFormat(config.pagination),
     }

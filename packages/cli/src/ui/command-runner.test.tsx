@@ -251,6 +251,12 @@ it('handles hydrateSnapshot, guardrails, gates, prompts, and failed summary in d
         updatedAt: new Date().toISOString(),
       })
       host.setActivity('s2 · checking')
+      host.upsertEntry?.('thought:s2:0', {
+        kind: 'agent.thought',
+        text: 'thinking...',
+        streaming: true,
+        scope: { stepId: 's2', phase: 'run' },
+      })
       host.onGuardrailStarted?.({ stepId: 's2', phase: 'afterStep', guardrailIndex: 0 })
       host.setGateWaiting?.(true, { stepId: 's2', phase: 'afterStep', guardrailIndex: 0 })
       const ans = await promptInteractiveQuestionInTty({

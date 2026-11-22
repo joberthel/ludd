@@ -229,4 +229,74 @@ describe('runDashboard', () => {
     process.stdout.emit('resize')
     unmount()
   })
+
+  it('displays selected node status circle, agent thoughts, and guardrail output in right pane', async () => {
+    let state = createInitialRunTreeState('demo')
+    state = runTreeReducer(state, {
+      type: 'SET_BLUEPRINT',
+      blueprint: {
+        harnessName: 'demo',
+        steps: [
+          {
+            id: 'triage',
+            hasMatrix: false,
+            afterStep: [
+              { index: 0, name: 'lint' },
+            ],
+          },
+        ],
+      },
+    })
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: {
+        kind: 'step.started',
+        stepId: 'triage',
+        scope: { stepId: 'triage' },
+      },
+    })
+    state = runTreeReducer(state, {
+      type: 'UPSERT_ENTRY',
+      streamKey: 'thought:s1:0',
+      entry: {
+        kind: 'agent.thought',
+        text: 'Checking edge cases',
+        streaming: true,
+        scope: { stepId: 'triage', phase: 'run' },
+      },
+    })
+    state = runTreeReducer(state, {
+      type: 'PUSH_ENTRY',
+      entry: {
+        kind: 'guardrail.failed',
+        name: 'lint',
+        output: 'Lint error on line 42',
+        scope: { stepId: 'triage', phase: 'afterStep', guardrailIndex: 0 },
+      },
+    })
+    state = runTreeReducer(state, {
+      type: 'SET_ACTIVITY',
+      activity: 'triage · running guardrail lint...',
+    })
+    state = runTreeReducer(state, {
+      type: 'SELECT_NODE',
+      nodeId: 'step:triage',
+    })
+
+    const { lastFrame, unmount } = render(
+      <RunDashboard
+        state={state}
+        dispatch={vi.fn()}
+        status="running"
+        onPromptSubmit={vi.fn()}
+        useAltScreen={false}
+      />,
+    )
+    const frame = lastFrame()!
+    expect(frame).toContain('●')
+    expect(frame).toContain('Checking edge cases')
+    expect(frame).toContain('Lint error on line 42')
+    expect(frame).toContain('t: thoughts · o: output')
+    unmount()
+  })
 })

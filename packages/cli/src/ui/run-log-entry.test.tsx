@@ -58,28 +58,49 @@ it('renders every RunUiEntry variant cleanly', () => {
       '↻ retrying',
     ],
     [
+      { kind: 'guardrail.started', name: 'typecheck' },
+      '● guardrail typecheck running…',
+    ],
+    [
+      { kind: 'guardrail.started' },
+      '● guardrail running…',
+    ],
+    [
       { kind: 'guardrail.passed' },
       '✔ guardrail passed',
     ],
     [
-      { kind: 'guardrail.passed', name: 'typecheck' },
-      '✔ guardrail typecheck passed',
+      {
+        kind: 'guardrail.passed',
+        name: 'typecheck',
+        output: '0 errors',
+        logKey: 'tc-0',
+      },
+      '0 errors',
     ],
     [
       { kind: 'guardrail.skipped' },
       '↷ guardrail skipped',
     ],
     [
-      { kind: 'guardrail.skipped', name: 'typecheck' },
-      '↷ guardrail typecheck skipped',
+      { kind: 'guardrail.skipped', name: 'typecheck', output: 'skipped reason' },
+      'skipped reason',
     ],
     [
       { kind: 'guardrail.failed' },
       '✖ guardrail failed',
     ],
     [
-      { kind: 'guardrail.failed', name: 'typecheck' },
-      '✖ guardrail typecheck failed',
+      { kind: 'guardrail.failed', name: 'typecheck', logKey: 'tc-1' },
+      'logKey: tc-1',
+    ],
+    [
+      { kind: 'agent.thought', text: 'considering options', streaming: true },
+      '💭 thinking…',
+    ],
+    [
+      { kind: 'agent.thought', text: 'done thinking', streaming: false },
+      '│ done thinking',
     ],
     [
       { kind: 'tool.start', toolName: 'read', argsSummary: 'path=a.ts' },

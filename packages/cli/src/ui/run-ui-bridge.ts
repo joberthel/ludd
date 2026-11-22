@@ -40,21 +40,25 @@ export type RunUiEntryPayload
     | { kind: 'step.skipped', stepId: string }
     | { kind: 'step.failed', stepId: string, error?: string }
     | { kind: 'step.retry', stepId: string, attempt?: number }
-    | { kind: 'guardrail.passed', name?: string }
-    | { kind: 'guardrail.skipped', name?: string }
-    | { kind: 'guardrail.failed', name?: string }
+    | { kind: 'guardrail.started', name?: string }
+    | { kind: 'guardrail.passed', name?: string, output?: string, logKey?: string }
+    | { kind: 'guardrail.skipped', name?: string, output?: string, logKey?: string }
+    | { kind: 'guardrail.failed', name?: string, output?: string, logKey?: string }
     | { kind: 'tool.start', toolName: string, argsSummary?: string }
     | { kind: 'tool.error', toolName: string }
+    | { kind: 'agent.thought', text: string, streaming?: boolean }
     | { kind: 'agent.text', text: string }
     | { kind: 'agent.output', output: string }
     | { kind: 'prompt.answered', prompt: string, answer: string }
 
 export type RunUiEntry = RunUiEntryPayload & {
   scope?: UiLogScope
+  streamKey?: string
 }
 
 export interface RunUiHost {
   pushEntry: (entry: RunUiEntry) => void
+  upsertEntry?: (streamKey: string, entry: RunUiEntry) => void
   setActivity: (label: string | undefined) => void
   setBlueprint?: (blueprint: HarnessBlueprint) => void
   hydrateSnapshot?: (snapshot: RunStateSnapshot) => void

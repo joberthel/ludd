@@ -5,7 +5,7 @@ import { Box, Text, useInput } from 'ink'
 import { useEffect, useState } from 'react'
 import { LogViewerPane } from './log-viewer-pane.js'
 import { QuestionModal } from './question-modal.js'
-import { flattenVisibleTree, getLogsForNode, getNodeBreadcrumb } from './run-tree-state.js'
+import { flattenVisibleTree, getLogsForNode, getNodeBreadcrumb, getNodeStatus } from './run-tree-state.js'
 import { StepTreePane } from './step-tree-pane.js'
 
 export interface RunDashboardProps {
@@ -85,6 +85,10 @@ export function RunDashboard({
   const visibleRows = flattenVisibleTree(state)
   const filteredEntries = getLogsForNode(state, state.selectedNodeId)
   const breadcrumb = getNodeBreadcrumb(state, state.selectedNodeId)
+  const selectedStatus = getNodeStatus(state, state.selectedNodeId)
+  const selectedActivity = state.selectedNodeId === state.activeNodeId || state.selectedNodeId === 'run'
+    ? state.activity
+    : undefined
 
   const statusColor = state.runStatus === 'passed'
     ? 'green'
@@ -136,6 +140,8 @@ export function RunDashboard({
           focused={!modalOpen && focusPane === 'logs'}
           width={rightWidth}
           height={bodyHeight}
+          status={selectedStatus}
+          activity={selectedActivity}
         />
       </Box>
 
@@ -151,7 +157,7 @@ export function RunDashboard({
               )
             : (
                 <Text dimColor wrap="truncate-end">
-                  Tab: switch pane · ↑/↓: navigate · Enter/Space: expand · f: follow · g/G: top/bottom
+                  Tab: switch pane · ↑/↓: navigate · Enter/Space: expand · f: follow · t: thoughts · o: output · g/G: top/bottom
                 </Text>
               )}
       </Box>

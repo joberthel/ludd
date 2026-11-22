@@ -7,10 +7,16 @@ import { expect } from 'vitest'
 
 export const cli = path.resolve('packages/cli/dist/bin.js')
 
+function childEnv(): NodeJS.ProcessEnv {
+  const { NODE_V8_COVERAGE: _, ...rest } = process.env
+  return rest
+}
+
 export async function launch(args: string[], cwd: string, input?: string): Promise<{ code: number | null, stdout: string, stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
       cwd,
+      env: childEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -26,6 +32,7 @@ export async function launch(args: string[], cwd: string, input?: string): Promi
 export async function launchWithHumanReview(args: string[], cwd: string): Promise<{ code: number | null, stdout: string, stderr: string }> {
   const child = spawn(process.execPath, [cli, ...args], {
     cwd,
+    env: childEnv(),
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   let stdout = ''

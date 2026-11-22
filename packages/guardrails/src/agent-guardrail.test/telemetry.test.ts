@@ -91,8 +91,9 @@ describe('agentGuardrail telemetry: ledger stream linking', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('emits agent.stream.linked to ledger.jsonl', async () => {
+  it('emits agent.stream.linked to ledger.jsonl with guardrail scope metadata', async () => {
     const rail = agentGuardrail({
+      name: 'arch-review',
       agent: createAgentWithEvents(),
       prompt: 'Review',
     })
@@ -105,9 +106,19 @@ describe('agentGuardrail telemetry: ledger stream linking', () => {
     expect(linkedEvent?.runId).toBe('run-telemetry')
     expect(linkedEvent?.matrixIndex).toBe(2)
 
-    const payload = linkedEvent?.payload as { sessionId: string, streamPath: string, attempt: number }
+    const payload = linkedEvent?.payload as {
+      sessionId: string
+      streamPath: string
+      attempt: number
+      phase?: string
+      guardrailIndex?: number
+      guardrailName?: string
+    }
     expect(payload.sessionId).toMatch(/^guardrail-session-[0-9a-f-]{36}$/)
     expect(payload.streamPath).toBe(`streams/${payload.sessionId}.jsonl`)
+    expect(payload.phase).toBe('afterStep')
+    expect(payload.guardrailIndex).toBe(0)
+    expect(payload.guardrailName).toBe('arch-review')
   })
 
   it('writes turn.started, mid-turn, and turn.completed events to stream file', async () => {

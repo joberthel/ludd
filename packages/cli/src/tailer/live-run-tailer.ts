@@ -112,6 +112,42 @@ function withScope<T extends Record<string, unknown>>(entry: T, scope: UiLogScop
     : entry
 }
 
+function extractGuardrailOutput(verdict: unknown): { output?: string, logKey?: string } {
+  if (typeof verdict !== 'object' || verdict === null) {
+    return {}
+  }
+  const record = verdict as Record<string, unknown>
+  const logKey = nonEmptyString(record.logKey)
+  const rawLog = nonEmptyString(record.rawLog)
+
+  let bodyStr: string | undefined
+  if (typeof record.body === 'string') {
+    bodyStr = nonEmptyString(record.body)
+  }
+  else if (record.body !== undefined && record.body !== null) {
+    bodyStr = nonEmptyString(JSON.stringify(record.body, null, 2))
+  }
+
+  let output: string | undefined
+  if (bodyStr !== undefined && rawLog !== undefined) {
+    output = bodyStr === rawLog || rawLog.includes(bodyStr)
+      ? rawLog
+      : `${bodyStr}\n${rawLog}`
+  }
+  else {
+    output = rawLog ?? bodyStr
+  }
+
+  return {
+    ...(output !== undefined
+      ? { output }
+      : {}),
+    ...(logKey !== undefined
+      ? { logKey }
+      : {}),
+  }
+}
+
 function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
   const stepId = nonEmptyString(event.stepId) ?? 'step'
   const payload = event.payload ?? {}
@@ -164,6 +200,12 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
       break
     case 'guardrail.started':
       uiHost.onGuardrailStarted?.(scope ?? { stepId })
+      uiHost.pushEntry(withScope({
+        kind: 'guardrail.started',
+        ...(guardrailName !== undefined
+          ? { name: guardrailName }
+          : {}),
+      }, scope))
       uiHost.setActivity(
         guardrailName !== undefined
           ? `${stepId} · running guardrail ${guardrailName}...`
@@ -176,6 +218,7 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
+        ...extractGuardrailOutput(payload.verdict),
       }, scope))
       break
     case 'guardrail.skipped':
@@ -184,6 +227,7 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
+        ...extractGuardrailOutput(payload.verdict),
       }, scope))
       break
     case 'guardrail.failed':
@@ -192,6 +236,7 @@ function emitLedgerToUi(event: LedgerRecord, uiHost: RunUiHost): void {
         ...(guardrailName !== undefined
           ? { name: guardrailName }
           : {}),
+        ...extractGuardrailOutput(payload.verdict),
       }, scope))
       break
     case 'gate.waiting':
@@ -212,6 +257,9 @@ export class LiveRunTailer {
   private readonly streams = new Set<string>()
   private readonly streamedTextSessions = new Set<string>()
   private readonly uiTextBuffers = new Map<string, string>()
+  private readonly uiThoughtBuffers = new Map<string, string>()
+  private readonly textSegmentSeq = new Map<string, number>()
+  private readonly thoughtSegmentSeq = new Map<string, number>()
   private readonly sessionScopes = new Map<string, UiLogScope>()
   private needsNewline = false
 
@@ -240,21 +288,54 @@ export class LiveRunTailer {
       : getRunUiHost()
   }
 
-  private flushUiBuffer(sessionId: string, uiHost: RunUiHost): void {
-    const buffered = this.uiTextBuffers.get(sessionId)?.trim()
+  private flushUiTextBuffer(sessionId: string, uiHost: RunUiHost): void {
+    const raw = this.uiTextBuffers.get(sessionId)
     this.uiTextBuffers.delete(sessionId)
+    const buffered = raw?.trim()
     if (buffered !== undefined && buffered.length > 0) {
-      uiHost.pushEntry(withScope({ kind: 'agent.text', text: buffered }, this.sessionScopes.get(sessionId)))
+      const scope = this.sessionScopes.get(sessionId)
+      if (uiHost.upsertEntry !== undefined) {
+        const seq = this.textSegmentSeq.get(sessionId) ?? 0
+        uiHost.upsertEntry(`text:${sessionId}:${seq}`, withScope({ kind: 'agent.text', text: buffered }, scope))
+        this.textSegmentSeq.set(sessionId, seq + 1)
+      }
+      else {
+        uiHost.pushEntry(withScope({ kind: 'agent.text', text: buffered }, scope))
+      }
     }
+  }
+
+  private flushUiThoughtBuffer(sessionId: string, uiHost: RunUiHost): void {
+    const raw = this.uiThoughtBuffers.get(sessionId)
+    this.uiThoughtBuffers.delete(sessionId)
+    const buffered = raw?.trim()
+    if (buffered !== undefined && buffered.length > 0) {
+      const scope = this.sessionScopes.get(sessionId)
+      if (uiHost.upsertEntry !== undefined) {
+        const seq = this.thoughtSegmentSeq.get(sessionId) ?? 0
+        uiHost.upsertEntry(`thought:${sessionId}:${seq}`, withScope({ kind: 'agent.thought', text: buffered, streaming: false }, scope))
+        this.thoughtSegmentSeq.set(sessionId, seq + 1)
+      }
+      else {
+        uiHost.pushEntry(withScope({ kind: 'agent.thought', text: buffered }, scope))
+      }
+    }
+  }
+
+  private flushUiBuffer(sessionId: string, uiHost: RunUiHost): void {
+    this.flushUiThoughtBuffer(sessionId, uiHost)
+    this.flushUiTextBuffer(sessionId, uiHost)
   }
 
   private flushAllUiBuffers(): void {
     const uiHost = this.activeUiHost()
     if (!uiHost)
       return
-    for (const id of [
+    const sessionIds = new Set([
+      ...this.uiThoughtBuffers.keys(),
       ...this.uiTextBuffers.keys(),
-    ]) {
+    ])
+    for (const id of sessionIds) {
       this.flushUiBuffer(id, uiHost)
     }
   }
@@ -298,7 +379,7 @@ export class LiveRunTailer {
   private handleStreamEventForUi(sessionId: string, event: StreamRecord, uiHost: RunUiHost): void {
     const payload = event.payload ?? {}
     const existingScope = this.sessionScopes.get(sessionId)
-    const eventScope = buildScope(event, 'run')
+    const eventScope = buildScope(event, existingScope?.phase ?? 'run')
     const mergedScope: UiLogScope | undefined = existingScope || eventScope
       ? {
           ...existingScope,
@@ -312,12 +393,43 @@ export class LiveRunTailer {
     if (event.eventType === 'turn.started') {
       this.streamedTextSessions.delete(sessionId)
       this.uiTextBuffers.delete(sessionId)
+      this.uiThoughtBuffers.delete(sessionId)
       uiHost.setActivity(`${stepId} · thinking...`)
       return
     }
+    if (event.eventType === 'thought' && typeof payload.text === 'string' && payload.text.length > 0) {
+      this.flushUiTextBuffer(sessionId, uiHost)
+      const nextText = `${this.uiThoughtBuffers.get(sessionId) ?? ''}${payload.text}`
+      this.uiThoughtBuffers.set(sessionId, nextText)
+      uiHost.setActivity(`${stepId} · thinking...`)
+      if (uiHost.upsertEntry !== undefined && nextText.trim().length > 0) {
+        const seq = this.thoughtSegmentSeq.get(sessionId) ?? 0
+        uiHost.upsertEntry(
+          `thought:${sessionId}:${seq}`,
+          withScope({
+            kind: 'agent.thought',
+            text: nextText.trim(),
+            streaming: true,
+          }, mergedScope),
+        )
+      }
+      return
+    }
     if (event.eventType === 'message_chunk' && typeof payload.text === 'string' && payload.text.length > 0) {
+      this.flushUiThoughtBuffer(sessionId, uiHost)
       this.streamedTextSessions.add(sessionId)
-      this.uiTextBuffers.set(sessionId, `${this.uiTextBuffers.get(sessionId) ?? ''}${payload.text}`)
+      const nextText = `${this.uiTextBuffers.get(sessionId) ?? ''}${payload.text}`
+      this.uiTextBuffers.set(sessionId, nextText)
+      if (uiHost.upsertEntry !== undefined && nextText.trim().length > 0) {
+        const seq = this.textSegmentSeq.get(sessionId) ?? 0
+        uiHost.upsertEntry(
+          `text:${sessionId}:${seq}`,
+          withScope({
+            kind: 'agent.text',
+            text: nextText.trim(),
+          }, mergedScope),
+        )
+      }
       return
     }
     if (event.eventType === 'tool_call') {

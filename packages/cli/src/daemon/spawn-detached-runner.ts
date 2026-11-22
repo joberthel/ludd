@@ -28,7 +28,8 @@ export async function spawnDetachedRunner(options: SpawnDetachedRunnerOptions): 
   ], { detached: true, stdio: 'ignore' })
   child.unref()
 
-  const deadline = Date.now() + (options.timeoutMs ?? 5000)
+  const timeoutMs = options.timeoutMs ?? 10_000
+  const deadline = Date.now() + timeoutMs
   let pid: number | undefined
   while (Date.now() < deadline) {
     if (child.pid !== undefined && fs.existsSync(path.join(runDir, RUNNER_PID_FILE)) && fs.existsSync(path.join(runDir, 'state.json'))) {
@@ -43,7 +44,7 @@ export async function spawnDetachedRunner(options: SpawnDetachedRunnerOptions): 
       break
   }
   if (pid === undefined || !isProcessAlive(pid))
-    throw new Error(`Detached worker for run ${options.runId} failed to initialize within 5 seconds.`)
+    throw new Error(`Detached worker for run ${options.runId} failed to initialize within ${Math.round(timeoutMs / 1000)} seconds.`)
   console.log(`Started detached run ${options.runId} (pid: ${pid}, config: ${path.resolve(options.configPath)})`)
   return 0
 }

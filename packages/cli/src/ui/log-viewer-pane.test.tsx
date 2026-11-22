@@ -2,6 +2,7 @@ import type { KeyedRunUiEntry } from './run-tree-state.js'
 import { render } from 'ink-testing-library'
 import { describe, expect, it } from 'vitest'
 import { LogViewerPane } from './log-viewer-pane.js'
+import { StatusCircle } from './status-circle.js'
 
 function makeEntries(count: number): KeyedRunUiEntry[] {
   return Array.from({ length: count }, (_, idx) => ({
@@ -107,5 +108,96 @@ describe('logViewerPane', () => {
     expect(single.lastFrame()).toContain('1 entry')
     single.unmount()
     unmount()
+  })
+
+  it('renders status circles, live activity footer, and supports t/o toggles with line-based scrolling', async () => {
+    const statuses = [
+      'running',
+      'waiting',
+      'passed',
+      'failed',
+      'skipped',
+      'pending',
+    ] as const
+    for (const status of statuses) {
+      const { lastFrame, unmount } = render(
+        <LogViewerPane
+          breadcrumb="demo › node"
+          selectedNodeId="step:node"
+          entries={[]}
+          focused={false}
+          width={60}
+          height={8}
+          status={status}
+          activity={status === 'running'
+            ? 'triage · thinking...'
+            : undefined}
+        />,
+      )
+      const frame = lastFrame()!
+      const expectedGlyph = status === 'skipped' || status === 'pending'
+        ? '○'
+        : '●'
+      expect(frame).toContain(expectedGlyph)
+      if (status === 'running') {
+        expect(frame).toContain('running · triage · thinking...')
+      }
+      if (status === 'waiting') {
+        expect(frame).toContain('waiting for gate')
+      }
+      unmount()
+    }
+
+    const longOutput = Array.from({ length: 45 }, (_, i) => `out-${i + 1}`).join('\n')
+    const entries: KeyedRunUiEntry[] = [
+      {
+        id: 0,
+        kind: 'agent.thought',
+        text: 'deep thought',
+        streaming: false,
+      },
+      {
+        id: 1,
+        kind: 'guardrail.passed',
+        name: 'lint',
+        output: longOutput,
+      },
+    ]
+    const { lastFrame, stdin, unmount } = render(
+      <LogViewerPane
+        breadcrumb="demo › lint"
+        selectedNodeId="step:lint"
+        entries={entries}
+        focused={true}
+        width={60}
+        height={12}
+        status="passed"
+      />,
+    )
+
+    expect(lastFrame()).toContain('press \'o\' to expand')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    stdin.write('g')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(lastFrame()).toContain('deep thought')
+
+    stdin.write('t')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(lastFrame()).toContain('thoughts:off')
+    expect(lastFrame()).not.toContain('deep thought')
+
+    stdin.write('o')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(lastFrame()).toContain('output:full')
+    expect(lastFrame()).not.toContain('press \'o\' to expand')
+
+    stdin.write('G')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(lastFrame()).toContain('out-45')
+    unmount()
+
+    const labeled = render(<StatusCircle status="passed" showLabel />)
+    expect(labeled.lastFrame()).toContain('● passed')
+    labeled.unmount()
   })
 })
