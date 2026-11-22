@@ -57,6 +57,8 @@ describe('questionModal', () => {
     expect(lastFrame()).toContain('Approve deployment?')
     expect(lastFrame()).toContain('Background logs: build succeeded')
     expect(lastFrame()).not.toContain('OVERLAPPING_BACKGROUND_CONTENT')
+    // Uses terminal default background instead of forcing ANSI black background (\x1B[40m)
+    expect(lastFrame()).not.toContain('\x1B[40m')
 
     await new Promise(resolve => setTimeout(resolve, 20))
     // Minimize via Ctrl+B (\x02)

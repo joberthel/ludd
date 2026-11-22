@@ -38,8 +38,9 @@ export function QuestionModal({
         width={modalWidth}
         borderStyle="double"
         borderColor="yellow"
-        backgroundColor="black"
-        borderBackgroundColor="black"
+        // Non-color truthy value triggers Ink's opaque space fill without emitting a background ANSI code,
+        // so the modal occludes underlying content while using the terminal's default background color.
+        backgroundColor="default"
         paddingX={2}
         paddingY={1}
       >
