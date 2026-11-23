@@ -25,13 +25,13 @@
 * **agents:** add read-only sandbox and symlink-safe workspace path guard ([0bdc454](https://github.com/joberthel/ludd/commit/0bdc45411fe720a557a4f03e23bfe0cd21649296)), closes [#47](https://github.com/joberthel/ludd/issues/47)
 * **agents:** add workspace-write tool_call guard and docker bash delegation ([c1ab138](https://github.com/joberthel/ludd/commit/c1ab13836e6a2f25a4c1e39efee67a01ef09fec8)), closes [#48](https://github.com/joberthel/ludd/issues/48)
 * **agents:** resolve string model patterns in piAgent ([bae39a5](https://github.com/joberthel/ludd/commit/bae39a596aeee6e0c1822e456b34c02dc9072e7e))
-* **agents:** scaffold @ludd/agents, AgentRunner contract & mockAgent() ([d8af1ae](https://github.com/joberthel/ludd/commit/d8af1ae619db2e23e0bfc35a449ec21e330fbc8f)), closes [#15](https://github.com/joberthel/ludd/issues/15)
+* **agents:** scaffold @luddjs/agents, AgentRunner contract & mockAgent() ([d8af1ae](https://github.com/joberthel/ludd/commit/d8af1ae619db2e23e0bfc35a449ec21e330fbc8f)), closes [#15](https://github.com/joberthel/ludd/issues/15)
 * **core:** compile-time type inference for defineHarness() & matrix ([1f1637f](https://github.com/joberthel/ludd/commit/1f1637f3834014446959ebfd9f7ee3032750c33d)), closes [#24](https://github.com/joberthel/ludd/issues/24)
 * **core:** declarative sessionId capture, output merging & session resumption ([c88dbdb](https://github.com/joberthel/ludd/commit/c88dbdb79b0ad67a05a49c3c1c1707a39cf9f5e0)), closes [#16](https://github.com/joberthel/ludd/issues/16)
 * **core:** embedded HTTP/SSE MCP server & scoped artifact store ([432e238](https://github.com/joberthel/ludd/commit/432e2381c878c5c5b0060265f8f241ba595c4f14)), closes [#21](https://github.com/joberthel/ludd/issues/21)
 * **core:** per-session telemetry stream splitting & agent.stream.linked event ([0506f94](https://github.com/joberthel/ludd/commit/0506f94626121e93cd755bf360ae2baaccffadf9)), closes [#17](https://github.com/joberthel/ludd/issues/17)
 * **core:** self-healing outputSchema retry loop & maxTotalTurns circuit breaker ([4980da9](https://github.com/joberthel/ludd/commit/4980da9769ea33be2634f616d59c4d09043c10c9)), closes [#18](https://github.com/joberthel/ludd/issues/18)
-* **environments:** scaffold @ludd/environments (hostEnv()) & execGuardrail ([c2272a4](https://github.com/joberthel/ludd/commit/c2272a44bbdaa326b390a0928b2a3d03f3025957)), closes [#28](https://github.com/joberthel/ludd/issues/28)
+* **environments:** scaffold @luddjs/environments (hostEnv()) & execGuardrail ([c2272a4](https://github.com/joberthel/ludd/commit/c2272a44bbdaa326b390a0928b2a3d03f3025957)), closes [#28](https://github.com/joberthel/ludd/issues/28)
 * update publish configuration to set access to public for all packages ([62f7b0e](https://github.com/joberthel/ludd/commit/62f7b0eb2697874cf6400da1778c28117b02fa83))
 
 

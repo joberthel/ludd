@@ -25,7 +25,7 @@
 * **environments:** dynamic env: (ctx) =&gt; ... resolution & ephemeral host port isolation ([896c8d5](https://github.com/joberthel/ludd/commit/896c8d5da2ddeb0cbedd9db3d96614f133d8eba2))
 * **environments:** gitWorktreeEnv adapter, per-run worktree provisioning & cross-step reuse ([f64272e](https://github.com/joberthel/ludd/commit/f64272e99f3f33292d20389adb5aed4d8dca63c6))
 * **environments:** safely delete merged branch on gitWorktreeEnv teardown ([f318517](https://github.com/joberthel/ludd/commit/f318517c2a017a80093853d1225b74f459a26895))
-* **environments:** scaffold @ludd/environments (hostEnv()) & execGuardrail ([c2272a4](https://github.com/joberthel/ludd/commit/c2272a44bbdaa326b390a0928b2a3d03f3025957)), closes [#28](https://github.com/joberthel/ludd/issues/28)
+* **environments:** scaffold @luddjs/environments (hostEnv()) & execGuardrail ([c2272a4](https://github.com/joberthel/ludd/commit/c2272a44bbdaa326b390a0928b2a3d03f3025957)), closes [#28](https://github.com/joberthel/ludd/issues/28)
 * update publish configuration to set access to public for all packages ([62f7b0e](https://github.com/joberthel/ludd/commit/62f7b0eb2697874cf6400da1778c28117b02fa83))
 
 
