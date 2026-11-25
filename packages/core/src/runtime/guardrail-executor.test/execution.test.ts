@@ -53,7 +53,6 @@ describe('runAfterStepGuardrails empty afterStep', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -91,7 +90,6 @@ describe('runAfterStepGuardrails factory validation', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -126,7 +124,6 @@ describe('runAfterStepGuardrails factory shape validation', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -160,7 +157,6 @@ describe('runAfterStepGuardrails factory shape validation', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -203,7 +199,6 @@ describe('runAfterStepGuardrails passing and skipped runs', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -248,7 +243,6 @@ describe('runAfterStepGuardrails passing and skipped runs', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -293,7 +287,6 @@ describe('runAfterStepGuardrails deterministic TS callback failures', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,

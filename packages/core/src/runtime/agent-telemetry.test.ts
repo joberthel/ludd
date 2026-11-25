@@ -16,7 +16,6 @@ describe('agent telemetry emitters', () => {
     try {
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: undefined, attempt: 1 },
         matrix: { index: 0, total: 2, item: 'first' },
@@ -46,7 +45,6 @@ describe('agent telemetry emitters', () => {
     try {
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: undefined, attempt: 1 },
         matrix: undefined,

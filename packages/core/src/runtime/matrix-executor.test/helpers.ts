@@ -20,7 +20,6 @@ export function createFakeArtifactClient(artifacts: Record<string, string | null
 export function createDummyContext(artifacts: Record<string, string | null> = {}): StepContext {
   return {
     runId: 'r-matrix-test',
-    environments: {},
     steps: {},
     step: { id: 'step-matrix', output: undefined, attempt: 1 },
     matrix: undefined,

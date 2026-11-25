@@ -60,7 +60,6 @@ describe('runAfterStepGuardrails agent retry signal', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,
@@ -102,7 +101,6 @@ describe('runAfterStepGuardrails anonymous session retry', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-anon-session', output: {}, attempt: 1 },
         matrix: undefined,
@@ -144,7 +142,6 @@ describe('runAfterStepGuardrails default maxRetries', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-no-retries', output: {}, attempt: 1 },
         matrix: undefined,
@@ -183,7 +180,6 @@ describe('runAfterStepGuardrails maxRetries exhaustion', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 2 },
         matrix: undefined,
@@ -221,7 +217,6 @@ describe('runAfterStepGuardrails maxTotalTurns exhaustion', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 5 },
         matrix: undefined,
@@ -259,7 +254,6 @@ describe('runAfterStepGuardrails StepRunFactory retry', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-factory', output: {}, attempt: 1 },
         matrix: undefined,
@@ -299,7 +293,6 @@ describe('runAfterStepGuardrails StepRunFactory retry', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-fn', output: {}, attempt: 1 },
         matrix: undefined,

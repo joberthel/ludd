@@ -95,7 +95,7 @@ describe('runHarness context initialization', () => {
     }, { runId: '  issue-124-9f8a  ', workspaceDir: tempDir })
     expect(result.runId).toBe('issue-124-9f8a')
     expect(captured.runId).toBe('issue-124-9f8a')
-    expect(captured.environments).toEqual({})
+    expect(captured).not.toHaveProperty('environments')
     expect(typeof captured.artifacts.put).toBe('function')
     expect(typeof captured.artifacts.get).toBe('function')
     expect(typeof captured.artifacts.getJson).toBe('function')

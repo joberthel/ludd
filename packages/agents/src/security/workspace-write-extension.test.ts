@@ -2,8 +2,8 @@ import type { ExtensionAPI, ToolCallEvent } from '@earendil-works/pi-coding-agen
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { SandboxViolationError } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SandboxViolationError } from './sandbox-violation-error.js'
 import { createWorkspaceWriteToolCallHandler, workspaceWriteExtension } from './workspace-write-extension.js'
 
 function call(toolName: string, input: Record<string, unknown>): ToolCallEvent {

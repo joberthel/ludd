@@ -1,5 +1,6 @@
 import path from 'node:path'
-import { realpathNearest, SandboxViolationError } from '@luddjs/core'
+import { realpathNearest } from '@luddjs/core'
+import { SandboxViolationError } from './sandbox-violation-error.js'
 
 export interface WorkspacePathGuardOptions {
   /** Permits paths outside the workspace root (only valid inside an isolated container). */

@@ -1,6 +1,6 @@
 import type { ExtensionFactory, ToolCallEvent, ToolCallEventResult } from '@earendil-works/pi-coding-agent'
-import { SandboxViolationError } from '@luddjs/core'
 import { BRIDGE_TOOL_NAMES } from '../mcp/pi-mcp-tools.js'
+import { SandboxViolationError } from './sandbox-violation-error.js'
 import { assertSafeWorkspacePath, normalizeContainerPath } from './workspace-path-guard.js'
 
 /** Tools physically removed from read-only sessions via `excludeTools`. */

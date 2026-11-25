@@ -40,7 +40,6 @@ function makeSnapshot(): RunStateSnapshot {
 function makeContext(): StepContext {
   return {
     runId: 'run-1',
-    environments: {},
     steps: {},
     step: { id: 'step-1', output: undefined, attempt: 1 },
     matrix: undefined,

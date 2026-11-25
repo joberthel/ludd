@@ -37,7 +37,6 @@ describe('fnGuardrail config object', () => {
 
     const fakeCtx = {
       runId: 'r-123',
-      environments: {},
       steps: {},
       step: {
         id: 'step-1',
@@ -70,7 +69,6 @@ describe('fnGuardrail shorthand and options', () => {
 
     const fakeCtx = {
       runId: 'r-123',
-      environments: {},
       steps: {},
       step: { id: 'step-2', output: undefined, attempt: 1 },
       matrix: undefined,

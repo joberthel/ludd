@@ -10,7 +10,6 @@ function input(): GuardrailExecutionInput {
   return {
     ctx: {
       runId: 'r',
-      environments: {},
       steps: {},
       step: { id: 's', attempt: 1 },
     } as unknown as StepContext,

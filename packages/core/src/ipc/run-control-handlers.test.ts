@@ -1,4 +1,3 @@
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
@@ -52,21 +51,7 @@ describe('validateRunTeardownParams', () => {
   })
 })
 
-function createMockEnv(workingDir: string) {
-  const teardown = vi.fn().mockResolvedValue(undefined)
-  const mockEnv: ProvisionedEnvironment = {
-    __kind: 'environment',
-    id: 'e1',
-    type: 'host',
-    workingDir,
-    exec: vi.fn(),
-    ping: vi.fn(),
-    teardown,
-  }
-  return { mockEnv, teardown }
-}
-
-function createSnapshot(runId: string, workingDir: string): RunStateSnapshot {
+function createSnapshot(runId: string): RunStateSnapshot {
   return {
     schemaVersion: 1,
     runId,
@@ -74,37 +59,34 @@ function createSnapshot(runId: string, workingDir: string): RunStateSnapshot {
     workflowName: 'test-harness',
     status: 'running',
     activeStepId: 'step-1',
-    environments: {
-      e1: { id: 'e1', type: 'host', workingDir },
-    },
     steps: {},
     updatedAt: new Date().toISOString(),
   }
 }
 
-describe('createRunAbortHandler without teardown', () => {
+describe('createRunAbortHandler', () => {
   let tempDir: string
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-abort-no-td-'))
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-abort-ctrl-'))
   })
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('aborts without teardown when teardown flag is omitted', async () => {
-    const snapshot = createSnapshot('abort-no-td', tempDir)
+  it('aborts with default or explicit reason without invoking onTeardown directly', async () => {
+    const snapshot = createSnapshot('abort-no-td')
     writeRunStateAtomic(tempDir, snapshot)
 
     const abortController = new AbortController()
     const gateWaiter = createGateWaiter(abortController.signal)
-    const { mockEnv, teardown } = createMockEnv(tempDir)
+    const onTeardown = vi.fn().mockResolvedValue(true)
 
     const handler = createRunAbortHandler({
       runDir: tempDir,
       getSnapshot: () => snapshot,
-      getEnvironments: () => ({ e1: mockEnv }),
+      onTeardown,
       abortController,
       gateWaiter,
     })
@@ -112,114 +94,41 @@ describe('createRunAbortHandler without teardown', () => {
     const result = await handler({ reason: 'Manual cancel' })
     expect(result.ok).toBe(true)
     expect(abortController.signal.aborted).toBe(true)
-    expect(teardown).not.toHaveBeenCalled()
+    expect(onTeardown).not.toHaveBeenCalled()
     expect(readRunState(tempDir).status).toBe('failed')
 
     const failedEvent = readLedgerEvents(tempDir).find(e => e.eventType === 'run.failed')
     expect(failedEvent?.payload.error).toBe('Manual cancel')
   })
-})
 
-describe('createRunAbortHandler with teardown', () => {
-  let tempDir: string
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-abort-td-'))
-  })
-
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true })
-  })
-
-  it('aborts and tears down environments when teardown is true', async () => {
-    const snapshot = createSnapshot('abort-with-td', tempDir)
-    writeRunStateAtomic(tempDir, snapshot)
-
-    const abortController = new AbortController()
-    const gateWaiter = createGateWaiter(abortController.signal)
-    const { mockEnv, teardown } = createMockEnv(tempDir)
-
-    const handler = createRunAbortHandler({
-      runDir: tempDir,
-      getSnapshot: () => snapshot,
-      getEnvironments: () => ({ e1: mockEnv }),
-      abortController,
-      gateWaiter,
-    })
-
-    const result = await handler({ teardown: true })
-    expect(result.ok).toBe(true)
-    expect(teardown).toHaveBeenCalled()
-    expect(readRunState(tempDir).environments).toEqual({})
-    expect(readLedgerEvents(tempDir).some(e => e.eventType === 'run.teardown')).toBe(true)
-  })
-
-  it('completes teardown and state persistence before firing abortController.abort()', async () => {
-    const snapshot = createSnapshot('abort-order', tempDir)
+  it('persists failed state before firing abortController.abort() and skips emitting run.teardown', async () => {
+    const snapshot = createSnapshot('abort-order')
     writeRunStateAtomic(tempDir, snapshot)
 
     const abortController = new AbortController()
     const gateWaiter = createGateWaiter(abortController.signal)
     const events: string[] = []
 
-    const mockEnv: ProvisionedEnvironment = {
-      __kind: 'environment',
-      id: 'e1',
-      type: 'host',
-      workingDir: tempDir,
-      exec: vi.fn(),
-      ping: vi.fn(),
-      teardown: vi.fn().mockImplementation(async () => {
-        events.push('teardown:start')
-        await new Promise(resolve => setTimeout(resolve, 10))
-        expect(abortController.signal.aborted).toBe(false)
-        events.push('teardown:end')
-      }),
-    }
-
     abortController.signal.addEventListener('abort', () => {
       expect(readRunState(tempDir).status).toBe('failed')
-      expect(readRunState(tempDir).environments).toEqual({})
+      expect(readRunState(tempDir).activeStepId).toBeNull()
       events.push('abort')
     })
 
     const handler = createRunAbortHandler({
       runDir: tempDir,
       getSnapshot: () => snapshot,
-      getEnvironments: () => ({ e1: mockEnv }),
       abortController,
       gateWaiter,
     })
 
-    const result = await handler({ teardown: true, reason: 'Ordered abort' })
-    expect(result.ok).toBe(true)
-    expect(events).toEqual(['teardown:start', 'teardown:end', 'abort'])
-  })
-
-  it('skips emitting run.teardown during abort with teardown: true when no environments exist', async () => {
-    const snapshot: RunStateSnapshot = {
-      schemaVersion: 1,
-      runId: 'abort-no-envs',
-      harnessName: 'test-harness',
-      workflowName: 'test-harness',
-      status: 'running',
-      activeStepId: 'step-1',
-      steps: {},
-      updatedAt: new Date().toISOString(),
-    }
-    writeRunStateAtomic(tempDir, snapshot)
-
-    const abortController = new AbortController()
-    const handler = createRunAbortHandler({
-      runDir: tempDir,
-      getSnapshot: () => snapshot,
-      abortController,
-      gateWaiter: createGateWaiter(abortController.signal),
-    })
-
     const result = await handler({ teardown: true })
     expect(result.ok).toBe(true)
+    expect(events).toEqual(['abort'])
     expect(readLedgerEvents(tempDir).some(e => e.eventType === 'run.teardown')).toBe(false)
+    expect(readLedgerEvents(tempDir).find(e => e.eventType === 'run.failed')?.payload.error).toBe(
+      'Run aborted by external control',
+    )
   })
 })
 
@@ -234,33 +143,7 @@ describe('createRunTeardownHandler', () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('invokes teardown on provisioned environments and emits ledger event', async () => {
-    const snapshot = createSnapshot('td-handler-run', tempDir)
-    writeRunStateAtomic(tempDir, snapshot)
-
-    const { mockEnv, teardown } = createMockEnv(tempDir)
-    const handler = createRunTeardownHandler({
-      runDir: tempDir,
-      getSnapshot: () => snapshot,
-      getEnvironments: () => ({ e1: mockEnv }),
-      abortController: new AbortController(),
-      gateWaiter: createGateWaiter(),
-    })
-
-    const result = await handler({ force: true })
-    expect(result.ok).toBe(true)
-    expect(teardown).toHaveBeenCalledTimes(1)
-    expect(readRunState(tempDir).environments).toEqual({})
-
-    const tdEvent = readLedgerEvents(tempDir).find(e => e.eventType === 'run.teardown')
-    expect(tdEvent?.payload).toEqual({
-      hookInvoked: false,
-      forced: true,
-      environments: ['e1'],
-    })
-  })
-
-  it('records hookInvoked boolean from onTeardown when getEnvironments is omitted', async () => {
+  it('records hookInvoked boolean from onTeardown and forced flag', async () => {
     const snapshot: RunStateSnapshot = {
       schemaVersion: 1,
       runId: 'td-hook-run',
@@ -284,15 +167,30 @@ describe('createRunTeardownHandler', () => {
       gateWaiter: createGateWaiter(),
     })
 
-    expect(await handler({})).toEqual({ ok: true })
+    expect(await handler({ force: true })).toEqual({ ok: true })
     expect(await handler({})).toEqual({ ok: true })
     expect(onTeardown).toHaveBeenCalledTimes(2)
 
     const tdEvents = readLedgerEvents(tempDir).filter(e => e.eventType === 'run.teardown')
     expect(tdEvents.map(e => e.payload)).toEqual([
-      { hookInvoked: true, forced: false },
+      { hookInvoked: true, forced: true },
       { hookInvoked: false, forced: false },
     ])
-    expect(readRunState(tempDir).environments).toBeUndefined()
+  })
+
+  it('records hookInvoked false when onTeardown is omitted', async () => {
+    const snapshot = createSnapshot('td-no-hook-run')
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const handler = createRunTeardownHandler({
+      runDir: tempDir,
+      getSnapshot: () => snapshot,
+      abortController: new AbortController(),
+      gateWaiter: createGateWaiter(),
+    })
+
+    expect(await handler({})).toEqual({ ok: true })
+    const tdEvent = readLedgerEvents(tempDir).find(e => e.eventType === 'run.teardown')
+    expect(tdEvent?.payload).toEqual({ hookInvoked: false, forced: false })
   })
 })

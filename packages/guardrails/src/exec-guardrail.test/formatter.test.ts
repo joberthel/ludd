@@ -7,7 +7,6 @@ import { execGuardrail } from '../exec-guardrail.js'
 function makeMockCtx(): StepContext {
   return {
     runId: 'r-1',
-    environments: {},
     steps: {},
     step: { id: 's-1', output: undefined, attempt: 1 },
     matrix: undefined,

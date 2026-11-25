@@ -182,12 +182,12 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     await writeFile(
       filePath,
       [
-        `import { defineHarness, teardownRun, gc, createArtifactStore, ForbiddenMountPathError, UnsafeDangerModeError } from '@luddjs/core'`,
+        `import { defineHarness, teardownRun, gc, createArtifactStore, spawn, killProcessTree } from '@luddjs/core'`,
         `if (typeof teardownRun !== 'function') throw new Error('missing teardownRun')`,
         `if (typeof gc !== 'function') throw new Error('missing gc')`,
         `if (typeof createArtifactStore !== 'function') throw new Error('missing createArtifactStore')`,
-        `if (typeof ForbiddenMountPathError !== 'function') throw new Error('missing ForbiddenMountPathError')`,
-        `if (typeof UnsafeDangerModeError !== 'function') throw new Error('missing UnsafeDangerModeError')`,
+        `if (typeof spawn !== 'function') throw new Error('missing spawn')`,
+        `if (typeof killProcessTree !== 'function') throw new Error('missing killProcessTree')`,
         `export default defineHarness({ name: 'core-exports', steps: [{ id: 's1', run: async () => ({}) }] })`,
       ].join('\n'),
     )

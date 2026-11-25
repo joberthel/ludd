@@ -8,8 +8,6 @@ import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RehydrationInfo } from './harness-rehydration.js'
 import type { StepSliceExecutionOptions } from './matrix-executor.js'
-import { UnsafeDangerModeError } from '../errors/unsafe-danger-mode-error.js'
-import { resolveStepEnvironment } from './environment-manager.js'
 import { executeMatrixStep, executeSingleSlice } from './matrix-executor.js'
 import {
   emitLedgerEvent,
@@ -17,39 +15,6 @@ import {
   persistSnapshot,
   recordStepResult,
 } from './run-harness-lifecycle.js'
-
-async function resolveStepBoundaryContext(
-  step: StepConfig,
-  ctx: StepContext,
-  workspaceDir: string,
-  snapshot: RunStateSnapshot,
-  runDir: string,
-  runExecutionContext: ResolvedExecutionContext,
-  signal?: AbortSignal,
-): Promise<StepSliceExecutionOptions> {
-  if (step.environment === undefined) {
-    if (step.dangerMode === true) {
-      throw new UnsafeDangerModeError(step.id, 'host')
-    }
-    return {
-      cwd: runExecutionContext.cwd,
-      env: runExecutionContext.env,
-      signal,
-    }
-  }
-  const environment = await resolveStepEnvironment(step, ctx, workspaceDir, snapshot, runDir, signal)
-  if (step.dangerMode === true && !environment.supportsDangerMode) {
-    throw new UnsafeDangerModeError(step.id, environment.type)
-  }
-  return {
-    cwd: environment.workingDir,
-    env: {
-      ...runExecutionContext.env,
-      ...environment.injectedEnv,
-    },
-    signal,
-  }
-}
 
 async function executeStep(
   step: StepConfig,
@@ -72,7 +37,6 @@ async function runStep(
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
   snapshot: RunStateSnapshot,
   runDir: string,
-  workspaceDir: string,
   runExecutionContext: ResolvedExecutionContext,
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
@@ -91,15 +55,11 @@ async function runStep(
       recordStepResult(runDir, snapshot, stepId, ctx, 'skipped')
       return null
     }
-    const executionContext = await resolveStepBoundaryContext(
-      step,
-      ctx,
-      workspaceDir,
-      snapshot,
-      runDir,
-      runExecutionContext,
+    const executionContext: StepSliceExecutionOptions = {
+      cwd: runExecutionContext.cwd,
+      env: runExecutionContext.env,
       signal,
-    )
+    }
     emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.started', { attempt })
     const output = await executeStep(step, ctx, snapshot, runDir, executionContext, rehydration, mcpServer, logStore, gateWaiter)
     recordStepResult(runDir, snapshot, stepId, ctx, 'passed', output)
@@ -118,7 +78,6 @@ export async function executeStepPipeline(
   ctx: StepContext<unknown, Record<string, StepResult<unknown>>>,
   snapshot: RunStateSnapshot,
   runDir: string,
-  workspaceDir: string,
   runExecutionContext: ResolvedExecutionContext,
   rehydration?: RehydrationInfo,
   mcpServer?: EmbeddedMcpServer,
@@ -141,7 +100,6 @@ export async function executeStepPipeline(
       ctx,
       snapshot,
       runDir,
-      workspaceDir,
       runExecutionContext,
       stepRehydration,
       mcpServer,

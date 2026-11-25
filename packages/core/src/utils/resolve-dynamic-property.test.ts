@@ -5,22 +5,6 @@ import { resolveDynamicProperty } from './resolve-dynamic-property.js'
 function createMockContext(): StepContext {
   return {
     runId: 'run-123',
-    environments: {
-      default: {
-        __kind: 'environment',
-        id: 'default',
-        type: 'host',
-        workingDir: '/workspace',
-        exec: async () => ({
-          exitCode: 0,
-          stdout: '',
-          stderr: '',
-          timedOut: false,
-        }),
-        ping: async () => true,
-        teardown: async () => {},
-      },
-    },
     steps: {
       build: {
         status: 'passed',

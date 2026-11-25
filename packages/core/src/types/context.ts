@@ -1,7 +1,6 @@
 import type { ArtifactClient } from './artifact.js'
-import type { EnvironmentAdapter, ProvisionedEnvironment } from './environment.js'
 
-export type { ArtifactClient, EnvironmentAdapter, ProvisionedEnvironment }
+export type { ArtifactClient }
 
 export type StepStatus = 'passed' | 'failed' | 'skipped'
 
@@ -23,7 +22,6 @@ export interface StepContext<
   THasMatrix extends boolean = false,
 > {
   runId: string
-  environments: Record<string, ProvisionedEnvironment>
   steps: TSteps
   step: {
     id: string

@@ -15,7 +15,6 @@ import { agentGuardrail } from '../agent-guardrail.js'
 function createTelemetryContext(): StepContext {
   return {
     runId: 'run-telemetry',
-    environments: {},
     steps: {},
     step: { id: 'step-review', output: undefined, attempt: 1 },
     matrix: {
@@ -153,7 +152,6 @@ describe('agentGuardrail telemetry: empty runDir handling', () => {
     const rail = agentGuardrail({ agent, prompt: 'Review' })
     const ctx: StepContext = {
       runId: 'run-1',
-      environments: {},
       steps: {},
       step: { id: 'step-1', output: undefined, attempt: 1 },
       matrix: undefined,

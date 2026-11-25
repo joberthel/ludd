@@ -7,7 +7,7 @@ import type {
   AgentTurnResult,
 } from './agent.js'
 import type { ArtifactValidationRule } from './artifact.js'
-import type { DynamicProperty, EnvironmentAdapter, ProvisionedEnvironment, StepContext, StepResult } from './context.js'
+import type { DynamicProperty, StepContext, StepResult } from './context.js'
 import type { Guardrail, OnMaxRetriesExceededAction } from './guardrail.js'
 import type { StepInteractiveConfig } from './interactive.js'
 
@@ -39,13 +39,6 @@ export type {
   StepTupleEntry,
   TypedStep,
 } from './inference.js'
-
-export type CleanupPolicyAction = 'keep' | 'destroy'
-
-export interface CleanupPolicy {
-  onSuccess?: CleanupPolicyAction
-  onFailure?: CleanupPolicyAction
-}
 
 export interface StepRunFn<
   TOutput = unknown,
@@ -143,9 +136,7 @@ export interface StepConfig<
 > {
   id: TId
   name?: string
-  dangerMode?: boolean
   if?: (ctx: TMatrixContext) => boolean | Promise<boolean>
-  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
   cwd?: DynamicProperty<string, TContext>
   env?: DynamicProperty<Record<string, string>, TContext>
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
@@ -164,7 +155,6 @@ export interface HarnessConfig<
   TName extends string = string,
 > extends HarnessExecutionConfig {
   name: TName
-  cleanupPolicy?: CleanupPolicy
   steps: TSteps
 }
 

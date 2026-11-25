@@ -26,20 +26,6 @@ const logMetadataSchema = z.object({
   createdAt: z.string().optional(),
 })
 
-const environmentDescriptorSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  workingDir: z.string(),
-  branchName: z.string().optional(),
-  containerId: z.string().optional(),
-  containerWorkingDir: z.string().optional(),
-  bridgeHost: z.string().optional(),
-  whitelistEnv: z.array(z.string()).optional(),
-  tornDown: z.boolean().optional(),
-  ephemeralPorts: z.record(z.string(), z.number()).optional(),
-  injectedEnv: z.record(z.string(), z.string()).optional(),
-})
-
 const interactiveSelectOptionSchema = z.union([
   z.string(),
   z.object({
@@ -124,7 +110,6 @@ export const runStateSnapshotSchema = z.object({
   activeGuardrailRetries: z.record(z.string(), z.number()).optional(),
   grantedExtraRetries: z.record(z.string(), z.number().int().nonnegative()).optional(),
   grantedExtraTurns: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  environments: z.record(z.string(), environmentDescriptorSchema).optional(),
   steps: z.record(z.string(), stepResultSchema),
   artifacts: z.array(z.string()).optional(),
   logs: z.record(z.string(), logMetadataSchema).optional(),

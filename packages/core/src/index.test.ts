@@ -38,16 +38,6 @@ describe('@luddjs/core harness and configuration exports', () => {
     expect(typeof core.validateStepOutput).toBe('function')
     expect(typeof core.createArtifactStore).toBe('function')
     expect(typeof core.startEmbeddedMcpServer).toBe('function')
-    expect(typeof core.createDefaultHostEnvironment).toBe('function')
-    expect(typeof core.createDockerWorktreeEnvironmentFromDescriptor).toBe('function')
-    expect(typeof core.createGitWorktreeEnvironmentFromDescriptor).toBe('function')
-    expect(typeof core.createHostEnvironmentFromDescriptor).toBe('function')
-    expect(typeof core.recordEnvironment).toBe('function')
-    expect(typeof core.rehydrateEnvironmentsAndCheckHealth).toBe('function')
-    expect(typeof core.resolveStepEnvironment).toBe('function')
-    expect(typeof core.resolveGuardrailEnvironment).toBe('function')
-    expect(typeof core.EnvironmentUnreachableError).toBe('function')
-    expect(typeof core.ForbiddenMountPathError).toBe('function')
     expect(typeof core.HarnessConfigError).toBe('function')
     expect(typeof core.HarnessConfigLoadError).toBe('function')
     expect(typeof core.RunAlreadyActiveError).toBe('function')
@@ -55,9 +45,6 @@ describe('@luddjs/core harness and configuration exports', () => {
     expect(typeof core.StepArtifactValidationError).toBe('function')
     expect(typeof core.StepMatrixResolutionError).toBe('function')
     expect(typeof core.GuardrailMaxRetriesExceededError).toBe('function')
-    expect(typeof core.UnsafeDangerModeError).toBe('function')
-    expect(typeof core.isEnvironmentAdapter).toBe('function')
-    expect(typeof core.isProvisionedEnvironment).toBe('function')
     expect(typeof core.isGuardrail).toBe('function')
     expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(Number.POSITIVE_INFINITY)
     expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
@@ -70,6 +57,7 @@ describe('@luddjs/core harness and configuration exports', () => {
     expect(typeof core.resolveMatrixItems).toBe('function')
     expect(typeof core.executeMatrixStep).toBe('function')
     expect(typeof core.teardownRun).toBe('function')
+    expect(typeof core.killProcessTree).toBe('function')
     expect(typeof core.spawn).toBe('function')
     expect(typeof core.resolveRunExecutionContext).toBe('function')
     expect(typeof core.resolveStepExecutionContext).toBe('function')
@@ -108,7 +96,6 @@ describe('@luddjs/core dynamic property and legacy exports', () => {
   it('resolves dynamic property via index export', async () => {
     const ctx = {
       runId: 'r-1',
-      environments: {},
       steps: {},
       step: { id: 's-1', output: null, attempt: 1 },
       matrix: undefined,
@@ -231,7 +218,6 @@ describe('@luddjs/core typed structures and matrix exports', () => {
     }
     const createOpts: CreateHarnessOptions = {
       ...execCfg,
-      cleanupPolicy: { onSuccess: 'destroy' },
     }
     const spawnOpts: HostSpawnOptions = {
       command: 'node',

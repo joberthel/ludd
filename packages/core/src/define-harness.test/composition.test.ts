@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { defineHarness } from '../define-harness.js'
 
 describe('defineHarness composition and execution models', () => {
-  it('validates and returns strong configuration with AgentRunner and cleanupPolicy', () => {
+  it('validates and returns strong configuration with AgentRunner', () => {
     const agent: AgentRunner<string> = {
       __kind: 'agent',
       mode: 'read-only',
@@ -12,14 +12,13 @@ describe('defineHarness composition and execution models', () => {
     }
     const harness = defineHarness({
       name: 'pipeline',
-      cleanupPolicy: { onSuccess: 'keep', onFailure: 'destroy' },
+      cwd: '/tmp/pipeline',
       steps: [
         { id: 'step-agent', run: agent },
       ],
     })
     expect(harness.name).toBe('pipeline')
-    expect(harness.cleanupPolicy?.onSuccess).toBe('keep')
-    expect(harness.cleanupPolicy?.onFailure).toBe('destroy')
+    expect(harness.cwd).toBe('/tmp/pipeline')
     expect(harness.steps).toHaveLength(1)
   })
 

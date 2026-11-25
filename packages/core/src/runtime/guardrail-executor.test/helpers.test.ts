@@ -59,7 +59,6 @@ describe('guardrail executor prompt and ledger helpers', () => {
     try {
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: null, attempt: 2 },
         matrix: { index: 1, total: 3, item: 'a' },
@@ -101,7 +100,6 @@ describe('guardrail executor host execution context forwarding', () => {
       }
       const ctx = {
         runId: 'r-1',
-        environments: {},
         steps: {},
         step: { id: 's-1', output: {}, attempt: 1 },
         matrix: undefined,

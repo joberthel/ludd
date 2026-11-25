@@ -28,7 +28,6 @@ function createLifecycleCtx(workspaceRoot = '/workspace/root'): {
 function createStepCtx(overrides?: Partial<StepContext>): StepContext {
   return {
     runId: 'run-42',
-    environments: {},
     steps: {},
     step: { id: 'step-1', output: undefined, attempt: 1 },
     matrix: undefined,

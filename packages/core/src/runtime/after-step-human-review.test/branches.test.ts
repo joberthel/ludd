@@ -16,7 +16,6 @@ function makeContext(snapshot: RunStateSnapshot) {
   }
   const ctx = {
     runId: snapshot.runId,
-    environments: {},
     steps: {},
     step: { id: 'step-review', output: null, attempt: 1 },
     matrix: undefined as { index: number, total: number, item: unknown } | undefined,

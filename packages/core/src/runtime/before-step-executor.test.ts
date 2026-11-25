@@ -97,7 +97,6 @@ describe('runBeforeStepGuardrails empty guards', () => {
     }
     const ctx = {
       runId: 'r-1',
-      environments: {},
       steps: {},
       step: { id: 'step-1', output: null, attempt: 1 },
       matrix: undefined,
@@ -137,7 +136,6 @@ describe('runBeforeStepGuardrails sequential execution', () => {
     })
     const ctx = {
       runId: 'r-restore',
-      environments: {},
       steps: {},
       step: { id: 'restore', output: null, attempt: 1 },
       matrix: undefined,
@@ -196,7 +194,6 @@ describe('runBeforeStepGuardrails sequential execution', () => {
     }
     const ctx = {
       runId: 'r-key-error',
-      environments: {},
       steps: {},
       step: { id: 'key-error', output: null, attempt: 1 },
       matrix: undefined,
@@ -230,7 +227,6 @@ describe('runBeforeStepGuardrails sequential execution', () => {
     }
     const ctx = {
       runId: 'r-before',
-      environments: {},
       steps: {},
       step: { id: 's-1', output: null, attempt: 1 },
       matrix: undefined,
@@ -281,7 +277,6 @@ describe('runBeforeStepGuardrails sequential execution', () => {
     }
     const ctx = {
       runId: 'r-named-before',
-      environments: {},
       steps: {},
       step: { id: 's-named', output: null, attempt: 1 },
       matrix: undefined,
@@ -328,7 +323,6 @@ describe('runBeforeStepGuardrails error abortion (AC 5.3.4)', () => {
     }
     const ctx = {
       runId: 'r-err',
-      environments: {},
       steps: {},
       step: { id: 's-err', output: null, attempt: 1 },
       matrix: undefined,
@@ -369,7 +363,6 @@ describe('runBeforeStepGuardrails partial rehydration', () => {
     }
     const ctx = {
       runId: 'r-rehydrate',
-      environments: {},
       steps: {},
       step: { id: 's-rehydrate', output: null, attempt: 1 },
       matrix: undefined,
@@ -461,7 +454,6 @@ describe('runBeforeStepGuardrails partial rehydration', () => {
     }
     const ctx = {
       runId: 'r-rehydrate-2',
-      environments: {},
       steps: {},
       step: { id: 's-rehydrate-2', output: null, attempt: 1 },
       matrix: { item: 'a', index: 0, total: 1 },
@@ -537,7 +529,6 @@ describe('runBeforeStepGuardrails host execution context forwarding', () => {
     }
     const ctx = {
       runId: 'r-ctx',
-      environments: {},
       steps: {},
       step: { id: 's-ctx', output: null, attempt: 1 },
       matrix: undefined,

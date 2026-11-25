@@ -17,20 +17,6 @@ export interface ActiveGateState {
   createdAt: string
 }
 
-export interface EnvironmentDescriptor {
-  id: string
-  type: string
-  workingDir: string
-  branchName?: string
-  containerId?: string
-  containerWorkingDir?: string
-  bridgeHost?: string
-  whitelistEnv?: readonly string[]
-  tornDown?: boolean
-  ephemeralPorts?: Record<string, number>
-  injectedEnv?: Record<string, string>
-}
-
 export interface RunStateSnapshot {
   schemaVersion: 1
   runId: string
@@ -51,7 +37,6 @@ export interface RunStateSnapshot {
   activeGuardrailRetries?: Record<string, number>
   grantedExtraRetries?: Record<string, number>
   grantedExtraTurns?: Record<string, number>
-  environments?: Record<string, EnvironmentDescriptor>
   steps: Record<string, StepResult<unknown>>
   artifacts?: string[]
   logs?: Record<string, LogMetadata>

@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { SandboxViolationError } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { SandboxViolationError } from './sandbox-violation-error.js'
 import { assertSafeWorkspacePath } from './workspace-path-guard.js'
 
 describe('assertSafeWorkspacePath', () => {

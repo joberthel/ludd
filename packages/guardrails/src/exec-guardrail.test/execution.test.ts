@@ -17,7 +17,6 @@ afterAll(() => {
 function makeMockCtx(): StepContext {
   return {
     runId: 'r-1',
-    environments: {},
     steps: {},
     step: {
       id: 's-1',

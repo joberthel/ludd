@@ -174,14 +174,6 @@ it('prunes only run directories on disk without inspecting external paths or loa
     configPath: missingConfigPath,
     status: 'passed',
     activeStepId: null,
-    environments: {
-      wt: {
-        id: 'wt',
-        type: 'git-worktree',
-        workingDir: externalWorktree,
-        branchName: 'ludd/fs-only-run',
-      },
-    },
     steps: {},
     updatedAt: new Date().toISOString(),
   })

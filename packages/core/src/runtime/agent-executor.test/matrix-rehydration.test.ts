@@ -23,7 +23,6 @@ afterEach(async () => {
 function createMatrixContext(index: number, total = 2): StepContext {
   return {
     runId: 'r-matrix-exec',
-    environments: {},
     steps: {},
     step: { id: 'step-matrix', output: undefined, attempt: 1 },
     matrix: { index, total, item: `item-${index}` },

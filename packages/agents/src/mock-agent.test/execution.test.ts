@@ -7,7 +7,6 @@ const abortController = new AbortController()
 const dummyInput: AgentTurnInput = {
   ctx: {
     runId: 'r-1',
-    environments: {},
     steps: {},
     step: { id: 's-1', output: undefined, attempt: 1 },
     matrix: undefined,

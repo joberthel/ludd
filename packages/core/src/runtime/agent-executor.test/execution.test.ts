@@ -15,7 +15,6 @@ import { executeAgentStep } from '../agent-executor.js'
 function createDummyContext(): StepContext {
   return {
     runId: 'r-exec-test',
-    environments: {},
     steps: {},
     step: { id: 'test-step', output: undefined, attempt: 1 },
     matrix: undefined,

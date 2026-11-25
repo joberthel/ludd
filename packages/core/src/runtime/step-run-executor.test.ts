@@ -64,7 +64,6 @@ describe('executeStepRun function step retry', () => {
     }
     const ctx = {
       runId: 'run-ctx',
-      environments: {},
       steps: {},
       step: { id: 'fn-ctx', output: undefined, attempt: 1 },
       matrix: undefined,

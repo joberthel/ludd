@@ -64,7 +64,6 @@ const fakeAgent = {
 function makeStepContext(runId: string) {
   return {
     runId,
-    environments: {},
     steps: {},
     step: { id: 'step-1', output: null as any, attempt: 1 },
     matrix: undefined,

@@ -1,27 +1,6 @@
 import { HarnessConfigError } from './errors/harness-config-error.js'
-import { isEnvironmentAdapter, isProvisionedEnvironment } from './types/environment.js'
 import { isGuardrail } from './types/guardrail.js'
 import { isAgentRunner } from './types/harness.js'
-
-export function validateCleanupPolicy(policy: unknown): void {
-  if (policy === undefined) {
-    return
-  }
-  if (typeof policy !== 'object' || policy === null || Array.isArray(policy)) {
-    throw new HarnessConfigError('Harness config "cleanupPolicy" must be an object.')
-  }
-  const raw = policy as Record<string, unknown>
-  if (raw.onSuccess !== undefined && raw.onSuccess !== 'keep' && raw.onSuccess !== 'destroy') {
-    throw new HarnessConfigError(
-      'Harness config "cleanupPolicy.onSuccess" must be "keep" or "destroy".',
-    )
-  }
-  if (raw.onFailure !== undefined && raw.onFailure !== 'keep' && raw.onFailure !== 'destroy') {
-    throw new HarnessConfigError(
-      'Harness config "cleanupPolicy.onFailure" must be "keep" or "destroy".',
-    )
-  }
-}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -247,17 +226,6 @@ export function validateStep(step: unknown, index: number, seenIds: Set<string>)
   if (rawStep.if !== undefined && typeof rawStep.if !== 'function') {
     throw new HarnessConfigError(
       `Step "${id}" "if" property must be a function when provided.`,
-    )
-  }
-
-  if (
-    rawStep.environment !== undefined
-    && typeof rawStep.environment !== 'function'
-    && !isProvisionedEnvironment(rawStep.environment)
-    && !isEnvironmentAdapter(rawStep.environment)
-  ) {
-    throw new HarnessConfigError(
-      `Step "${id}" "environment" must be a ProvisionedEnvironment or a function.`,
     )
   }
 

@@ -2,8 +2,6 @@ import type { z } from 'zod'
 import type { AgentRunner } from './agent.js'
 import type {
   DynamicProperty,
-  EnvironmentAdapter,
-  ProvisionedEnvironment,
   StepContext,
   StepContextWithBeforeStep,
   StepContextWithInteractive,
@@ -34,9 +32,7 @@ export interface PlainStepDef<
 > {
   id: TId
   name?: string
-  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   cwd?: DynamicProperty<string, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   env?: DynamicProperty<Record<string, string>, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   matrix?: never
@@ -80,9 +76,7 @@ export interface ItemsMatrixStepDef<
 > {
   id: TId
   name?: string
-  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   cwd?: DynamicProperty<string, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   env?: DynamicProperty<Record<string, string>, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   matrix: {
@@ -129,17 +123,7 @@ export interface ArtifactMatrixStepDef<
 > {
   id: TId
   name?: string
-  dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
-  environment?: DynamicProperty<
-    ProvisionedEnvironment | EnvironmentAdapter,
-    StepContext<
-      unknown,
-      AccumulatePriorSteps<TPriorSteps>,
-      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
-      true
-    >
-  >
   cwd?: DynamicProperty<
     string,
     StepContext<
@@ -258,7 +242,6 @@ export interface StepTupleEntry<
   TKey extends string = never,
 > {
   id: TId
-  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, any>
   cwd?: DynamicProperty<string, any>
   env?: DynamicProperty<Record<string, string>, any>
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction

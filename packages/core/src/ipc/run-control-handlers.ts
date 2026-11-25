@@ -1,5 +1,4 @@
 import type { GateWaiter } from '../runtime/gate-waiter.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { RunAbortParams, RunAbortResult, RunTeardownParams, RunTeardownResult } from '../types/ipc.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import { JsonRpcResponseError } from '../errors/json-rpc-response-error.js'
@@ -10,7 +9,6 @@ import { JSON_RPC_INVALID_PARAMS } from '../types/ipc.js'
 export interface RunControlHandlerContext {
   runDir: string
   getSnapshot: () => RunStateSnapshot
-  getEnvironments?: () => Record<string, ProvisionedEnvironment>
   onTeardown?: () => boolean | Promise<boolean>
   abortController: AbortController
   gateWaiter: GateWaiter
@@ -49,41 +47,23 @@ export function validateRunTeardownParams(raw: unknown): RunTeardownParams {
 async function performTeardown(
   context: RunControlHandlerContext,
   snapshot: RunStateSnapshot,
-  extraPayload: Record<string, unknown>,
-  invokeHook: boolean,
+  forced: boolean,
 ): Promise<void> {
-  const environments = context.getEnvironments?.() ?? {}
-  const envList = Object.values(environments)
-  await Promise.all(envList.map(async env => env.teardown()))
-
-  const hookInvoked = invokeHook && context.onTeardown !== undefined
+  const hookInvoked = context.onTeardown !== undefined
     ? await context.onTeardown()
     : false
 
-  if (invokeHook || envList.length > 0) {
-    const payload: Record<string, unknown> = {
-      ...(invokeHook
-        ? { hookInvoked }
-        : {}),
-      ...extraPayload,
-    }
-    if (envList.length > 0) {
-      payload.environments = envList.map(e => e.id)
-    }
-
-    appendLedgerEvent(context.runDir, {
-      schemaVersion: 1,
-      timestamp: new Date().toISOString(),
-      runId: snapshot.runId,
-      stepId: null,
-      eventType: 'run.teardown',
-      payload,
-    })
-  }
-
-  if (envList.length > 0 || snapshot.environments !== undefined) {
-    snapshot.environments = {}
-  }
+  appendLedgerEvent(context.runDir, {
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    runId: snapshot.runId,
+    stepId: null,
+    eventType: 'run.teardown',
+    payload: {
+      hookInvoked,
+      forced,
+    },
+  })
 }
 
 export function createRunAbortHandler(
@@ -106,11 +86,6 @@ export function createRunAbortHandler(
     snapshot.status = 'failed'
     snapshot.activeGate = null
     snapshot.activeStepId = null
-
-    if (params.teardown) {
-      await performTeardown(context, snapshot, { aborted: true }, false)
-    }
-
     snapshot.updatedAt = new Date().toISOString()
     writeRunStateAtomic(context.runDir, snapshot)
 
@@ -127,9 +102,7 @@ export function createRunTeardownHandler(
     const params = validateRunTeardownParams(rawParams)
     const snapshot = context.getSnapshot()
 
-    await performTeardown(context, snapshot, {
-      forced: Boolean(params.force),
-    }, true)
+    await performTeardown(context, snapshot, Boolean(params.force))
 
     snapshot.updatedAt = new Date().toISOString()
     writeRunStateAtomic(context.runDir, snapshot)

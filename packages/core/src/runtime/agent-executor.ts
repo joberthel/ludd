@@ -170,7 +170,6 @@ async function runTurnLoopAttempt(
     sessionId: scope.sessionId,
     attempt,
     mode: scope.agent.mode,
-    dangerMode: Boolean(scope.step.dangerMode),
     runDir: scope.runDir,
     cwd: scope.cwd,
     env: scope.env,

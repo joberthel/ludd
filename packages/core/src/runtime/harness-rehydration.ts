@@ -63,9 +63,6 @@ function preservedSnapshotFields(
     grantedExtraTurns: previous?.grantedExtraTurns
       ? { ...previous.grantedExtraTurns }
       : undefined,
-    environments: previous?.environments
-      ? { ...previous.environments }
-      : undefined,
     artifacts: previous?.artifacts
       ? [...previous.artifacts]
       : undefined,

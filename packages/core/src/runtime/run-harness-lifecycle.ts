@@ -1,7 +1,6 @@
 import type { RunControlHandlerContext } from '../ipc/run-control-handlers.js'
 import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, RunLifecycleContext } from '../types/harness.js'
 import type { ControlServer } from '../types/ipc.js'
 import type { LedgerEventType } from '../types/ledger.js'
@@ -11,7 +10,6 @@ import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
-import { EnvironmentUnreachableError } from '../errors/environment-unreachable-error.js'
 import { startControlServer } from '../ipc/control-server.js'
 import { createGateResolveHandler } from '../ipc/gate-resolve-handler.js'
 import { createRunAbortHandler, createRunTeardownHandler } from '../ipc/run-control-handlers.js'
@@ -19,7 +17,7 @@ import { createArtifactStore } from '../mcp/artifact-store.js'
 import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
-import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
+import { resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
 import { executeWithHarnessLifecycle } from './execution-context.js'
 
 export function resolveOption(value: string | undefined, fallback: () => string): string {
@@ -36,7 +34,6 @@ export function createInitialContext(
 ): StepContext<unknown, Record<string, StepResult<unknown>>> {
   return {
     runId,
-    environments: {},
     steps: {},
     step: { id: '', output: undefined, attempt: 1 },
     matrix: undefined,
@@ -181,17 +178,6 @@ export async function cleanupRunResources(
 }
 
 export function handleRunError(error: unknown, runDir: string, runId: string, snapshot?: RunStateSnapshot): void {
-  if (error instanceof EnvironmentUnreachableError) {
-    emitLedgerEvent(runDir, runId, null, 'run.failed', {
-      error: error.message,
-      envId: error.envId,
-      workingDir: error.workingDir,
-    })
-    const state = snapshot ?? readRunState(runDir)
-    state.status = 'failed'
-    persistSnapshot(runDir, state)
-    return
-  }
   if (snapshot !== undefined && snapshot.status !== 'failed') {
     emitLedgerEvent(runDir, runId, null, 'run.failed', {
       error: formatErrorMessage(error),
@@ -281,7 +267,6 @@ export function resolveAndLockRunDir(
 export async function initControlServer(
   runDir: string,
   snapshot: RunStateSnapshot,
-  environments: Record<string, ProvisionedEnvironment>,
   abortController: AbortController,
   gateWaiter: GateWaiter,
   onTeardown?: () => boolean | Promise<boolean>,
@@ -289,7 +274,6 @@ export async function initControlServer(
   const controlCtx: RunControlHandlerContext = {
     runDir,
     getSnapshot: () => snapshot,
-    getEnvironments: () => environments,
     ...(onTeardown !== undefined
       ? { onTeardown }
       : {}),

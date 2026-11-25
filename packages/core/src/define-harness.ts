@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { DynamicProperty } from './types/context.js'
-import type { CleanupPolicy, HarnessConfig, HarnessExecutionConfig } from './types/harness.js'
+import type { HarnessConfig, HarnessExecutionConfig } from './types/harness.js'
 import type {
   ArtifactMatrixStepDef,
   ItemsMatrixStepDef,
@@ -8,7 +8,6 @@ import type {
   PriorStepContext,
 } from './types/inference.js'
 import {
-  validateCleanupPolicy,
   validateCwdConfig,
   validateEnvConfig,
   validateLifecycleHook,
@@ -18,13 +17,10 @@ import { HarnessConfigError } from './errors/harness-config-error.js'
 
 export { isAgentRunner } from './types/harness.js'
 
-export interface CreateHarnessOptions extends HarnessExecutionConfig {
-  cleanupPolicy?: CleanupPolicy
-}
+export type CreateHarnessOptions = HarnessExecutionConfig
 
 type DefinedHarnessConfig<TName extends string, TSteps> = HarnessExecutionConfig & {
   name: TName
-  cleanupPolicy?: CleanupPolicy
   steps: TSteps
 }
 
@@ -49,7 +45,6 @@ export function validateHarnessConfig(config: unknown): HarnessConfig {
     )
   }
 
-  validateCleanupPolicy(rawConfig.cleanupPolicy)
   validateCwdConfig(rawConfig.cwd, 'Harness config')
   validateEnvConfig(rawConfig.env, 'Harness config')
   validateLifecycleHook(rawConfig.setup, 'setup')
@@ -355,7 +350,6 @@ export interface HarnessBuilder<
 }
 
 const HARNESS_OPTION_KEYS = [
-  'cleanupPolicy',
   'cwd',
   'env',
   'setup',

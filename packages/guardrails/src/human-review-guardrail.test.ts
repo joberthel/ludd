@@ -5,7 +5,6 @@ import { humanReviewGuardrail } from './human-review-guardrail.js'
 
 const dummyCtx: StepContext = {
   runId: 'r-test',
-  environments: {},
   steps: {},
   step: { id: 's-1', output: undefined, attempt: 1 },
   matrix: undefined,

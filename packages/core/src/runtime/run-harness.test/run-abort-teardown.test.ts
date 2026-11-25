@@ -48,45 +48,26 @@ async function waitForRunState(
   throw new Error('Timeout waiting for target run state in control server')
 }
 
-function createMockEnv(id: string, workingDir: string, teardown = vi.fn().mockResolvedValue(undefined)) {
-  return {
-    env: {
-      __kind: 'environment' as const,
-      id,
-      type: 'host',
-      workingDir,
-      exec: vi.fn(),
-      ping: vi.fn().mockResolvedValue(true),
-      teardown,
-    },
-    teardown,
-  }
-}
-
-function makeGateConfig(name: string, environment: any, prompt: string) {
-  return {
-    name,
-    steps: [
-      {
-        id: 'gate-step',
-        environment,
-        beforeStep: [
-          humanReviewGuardrail({ prompt }),
-        ],
-        run: async () => 'ok',
-      },
-    ],
-  }
-}
-
 describe('run.abort RPC method while waiting at gate (AC 6.6.1)', () => {
-  it('aborts waiting gate immediately, tears down environments, records status failed', async () => {
+  it('aborts waiting gate immediately, invokes teardown hook, and records status failed', async () => {
     const runId = 'abort-at-gate'
     const runDir = path.join(tempDir, '.harness', 'runs', runId)
-    const { env: customEnv, teardown: teardownMock } = createMockEnv('custom-box', tempDir)
+    const hookTeardown = vi.fn().mockResolvedValue(undefined)
 
     const runPromise = runHarness(
-      makeGateConfig('gate-abort-pipeline', customEnv, 'Approve before continuing:'),
+      {
+        name: 'gate-abort-pipeline',
+        teardown: hookTeardown,
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Approve before continuing:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
       { runId, workspaceDir: tempDir },
     )
 
@@ -97,7 +78,7 @@ describe('run.abort RPC method while waiting at gate (AC 6.6.1)', () => {
 
     const result = await runPromise
     expect(result.status).toBe('failed')
-    expect(teardownMock).toHaveBeenCalledTimes(1)
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
 
     const state = readRunState(runDir)
     expect(state.status).toBe('failed')
@@ -106,40 +87,7 @@ describe('run.abort RPC method while waiting at gate (AC 6.6.1)', () => {
     const events = readLedgerEvents(runDir)
     const failedEvent = events.find(e => e.eventType === 'run.failed')
     expect(failedEvent?.payload.error).toBe('User canceled at gate')
-    expect(events.some(e => e.eventType === 'run.teardown')).toBe(true)
     expect(fs.existsSync(path.join(runDir, RUNNER_PID_FILE))).toBe(false)
-  })
-
-  it('invokes harness teardown hook when gate is aborted', async () => {
-    const runId = 'abort-at-gate-hook'
-    const runDir = path.join(tempDir, '.harness', 'runs', runId)
-    const hookTeardown = vi.fn().mockResolvedValue(undefined)
-
-    const runPromise = runHarness(
-      {
-        name: 'gate-hook-teardown',
-        teardown: hookTeardown,
-        steps: [
-          {
-            id: 'gate-step',
-            beforeStep: [
-              humanReviewGuardrail({ prompt: 'Approve release:' }),
-            ],
-            run: async () => 'ok',
-          },
-        ],
-      },
-      { runId, workspaceDir: tempDir },
-    )
-
-    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
-    const abortResult = await client.abort({ reason: 'Gate canceled', teardown: true })
-    expect(abortResult.ok).toBe(true)
-    await client.close()
-
-    const result = await runPromise
-    expect(result.status).toBe('failed')
-    expect(hookTeardown).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -197,13 +145,23 @@ describe('run.abort RPC method while executing command (AC 6.6.1)', () => {
 })
 
 describe('run.abort RPC method without teardown', () => {
-  it('aborts without teardown when teardown flag is false', async () => {
+  it('aborts without emitting run.teardown when teardown flag is false', async () => {
     const runId = 'abort-no-teardown'
     const runDir = path.join(tempDir, '.harness', 'runs', runId)
-    const { env: mockEnv, teardown: teardownMock } = createMockEnv('kept-env', tempDir)
 
     const runPromise = runHarness(
-      makeGateConfig('abort-keep-pipeline', mockEnv, 'Review me:'),
+      {
+        name: 'abort-keep-pipeline',
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Review me:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
       { runId, workspaceDir: tempDir },
     )
 
@@ -213,31 +171,11 @@ describe('run.abort RPC method without teardown', () => {
 
     const result = await runPromise
     expect(result.status).toBe('failed')
-    expect(teardownMock).not.toHaveBeenCalled()
+    expect(readLedgerEvents(runDir).some(e => e.eventType === 'run.teardown')).toBe(false)
   })
 })
 
 describe('run.teardown RPC method on live runner', () => {
-  it('tears down active environments via IPC call while run is active', async () => {
-    const runId = 'live-teardown'
-    const runDir = path.join(tempDir, '.harness', 'runs', runId)
-    const { env: mockEnv, teardown: teardownMock } = createMockEnv('live-env', tempDir)
-
-    const runPromise = runHarness(
-      makeGateConfig('live-td-pipeline', mockEnv, 'Wait before teardown:'),
-      { runId, workspaceDir: tempDir },
-    )
-
-    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
-    const tdResult = await client.teardown({ force: true })
-    expect(tdResult.ok).toBe(true)
-    expect(teardownMock).toHaveBeenCalledTimes(1)
-
-    await client.abort({ reason: 'Finished after teardown' })
-    await client.close()
-    await runPromise
-  })
-
   it('invokes harness teardown hook via IPC run.teardown once without duplicating on abort', async () => {
     const runId = 'live-teardown-hook'
     const runDir = path.join(tempDir, '.harness', 'runs', runId)

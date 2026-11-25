@@ -1,6 +1,4 @@
 export { createHarness, type CreateHarnessOptions, defineHarness, type HarnessBuilder, validateHarnessConfig } from './define-harness.js'
-export { EnvironmentUnreachableError } from './errors/environment-unreachable-error.js'
-export { ForbiddenMountPathError } from './errors/forbidden-mount-path-error.js'
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError, type HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
@@ -12,12 +10,10 @@ export {
 export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { RunAlreadyExistsError } from './errors/run-already-exists-error.js'
 export { RunNotFoundError } from './errors/run-not-found-error.js'
-export { SandboxViolationError } from './errors/sandbox-violation-error.js'
 export { SchemaVersionMismatchError } from './errors/schema-version-mismatch-error.js'
 export { StepArtifactValidationError } from './errors/step-artifact-validation-error.js'
 export { StepMatrixResolutionError } from './errors/step-matrix-resolution-error.js'
 export { StepOutputValidationError } from './errors/step-output-validation-error.js'
-export { UnsafeDangerModeError } from './errors/unsafe-danger-mode-error.js'
 export { createControlClient } from './ipc/control-client.js'
 export { startControlServer } from './ipc/control-server.js'
 export {
@@ -80,19 +76,6 @@ export {
   type RunBeforeStepGuardrailsParams,
 } from './runtime/before-step-executor.js'
 export {
-  createDefaultHostEnvironment,
-  createDockerWorktreeEnvironmentFromDescriptor,
-  createGitWorktreeEnvironmentFromDescriptor,
-  createHostEnvironmentFromDescriptor,
-  execHostCommand,
-  killProcessTree,
-  recordEnvironment,
-  rehydrateEnvironmentsAndCheckHealth,
-  type RehydrateEnvironmentsParams,
-  resolveGuardrailEnvironment,
-  resolveStepEnvironment,
-} from './runtime/environment-manager.js'
-export {
   determineEscalationPolicy,
   type EscalationReason,
   formatEscalationPrompt,
@@ -128,6 +111,7 @@ export {
   extractAbortError,
   type HostSpawnOptions,
   type HostSpawnResult,
+  killProcessTree,
   spawn,
 } from './runtime/host-exec.js'
 export {
@@ -171,15 +155,6 @@ export type {
   StepStatus,
 } from './types/context.js'
 export {
-  type EnvironmentAdapter,
-  type EnvironmentExecOptions,
-  type EnvironmentExecResult,
-  isEnvironmentAdapter,
-  isProvisionedEnvironment,
-  type ProvisionContext,
-  type ProvisionedEnvironment,
-} from './types/environment.js'
-export {
   type ExecLogPaginationConfig,
   type ExecLogPaginationSelector,
   type Guardrail,
@@ -199,8 +174,6 @@ export {
   type BeforeStepGuardrails,
   type BeforeStepGuardrailSet,
   type BeforeStepResults,
-  type CleanupPolicy,
-  type CleanupPolicyAction,
   type DerivedStepContext,
   type HarnessConfig,
   type HarnessExecutionConfig,
@@ -278,7 +251,7 @@ export type {
   SearchLogMatch,
   SearchLogResult,
 } from './types/log.js'
-export type { ActiveGateState, EnvironmentDescriptor, RunStateSnapshot, RunStatus } from './types/state.js'
+export type { ActiveGateState, RunStateSnapshot, RunStatus } from './types/state.js'
 export type { AgentStreamEvent, AgentStreamEventType } from './types/stream.js'
 export { realpathNearest } from './utils/realpath-nearest.js'
 export { resolveDynamicProperty } from './utils/resolve-dynamic-property.js'

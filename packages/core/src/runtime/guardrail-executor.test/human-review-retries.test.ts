@@ -41,7 +41,6 @@ function makeInitialSnapshot(runDir: string): RunStateSnapshot {
 function makeReviewContext() {
   return {
     runId: 'r-hr-test',
-    environments: {},
     steps: {},
     step: { id: 's-hr', output: null as any, attempt: 1 },
     matrix: undefined,

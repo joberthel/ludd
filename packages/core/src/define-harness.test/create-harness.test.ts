@@ -47,7 +47,7 @@ describe('createHarness fluent builder', () => {
 
   it('infers context across a 5-step pipeline exceeding the previous 4-step limit', () => {
     const harness = createHarness('five-step-pipeline', {
-      cleanupPolicy: { onSuccess: 'destroy' },
+      cwd: '/tmp/workspace',
     })
       .step({
         id: 'init',
@@ -104,7 +104,7 @@ describe('createHarness fluent builder', () => {
       .build()
 
     expect(harness.name).toBe('five-step-pipeline')
-    expect(harness.cleanupPolicy).toEqual({ onSuccess: 'destroy' })
+    expect(harness.cwd).toBe('/tmp/workspace')
     expect(harness.steps).toHaveLength(5)
   })
 

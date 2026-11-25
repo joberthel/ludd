@@ -25,42 +25,7 @@ describe('validateHarnessConfig root structure and name', () => {
   })
 })
 
-describe('validateHarnessConfig cleanupPolicy and steps array', () => {
-  it('rejects invalid cleanupPolicy configuration', () => {
-    expect(() => validateHarnessConfig({
-      name: 'test',
-      cleanupPolicy: 'invalid',
-      steps: [
-        {
-          id: 's1',
-          run: () => {},
-        },
-      ],
-    })).toThrow('must be an object')
-
-    expect(() => validateHarnessConfig({
-      name: 'test',
-      cleanupPolicy: { onSuccess: 'invalid' },
-      steps: [
-        {
-          id: 's1',
-          run: () => {},
-        },
-      ],
-    })).toThrow('cleanupPolicy.onSuccess')
-
-    expect(() => validateHarnessConfig({
-      name: 'test',
-      cleanupPolicy: { onFailure: 'invalid' },
-      steps: [
-        {
-          id: 's1',
-          run: () => {},
-        },
-      ],
-    })).toThrow('cleanupPolicy.onFailure')
-  })
-
+describe('validateHarnessConfig steps array', () => {
   it('rejects missing or empty steps array', () => {
     expect(() => validateHarnessConfig({ name: 'test', steps: 'invalid' })).toThrow('must be a non-empty array')
     expect(() => validateHarnessConfig({ name: 'test', steps: [] })).toThrow('must be a non-empty array')

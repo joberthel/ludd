@@ -15,7 +15,6 @@ async function writeValidHarnessConfig(dir: string): Promise<string> {
     `const resultSchema = z.object({ applied: z.boolean(), prompt: z.string() })`,
     `export default defineHarness({`,
     `  name: 'epic-01-vertical-workflow',`,
-    `  cleanupPolicy: { onSuccess: 'keep', onFailure: 'destroy' },`,
     `  steps: [`,
     `    {`,
     `      id: 'plan-step',`,

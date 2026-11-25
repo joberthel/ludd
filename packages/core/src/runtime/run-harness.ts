@@ -8,8 +8,6 @@ import type { RehydrationInfo } from './harness-rehydration.js'
 import path from 'node:path'
 import { validateHarnessConfig } from '../define-harness.js'
 import { startEmbeddedMcpServer } from '../mcp/mcp-server.js'
-import { applyCleanupPolicy } from './cleanup-policy.js'
-import { rehydrateEnvironmentsAndCheckHealth } from './environment-manager.js'
 import { createGateWaiter } from './gate-waiter.js'
 import { initOrRehydrateSnapshot } from './harness-rehydration.js'
 import {
@@ -34,55 +32,21 @@ interface PreparedRun {
   logStore: LogStore
 }
 
-export function hasDockerEnvironment(
-  steps: readonly StepConfig[],
-  environments: Record<string, { readonly type?: string }>,
-): boolean {
-  if (Object.values(environments).some(env => env.type === 'docker-worktree')) {
-    return true
-  }
-  return steps.some(
-    step => typeof step.environment === 'object'
-      && step.environment !== null
-      && step.environment.type === 'docker-worktree',
-  )
-}
-
 async function prepareRunContext(
   validatedConfig: HarnessConfig,
   runDir: string,
   runId: string,
-  workspaceDir: string,
   configPath: string | undefined,
-  signal?: AbortSignal,
 ): Promise<PreparedRun> {
   const ctx = createInitialContext(runId, runDir)
   const steps = validatedConfig.steps
   const initResult = initOrRehydrateSnapshot(runDir, runId, validatedConfig.name, steps, ctx, configPath)
   const snapshot = initResult.snapshot
-  if (initResult.previous !== undefined) {
-    const activeStep = steps.find(s => !['passed', 'skipped'].includes(ctx.steps[s.id]?.status ?? ''))
-    await rehydrateEnvironmentsAndCheckHealth({
-      previousEnvironments: initResult.previous.environments,
-      ctx,
-      activeStep,
-      workspaceDir,
-      snapshot,
-      runDir,
-      defaultSignal: signal,
-    })
-  }
   const { artifactStore, logStore } = setupHarnessStores(runDir, snapshot)
   ctx.artifacts = artifactStore
-  const mcpHost = hasDockerEnvironment(steps, ctx.environments)
-    ? '0.0.0.0'
-    : undefined
   const mcpServer = await startEmbeddedMcpServer(runDir, {
     artifactStore,
     logStore,
-    ...(mcpHost !== undefined
-      ? { host: mcpHost }
-      : {}),
   })
   return {
     ctx,
@@ -142,7 +106,7 @@ export async function runHarness(
     const configPath = options?.configPath === undefined
       ? undefined
       : path.relative(workspaceDir, path.resolve(workspaceDir, options.configPath))
-    const prep = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir, configPath, abortController.signal)
+    const prep = await prepareRunContext(validatedConfig, runDir, runId, configPath)
     mcpServer = prep.mcpServer
     snapshot = prep.snapshot
     let teardownCompleted = false
@@ -180,7 +144,6 @@ export async function runHarness(
     controlServer = await initControlServer(
       runDir,
       snapshot,
-      prep.ctx.environments,
       abortController,
       gateWaiter,
       runTeardownHook
@@ -200,7 +163,6 @@ export async function runHarness(
         prep.ctx,
         snapshot!,
         runDir,
-        workspaceDir,
         runExecutionContext,
         prep.rehydration,
         mcpServer,
@@ -210,18 +172,9 @@ export async function runHarness(
       ),
     })
 
-    const result = lifecycleResult.status === 'passed'
+    return lifecycleResult.status === 'passed'
       ? completeSuccessfulRun(runDir, snapshot, prep.ctx.steps)
       : lifecycleResult
-
-    await applyCleanupPolicy(
-      validatedConfig.cleanupPolicy,
-      result,
-      runId,
-      workspaceDir,
-      prep.ctx.environments,
-    )
-    return result
   }
   catch (error: unknown) {
     handleRunError(error, runDir, runId, snapshot)
