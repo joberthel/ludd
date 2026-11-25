@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0007` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | `Accepted` (Immutable once accepted; amended by [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md)) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@luddjs/core`, `@luddjs/environments`, `@luddjs/guardrails` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/environments` (removed per ADR-0013), `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 3, 4.2, 5.6.2, 8.1, 9.2) |
+
+> **Amendment Note (ADR-0013):** Per [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md), `@luddjs/environments` and `hostEnv()` have been removed. Direct host execution via `packages/core/src/runtime/host-exec.ts` (`spawn`) is now the explicit default, steps and guardrails declare explicit `cwd`/`env` overrides directly, and `packages/core/src/runtime/env-sanitizer.ts` (`buildIsolatedEnvironmentVars`) remains available as an opt-in utility (`sanitizeEnv` / `allowedEnvKeys`) for explicit secret whitelisting.
 
 ## **1\. Context and Problem Statement**
 

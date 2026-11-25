@@ -156,7 +156,6 @@ async function teardownFeatureWorktree(
 
 /**
  * TDD 9.2 reference configuration. Deviations, all documented:
- * - Explicit DIY Git worktree `setup`/`teardown` + `cwd` runs in CI without a Docker daemon.
  * - `phpstan` / `phpunit` are stubbed with `node --check` / `node test.js` from the fixture repo.
  * - `sessionFactory` is injected into every `piAgent` (and the agent guardrail).
  */

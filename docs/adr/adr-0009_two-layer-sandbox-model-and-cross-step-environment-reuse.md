@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0009` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | **Superseded by [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md)** (previously `Accepted`; partially amended by [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md)) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
 | **Target Packages** | `@luddjs/core`, `@luddjs/agents`, `@luddjs/environments`, `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 3.1, 4.1, 5.5.1, 5.6.1, 5.7.3) |
+
+> **Superseded by ADR-0013:** `@luddjs/environments`, environment adapter rehydration (`hostEnv`, `gitWorktreeEnv`, `dockerWorktreeEnv`), `cleanupPolicy`, and `ctx.environments` have been removed in favor of explicit host execution (`cwd`/`env`) and optional run-level `setup`/`teardown` hooks. See [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md).
 
 ## **1\. Context and Problem Statement**
 

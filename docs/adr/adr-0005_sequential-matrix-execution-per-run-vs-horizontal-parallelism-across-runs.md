@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0005` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | `Accepted` (Immutable once accepted; amended by [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md)) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
-| **Target Packages** | `@luddjs/core`, `@luddjs/environments` |
+| **Target Packages** | `@luddjs/core`, `@luddjs/environments` (removed per ADR-0013) |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 1.1, 3.1, 5.5.1, 9.1, 9.2) |
+
+> **Amendment Note (ADR-0013):** Per [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md), `@luddjs/environments` has been removed. Sequential intra-run matrix execution and horizontal parallelism across independent `<runId>` instances remain unchanged, with concurrent run isolation (such as worktree directories, DB schemas, and ports) now declared explicitly via `ctx.runId`-scoped `cwd`/`env` and optional `setup`/`teardown` hooks in `harness.config.ts`.
 
 ## **1\. Context and Problem Statement**
 
