@@ -1,7 +1,6 @@
 import type {
   AgentRunner,
   GuardrailExecutionInput,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
 import { StepOutputValidationError } from '@luddjs/core'
@@ -9,25 +8,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
 
-const mockEnv: ProvisionedEnvironment = {
-  __kind: 'environment',
-  id: 'mock-env',
-  type: 'host',
-  workingDir: '/workspace',
-  exec: async () => ({
-    exitCode: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-  }),
-  ping: async () => true,
-  teardown: async () => {},
-}
-
 function createDummyContext(): StepContext {
   return {
     runId: 'run-1',
-    environments: { host: mockEnv },
+    environments: {},
     steps: {},
     step: { id: 'step-1', output: undefined, attempt: 1 },
     matrix: undefined,
@@ -43,7 +27,8 @@ function createExecutionInput(): GuardrailExecutionInput {
     guardrailIndex: 0,
     attempt: 1,
     runDir: '',
-    environment: mockEnv,
+    cwd: '/workspace',
+    env: {},
     mcpServerUrl: 'http://127.0.0.1:4000',
     mcpAuthToken: 'token-abc',
   }

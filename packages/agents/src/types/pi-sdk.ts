@@ -1,5 +1,5 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { AgentAccessMode, ProvisionedEnvironment } from '@luddjs/core'
+import type { AgentAccessMode } from '@luddjs/core'
 
 /**
  * Minimal structural view of a Pi SDK `AgentSessionEvent`. Only the fields the
@@ -28,15 +28,17 @@ export interface PiSession {
 }
 
 export interface PiSessionFactoryOptions {
-  /** Working directory of the provisioned environment. */
+  /** Working directory for the agent session. */
   cwd: string
   /** Absolute path of the JSONL session file (`<runDir>/pi-sessions/<sessionId>.jsonl`). Resumed when present. */
   sessionFile: string
   mode: AgentAccessMode
   /** Allow paths outside the workspace root (intended for isolated containers). */
   dangerMode?: boolean
-  /** Provisioned environment; `docker-worktree` environments receive a container-delegating `bash` tool. */
-  environment?: ProvisionedEnvironment
+  /** Environment variables forwarded to host tools (such as `bash`). */
+  env?: Record<string, string>
+  /** Abort signal forwarded to host tools and session execution. */
+  signal?: AbortSignal
   /** Opaque Pi SDK model object or model pattern string, resolved and forwarded to `createAgentSession`. */
   model?: unknown
   /** Extra Pi `customTools` (MCP bridge, `submit_step_output`), available in every mode. */

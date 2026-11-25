@@ -2,7 +2,6 @@ import type {
   AgentTurnInput,
   Guardrail,
   GuardrailExecutionInput,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
 import fs from 'node:fs'
@@ -13,25 +12,10 @@ import { readLedgerEvents, readStreamEvents } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { agentGuardrail } from '../agent-guardrail.js'
 
-const mockEnv: ProvisionedEnvironment = {
-  __kind: 'environment',
-  id: 'mock-env',
-  type: 'host',
-  workingDir: '/workspace',
-  exec: async () => ({
-    exitCode: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-  }),
-  ping: async () => true,
-  teardown: async () => {},
-}
-
 function createTelemetryContext(): StepContext {
   return {
     runId: 'run-telemetry',
-    environments: { host: mockEnv },
+    environments: {},
     steps: {},
     step: { id: 'step-review', output: undefined, attempt: 1 },
     matrix: {
@@ -73,7 +57,8 @@ async function runTelemetryRail(rail: Guardrail, dir: string) {
     guardrailIndex: 0,
     attempt: 1,
     runDir: dir,
-    environment: mockEnv,
+    cwd: '/workspace',
+    env: {},
     mcpServerUrl: 'http://127.0.0.1:4000',
     mcpAuthToken: 'token',
   }
@@ -182,7 +167,8 @@ describe('agentGuardrail telemetry: empty runDir handling', () => {
       guardrailIndex: 0,
       attempt: 1,
       runDir: '',
-      environment: mockEnv,
+      cwd: '/workspace',
+      env: {},
       mcpServerUrl: '',
       mcpAuthToken: '',
     }

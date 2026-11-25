@@ -1,5 +1,5 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
-import type { ProvisionedEnvironment, StepContext } from '../types/context.js'
+import type { StepContext } from '../types/context.js'
 import type { Guardrail, GuardrailVerdict } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LedgerEvent, LedgerEventType } from '../types/ledger.js'
@@ -12,7 +12,6 @@ import { appendLedgerEvent, readLedgerEvents } from '../persistence/ledger-write
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { isGuardrail } from '../types/guardrail.js'
 import { executeHumanReviewBeforeStepGuardrail } from './before-step-human-review.js'
-import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
 
 export interface BeforeStepExecutionResult {
   readonly guardrailIndex: number
@@ -27,7 +26,9 @@ export interface RunBeforeStepGuardrailsParams {
   readonly snapshot: RunStateSnapshot
   readonly runDir: string
   readonly mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
-  readonly environment?: ProvisionedEnvironment
+  readonly cwd?: string
+  readonly env?: Record<string, string>
+  readonly signal?: AbortSignal
   readonly logStore?: LogStore
   readonly gateWaiter?: GateWaiter
   readonly startIndex?: number
@@ -67,21 +68,6 @@ export function emitBeforeStepEvent(
     eventType,
     payload,
   })
-}
-
-async function resolveGuardrailEnv(
-  guardrail: Guardrail<any, any>,
-  ctx: StepContext,
-  stepId: string,
-  stepEnvironment?: ProvisionedEnvironment,
-  snapshot?: RunStateSnapshot,
-  runDir?: string,
-): Promise<ProvisionedEnvironment> {
-  const fallback = stepEnvironment
-    ?? ctx.environments[stepId]
-    ?? ctx.environments.host
-    ?? createDefaultHostEnvironment(process.cwd())
-  return resolveGuardrailEnvironment(guardrail, ctx, fallback, snapshot, runDir)
 }
 
 function resolveBeforeStepContent(guardrailIndex: number, verdict: GuardrailVerdict): string {
@@ -132,8 +118,7 @@ async function executeStandardBeforeStepGuardrail(
   k: number,
   logStore: LogStore,
 ): Promise<BeforeStepExecutionResult> {
-  const { step, ctx, runDir, mcpServer, environment, snapshot } = params
-  const env = await resolveGuardrailEnv(guardrail, ctx, step.id, environment, snapshot, runDir)
+  const { step, ctx, runDir, mcpServer, cwd, env, signal, gateWaiter, snapshot } = params
   const verdict = await guardrail.execute({
     ctx,
     stepId: step.id,
@@ -141,7 +126,9 @@ async function executeStandardBeforeStepGuardrail(
     guardrailIndex: k,
     attempt: 1,
     runDir,
-    environment: env,
+    cwd: cwd ?? process.cwd(),
+    env: env ?? {},
+    signal: signal ?? gateWaiter?.signal,
     mcpServerUrl: mcpServer?.url ?? '',
     mcpAuthToken: mcpServer?.authToken ?? '',
   })

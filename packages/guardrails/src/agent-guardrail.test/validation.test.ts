@@ -1,22 +1,7 @@
-import type { AgentRunner, ProvisionedEnvironment } from '@luddjs/core'
+import type { AgentRunner } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
-
-const dummyEnv: ProvisionedEnvironment = {
-  __kind: 'environment',
-  id: 'dummy-env',
-  type: 'host',
-  workingDir: '/workspace',
-  exec: async () => ({
-    exitCode: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-  }),
-  ping: async () => true,
-  teardown: async () => {},
-}
 
 const dummyAgent: AgentRunner<any, any> = {
   __kind: 'agent',
@@ -177,12 +162,24 @@ describe('agentGuardrail validation: pagination and properties', () => {
     }).type).toBe('agent')
   })
 
-  it('preserves environment and configuration properties', () => {
+  it('validates cwd/env and preserves configuration properties', () => {
+    expect(() => agentGuardrail({
+      agent: dummyAgent,
+      prompt: 'Check',
+      cwd: '  ',
+    })).toThrow('agentGuardrail "cwd" must be a non-empty string.')
+    expect(() => agentGuardrail({
+      agent: dummyAgent,
+      prompt: 'Check',
+      env: { BAD: 123 as any },
+    })).toThrow('agentGuardrail "env" entry "BAD" must be a string without null bytes.')
+
     const rail = agentGuardrail({
       name: 'security-review',
       agent: dummyAgent,
-      prompt: 'Check environment',
-      environment: dummyEnv,
+      prompt: 'Check cwd',
+      cwd: '/workspace',
+      env: { CHECK: '1' },
       maxRetries: 2,
       onMaxRetriesExceeded: 'abort',
     })
@@ -192,7 +189,6 @@ describe('agentGuardrail validation: pagination and properties', () => {
     expect(rail.name).toBe('security-review')
     expect(rail.maxRetries).toBe(2)
     expect(rail.onMaxRetriesExceeded).toBe('abort')
-    expect(rail.environment).toBe(dummyEnv)
   })
 
   it('validates optional name property', () => {

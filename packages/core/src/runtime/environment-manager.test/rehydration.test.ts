@@ -1,5 +1,4 @@
 import type { StepContext } from '../../types/context.js'
-import type { Guardrail } from '../../types/guardrail.js'
 import type { StepConfig } from '../../types/harness.js'
 import type { RunStateSnapshot } from '../../types/state.js'
 import fs from 'node:fs'
@@ -154,15 +153,15 @@ describe('resolveStepEnvironment & resolveGuardrailEnvironment persistence', () 
     const overrideSubDir = path.join(tmpDir, 'override')
     fs.mkdirSync(overrideSubDir)
 
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'exec',
+    const guardrail = {
+      __kind: 'guardrail' as const,
+      type: 'exec' as const,
       environment: createHostEnvironmentFromDescriptor({
         id: 'rail-env',
         type: 'host',
         workingDir: overrideSubDir,
       }),
-      execute: async () => ({ status: 'pass' }),
+      execute: async () => ({ status: 'pass' as const }),
     }
 
     const resolved = await resolveGuardrailEnvironment(guardrail, ctx, stepEnv, snapshot, tmpDir)

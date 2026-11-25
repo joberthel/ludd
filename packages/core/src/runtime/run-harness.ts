@@ -1,6 +1,6 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
-import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, StepConfig } from '../types/harness.js'
+import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, RunLifecycleContext, StepConfig } from '../types/harness.js'
 import type { ControlServer } from '../types/ipc.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
@@ -16,6 +16,7 @@ import {
   cleanupRunResources,
   completeSuccessfulRun,
   createInitialContext,
+  executeHarnessLifecycle,
   handleRunError,
   initControlServer,
   resolveAndLockRunDir,
@@ -92,40 +93,23 @@ async function prepareRunContext(
   }
 }
 
-function wireAbortSignal(abortController: AbortController, signal?: AbortSignal): void {
+function noop(): void {}
+
+function wireAbortSignal(abortController: AbortController, signal?: AbortSignal): () => void {
   if (!signal) {
-    return
+    return noop
   }
   if (signal.aborted) {
     abortController.abort(signal.reason)
-    return
+    return noop
   }
-  signal.addEventListener('abort', () => abortController.abort(signal.reason), { once: true })
-}
-
-function formatAbortedResult(
-  snapshot: RunStateSnapshot,
-  steps: Record<string, StepResult<unknown>>,
-  reason: unknown,
-): HarnessRunResult {
-  return {
-    runId: snapshot.runId,
-    status: 'failed',
-    steps,
-    error: reason,
+  const onAbort = (): void => {
+    abortController.abort(signal.reason)
   }
-}
-
-function resolveRunResult(
-  failure: HarnessRunResult | null,
-  abortController: AbortController,
-  snapshot: RunStateSnapshot,
-  steps: Record<string, StepResult<unknown>>,
-  runDir: string,
-): HarnessRunResult {
-  return failure ?? (abortController.signal.aborted
-    ? formatAbortedResult(snapshot, steps, abortController.signal.reason)
-    : completeSuccessfulRun(runDir, snapshot, steps))
+  signal.addEventListener('abort', onAbort, { once: true })
+  return () => {
+    signal.removeEventListener('abort', onAbort)
+  }
 }
 
 export async function runHarness(
@@ -143,8 +127,13 @@ export async function runHarness(
   const validatedConfig = validateHarnessConfig(config)
   const { runId, workspaceDir, runDir } = resolveAndLockRunDir(options)
   const abortController = new AbortController()
-  wireAbortSignal(abortController, options?.signal)
+  const detachAbortSignal = wireAbortSignal(abortController, options?.signal)
   const gateWaiter = createGateWaiter(abortController.signal)
+  const lifecycleCtx: RunLifecycleContext = {
+    runId,
+    workspaceRoot: workspaceDir,
+    signal: abortController.signal,
+  }
   let mcpServer: EmbeddedMcpServer | undefined
   let controlServer: ControlServer | undefined
   let snapshot: RunStateSnapshot | undefined
@@ -158,19 +147,31 @@ export async function runHarness(
     snapshot = prep.snapshot
     controlServer = await initControlServer(runDir, snapshot, prep.ctx.environments, abortController, gateWaiter)
 
-    const failure = await executeStepPipeline(
-      validatedConfig.steps,
-      prep.ctx,
+    const lifecycleResult = await executeHarnessLifecycle({
+      config: validatedConfig,
+      lifecycleCtx,
       snapshot,
+      steps: prep.ctx.steps,
       runDir,
-      workspaceDir,
-      prep.rehydration,
-      mcpServer,
-      prep.logStore,
-      gateWaiter,
-      abortController.signal,
-    )
-    const result = resolveRunResult(failure, abortController, snapshot, prep.ctx.steps, runDir)
+      abortController,
+      run: async runExecutionContext => executeStepPipeline(
+        validatedConfig.steps,
+        prep.ctx,
+        snapshot!,
+        runDir,
+        workspaceDir,
+        runExecutionContext,
+        prep.rehydration,
+        mcpServer,
+        prep.logStore,
+        gateWaiter,
+        abortController.signal,
+      ),
+    })
+
+    const result = lifecycleResult.status === 'passed'
+      ? completeSuccessfulRun(runDir, snapshot, prep.ctx.steps)
+      : lifecycleResult
 
     await applyCleanupPolicy(
       validatedConfig.cleanupPolicy,
@@ -186,6 +187,7 @@ export async function runHarness(
     throw error
   }
   finally {
+    detachAbortSignal()
     await cleanupRunResources(runDir, controlServer, mcpServer, gateWaiter)
   }
 }

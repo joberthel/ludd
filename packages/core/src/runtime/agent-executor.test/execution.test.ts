@@ -5,8 +5,9 @@ import type { RunStateSnapshot } from '../../types/state.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { StepOutputValidationError } from '../../errors/step-output-validation-error.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { readStreamEvents } from '../../persistence/stream-writer.js'
 import { executeAgentStep } from '../agent-executor.js'
@@ -203,5 +204,143 @@ describe('executeAgentStep outputSchema handling and transformation', () => {
     }
     expect(output.count).toBe(84)
     expect(output.sessionId).toMatch(/^session-[0-9a-f-]+$/)
+  })
+
+  it('forwards explicit cwd, env, and signal to agent turns without environment handle', async () => {
+    let captured: AgentTurnInput | undefined
+    const controller = new AbortController()
+    const agent: AgentRunner<string> = {
+      __kind: 'agent',
+      mode: 'workspace-write',
+      prompt: 'run in worktree',
+      executeTurn: async (input) => {
+        captured = input
+        return { output: 'ok', sessionId: input.sessionId }
+      },
+    }
+    const step: StepConfig = { id: 's-host', run: agent }
+    await executeAgentStep(
+      step,
+      agent,
+      createDummyContext(),
+      createDummySnapshot('s-host'),
+      tempDir,
+      undefined,
+      { url: 'http://127.0.0.1:9999/mcp', authToken: 'tok' },
+      {
+        cwd: '/repo/wt',
+        env: { WT: '1' },
+        signal: controller.signal,
+      },
+    )
+
+    expect(captured?.cwd).toBe('/repo/wt')
+    expect(captured?.env).toEqual({ WT: '1' })
+    expect(captured?.signal).toBe(controller.signal)
+    expect(captured?.mcpServerUrl).toBe('http://127.0.0.1:9999/mcp')
+    expect(captured?.mcpAuthToken).toBe('tok')
+    expect(captured).not.toHaveProperty('environment')
+  })
+
+  it('aborts immediately on pre-aborted or mid-turn aborted signal and never retries aborted guardrails', async () => {
+    const preCtrl = new AbortController()
+    preCtrl.abort(new Error('pre-aborted-agent'))
+    const neverCalled = vi.fn()
+    await expect(
+      executeAgentStep(
+        {
+          id: 's-pre',
+          run: {
+            __kind: 'agent',
+            mode: 'read-only',
+            prompt: 'p',
+            executeTurn: neverCalled,
+          },
+        },
+        {
+          __kind: 'agent',
+          mode: 'read-only',
+          prompt: 'p',
+          executeTurn: neverCalled,
+        },
+        createDummyContext(),
+        createDummySnapshot('s-pre'),
+        tempDir,
+        undefined,
+        undefined,
+        { cwd: tempDir, env: {}, signal: preCtrl.signal },
+      ),
+    ).rejects.toThrow('pre-aborted-agent')
+    expect(neverCalled).not.toHaveBeenCalled()
+
+    const midTurnCtrl = new AbortController()
+    const midTurnAgent: AgentRunner<string> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'p',
+      executeTurn: async (input) => {
+        midTurnCtrl.abort(new Error('aborted-in-turn'))
+        return { output: 'partial', sessionId: input.sessionId }
+      },
+    }
+    await expect(
+      executeAgentStep(
+        { id: 's-mid-turn', run: midTurnAgent },
+        midTurnAgent,
+        createDummyContext(),
+        createDummySnapshot('s-mid-turn'),
+        tempDir,
+        undefined,
+        undefined,
+        { cwd: tempDir, env: {}, signal: midTurnCtrl.signal },
+      ),
+    ).rejects.toThrow('aborted-in-turn')
+
+    const railCtrl = new AbortController()
+    let attempts = 0
+    const retryProtectedAgent: AgentRunner<string> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'p',
+      executeTurn: async (input) => {
+        attempts += 1
+        return { output: 'done', sessionId: input.sessionId }
+      },
+    }
+    const abortingRailStep: StepConfig = {
+      id: 's-abort-rail',
+      run: retryProtectedAgent,
+      maxTotalTurns: 3,
+      afterStep: [
+        {
+          __kind: 'guardrail',
+          type: 'agent',
+          execute: async () => {
+            railCtrl.abort(new Error('aborted-in-guardrail'))
+            throw new StepOutputValidationError('s-abort-rail', undefined, [
+              {
+                code: 'custom',
+                path: ['status'],
+                message: 'missing submission',
+              },
+            ])
+          },
+        },
+      ],
+    }
+
+    await expect(
+      executeAgentStep(
+        abortingRailStep,
+        retryProtectedAgent,
+        createDummyContext(),
+        createDummySnapshot('s-abort-rail'),
+        tempDir,
+        undefined,
+        undefined,
+        { cwd: tempDir, env: {}, signal: railCtrl.signal },
+      ),
+    ).rejects.toThrow('aborted-in-guardrail')
+    expect(attempts).toBe(1)
   })
 })

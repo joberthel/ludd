@@ -125,6 +125,7 @@ export {
   runAfterStepGuardrails,
 } from './runtime/guardrail-executor.js'
 export {
+  extractAbortError,
   type HostSpawnOptions,
   type HostSpawnResult,
   spawn,

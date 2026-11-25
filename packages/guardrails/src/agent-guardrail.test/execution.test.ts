@@ -2,31 +2,17 @@ import type {
   AgentRunner,
   AgentTurnInput,
   GuardrailExecutionInput,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
+import path from 'node:path'
+import { StepOutputValidationError } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { agentGuardrail } from '../agent-guardrail.js'
-
-const mockEnv: ProvisionedEnvironment = {
-  __kind: 'environment',
-  id: 'mock-env',
-  type: 'host',
-  workingDir: '/workspace',
-  exec: async () => ({
-    exitCode: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-  }),
-  ping: async () => true,
-  teardown: async () => {},
-}
 
 function createDummyContext(): StepContext {
   return {
     runId: 'run-1',
-    environments: { host: mockEnv },
+    environments: {},
     steps: {},
     step: { id: 'step-1', output: undefined, attempt: 1 },
     matrix: undefined,
@@ -44,7 +30,8 @@ function createExecutionInput(
     guardrailIndex: 0,
     attempt: 1,
     runDir: '',
-    environment: mockEnv,
+    cwd: '/workspace',
+    env: { BASE: '1' },
     mcpServerUrl: 'http://127.0.0.1:4000',
     mcpAuthToken: 'token-abc',
     ...overrides,
@@ -102,15 +89,16 @@ describe('agentGuardrail execution: sessionId and mode', () => {
   })
 })
 
-describe('agentGuardrail execution: environment handling', () => {
-  it('reuses parent step environment by default', async () => {
-    let capturedEnv: ProvisionedEnvironment | undefined
+describe('agentGuardrail execution: cwd, env, and signal handling', () => {
+  it('forwards parent step cwd, env, and signal by default', async () => {
+    let capturedTurn: AgentTurnInput | undefined
+    const controller = new AbortController()
     const agent: AgentRunner<any, any> = {
       __kind: 'agent',
       mode: 'read-only',
       prompt: 'p',
       executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedEnv = turnInput.environment
+        capturedTurn = turnInput
         return {
           output: { status: 'pass' },
           sessionId: turnInput.sessionId,
@@ -119,19 +107,24 @@ describe('agentGuardrail execution: environment handling', () => {
     }
 
     const rail = agentGuardrail({ agent, prompt: 'p' })
-    await rail.execute(createExecutionInput({ environment: mockEnv }))
-    expect(capturedEnv).toBe(mockEnv)
+    await rail.execute(createExecutionInput({
+      cwd: '/workspace/wt',
+      env: { STEP: 'yes' },
+      signal: controller.signal,
+    }))
+    expect(capturedTurn?.cwd).toBe('/workspace/wt')
+    expect(capturedTurn?.env).toEqual({ STEP: 'yes' })
+    expect(capturedTurn?.signal).toBe(controller.signal)
   })
 
-  it('uses custom static or dynamic environment when configured', async () => {
-    const customEnv: ProvisionedEnvironment = { ...mockEnv, id: 'custom-env' }
-    let capturedEnv: ProvisionedEnvironment | undefined
+  it('applies static and dynamic cwd and env overrides when configured', async () => {
+    let capturedTurn: AgentTurnInput | undefined
     const agent: AgentRunner<any, any> = {
       __kind: 'agent',
       mode: 'read-only',
       prompt: 'p',
       executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedEnv = turnInput.environment
+        capturedTurn = turnInput
         return {
           output: { status: 'pass' },
           sessionId: turnInput.sessionId,
@@ -139,17 +132,25 @@ describe('agentGuardrail execution: environment handling', () => {
       },
     }
 
-    const staticRail = agentGuardrail({ agent, prompt: 'p', environment: customEnv })
+    const staticRail = agentGuardrail({
+      agent,
+      prompt: 'p',
+      cwd: 'packages/core',
+      env: { EXTRA: 'static' },
+    })
     await staticRail.execute(createExecutionInput())
-    expect(capturedEnv?.id).toBe('custom-env')
+    expect(capturedTurn?.cwd).toBe(path.resolve('/workspace/packages/core'))
+    expect(capturedTurn?.env).toEqual({ BASE: '1', EXTRA: 'static' })
 
     const dynamicRail = agentGuardrail({
       agent,
       prompt: 'p',
-      environment: () => customEnv,
+      cwd: ctx => `/custom/${ctx.step.id}`,
+      env: () => ({ BASE: 'override', DYN: '1' }),
     })
     await dynamicRail.execute(createExecutionInput())
-    expect(capturedEnv?.id).toBe('custom-env')
+    expect(capturedTurn?.cwd).toBe(path.resolve('/custom/step-1'))
+    expect(capturedTurn?.env).toEqual({ BASE: 'override', DYN: '1' })
   })
 })
 
@@ -224,5 +225,45 @@ describe('agentGuardrail execution: prompt resolution', () => {
     await expect(async () => emptyRail.execute(createExecutionInput())).rejects.toThrow(
       new TypeError('agentGuardrail prompt cannot be empty.'),
     )
+  })
+
+  it('throws abort error rather than StepOutputValidationError when signal aborts mid-turn', async () => {
+    const resolvedAbortCtrl = new AbortController()
+    const resolvedAfterAbortAgent: AgentRunner<any, any> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'p',
+      executeTurn: async (turnInput: AgentTurnInput) => {
+        resolvedAbortCtrl.abort(new Error('guardrail-turn-aborted'))
+        return { output: 'incomplete-non-verdict', sessionId: turnInput.sessionId }
+      },
+    }
+    const rail1 = agentGuardrail({ agent: resolvedAfterAbortAgent, prompt: 'p' })
+    await expect(
+      rail1.execute(createExecutionInput({ signal: resolvedAbortCtrl.signal })),
+    ).rejects.toThrow('guardrail-turn-aborted')
+
+    const thrownAbortCtrl = new AbortController()
+    const thrownValidationOnAbortAgent: AgentRunner<any, any> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'p',
+      executeTurn: async () => {
+        thrownAbortCtrl.abort(new Error('pi-turn-aborted'))
+        throw new StepOutputValidationError('step-1', undefined, [
+          {
+            code: 'custom',
+            path: ['status'],
+            message: 'missing submission',
+          },
+        ])
+      },
+    }
+    const rail2 = agentGuardrail({ agent: thrownValidationOnAbortAgent, prompt: 'p' })
+    const err = await rail2
+      .execute(createExecutionInput({ signal: thrownAbortCtrl.signal }))
+      .catch((e: unknown) => e)
+    expect(err).not.toBeInstanceOf(StepOutputValidationError)
+    expect((err as Error).message).toBe('pi-turn-aborted')
   })
 })

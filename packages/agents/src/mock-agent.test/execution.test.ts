@@ -1,21 +1,8 @@
-import type { AgentTurnInput, ArtifactClient, ProvisionedEnvironment } from '@luddjs/core'
+import type { AgentTurnInput, ArtifactClient } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 
-const dummyEnv: ProvisionedEnvironment = {
-  __kind: 'environment',
-  id: 'mock-env',
-  type: 'host',
-  workingDir: '/tmp',
-  exec: async () => ({
-    exitCode: 0,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-  }),
-  ping: async () => true,
-  teardown: async () => {},
-}
+const abortController = new AbortController()
 
 const dummyInput: AgentTurnInput = {
   ctx: {
@@ -32,18 +19,20 @@ const dummyInput: AgentTurnInput = {
   attempt: 1,
   mode: 'read-only',
   runDir: '/tmp/run',
-  environment: dummyEnv,
+  cwd: '/tmp/worktree',
+  env: { WORKTREE: '1' },
+  signal: abortController.signal,
   mcpServerUrl: 'http://127.0.0.1:0/mcp',
   mcpAuthToken: 'dummy-token',
 }
 
 describe('mockAgent turn execution and response exhaustion', () => {
-  it('sequentially consumes static values and function responses', async () => {
+  it('sequentially consumes static values and function responses with cwd, env, and signal', async () => {
     const agent = mockAgent<string>({
       prompt: 'hello',
       responses: [
         'turn-1-value',
-        async input => `turn-2-${input.stepId}-${input.prompt}`,
+        async input => `turn-2-${input.stepId}-${input.prompt}-${input.cwd}-${input.env.WORKTREE}-${input.signal === abortController.signal}`,
       ],
     })
 
@@ -52,7 +41,7 @@ describe('mockAgent turn execution and response exhaustion', () => {
 
     const turn2 = await agent.executeTurn(dummyInput)
     expect(turn2).toEqual({
-      output: 'turn-2-s-1-hello',
+      output: 'turn-2-s-1-hello-/tmp/worktree-1-true',
       sessionId: 'sess-1',
     })
   })

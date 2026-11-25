@@ -1,13 +1,14 @@
-import type { ProvisionedEnvironment } from '../../types/environment.js'
-import type { Guardrail } from '../../types/guardrail.js'
+import type { Guardrail, GuardrailExecutionInput } from '../../types/guardrail.js'
 import type { StepConfig } from '../../types/harness.js'
 import type { RunStateSnapshot } from '../../types/state.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../../persistence/state-store.js'
+import { createGateWaiter } from '../gate-waiter.js'
 import {
   emitStepRetry,
   formatGuardrailRetryPrompt,
@@ -79,42 +80,23 @@ describe('guardrail executor prompt and ledger helpers', () => {
   })
 })
 
-function makeMockEnv(id: string): ProvisionedEnvironment {
-  return {
-    __kind: 'environment',
-    id,
-    type: 'mock',
-    workingDir: '/workspace',
-    exec: async () => ({
-      exitCode: 0,
-      stdout: '',
-      stderr: '',
-      timedOut: false,
-    }),
-    ping: async () => true,
-    teardown: async () => {},
-  }
-}
-
-describe('guardrail executor dynamic environment resolution', () => {
-  it('resolves guardrail environment property dynamically', async () => {
+describe('guardrail executor host execution context forwarding', () => {
+  it('forwards explicit cwd, env, and signal and falls back to defaults', async () => {
     const runDir = makeTempDir()
     try {
       const snapshot = makeInitialSnapshot(runDir)
-      let receivedEnv: any
-      const mockEnv = makeMockEnv('custom-container')
-      const customRail: Guardrail = {
+      const received: GuardrailExecutionInput[] = []
+      const rail: Guardrail = {
         __kind: 'guardrail',
         type: 'fn',
-        environment: () => mockEnv,
         execute: async (input) => {
-          receivedEnv = input.environment
+          received.push(input)
           return { status: 'pass' }
         },
       }
       const step: StepConfig = {
         id: 's-1',
-        afterStep: [customRail],
+        afterStep: [rail],
         run: async () => ({}),
       }
       const ctx = {
@@ -126,6 +108,7 @@ describe('guardrail executor dynamic environment resolution', () => {
         artifacts: {} as any,
       }
 
+      const explicitController = new AbortController()
       await runAfterStepGuardrails({
         step,
         ctx,
@@ -134,47 +117,12 @@ describe('guardrail executor dynamic environment resolution', () => {
         attempt: 1,
         maxTotalTurns: 5,
         initialPrompt: '',
+        cwd: '/custom/step/dir',
+        env: { STEP_VAR: '1' },
+        signal: explicitController.signal,
       })
 
-      expect(receivedEnv).toEqual(mockEnv)
-    }
-    finally {
-      fs.rmSync(runDir, { recursive: true, force: true })
-    }
-  })
-})
-
-describe('guardrail executor inherited environment resolution', () => {
-  it('inherits environment from ctx.environments[stepId] when guardrail.environment is undefined', async () => {
-    const runDir = makeTempDir()
-    try {
-      const snapshot = makeInitialSnapshot(runDir)
-      let receivedEnv: any
-      const inheritedEnv = makeMockEnv('inherited-step-env')
-      const defaultRail: Guardrail = {
-        __kind: 'guardrail',
-        type: 'fn',
-        execute: async (input) => {
-          receivedEnv = input.environment
-          return { status: 'pass' }
-        },
-      }
-      const step: StepConfig = {
-        id: 's-step-env',
-        afterStep: [defaultRail],
-        run: async () => ({}),
-      }
-      const ctx = {
-        runId: 'r-1',
-        environments: {
-          's-step-env': inheritedEnv,
-        },
-        steps: {},
-        step: { id: 's-step-env', output: {}, attempt: 1 },
-        matrix: undefined,
-        artifacts: {} as any,
-      }
-
+      const waiterController = new AbortController()
       await runAfterStepGuardrails({
         step,
         ctx,
@@ -183,9 +131,15 @@ describe('guardrail executor inherited environment resolution', () => {
         attempt: 1,
         maxTotalTurns: 5,
         initialPrompt: '',
+        gateWaiter: createGateWaiter(waiterController.signal),
       })
 
-      expect(receivedEnv).toEqual(inheritedEnv)
+      expect(received[0]?.cwd).toBe('/custom/step/dir')
+      expect(received[0]?.env).toEqual({ STEP_VAR: '1' })
+      expect(received[0]?.signal).toBe(explicitController.signal)
+      expect(received[1]?.cwd).toBe(process.cwd())
+      expect(received[1]?.env).toEqual({})
+      expect(received[1]?.signal).toBe(waiterController.signal)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })

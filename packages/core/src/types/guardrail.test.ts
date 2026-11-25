@@ -81,7 +81,6 @@ describe('isGuardrail positive checks', () => {
       name: 'typecheck',
       maxRetries: 3,
       onMaxRetriesExceeded: 'prompt_user',
-      environment: { id: 'env-1' },
       execute: async () => ({ status: 'pass' as const }),
     })).toBe(true)
   })

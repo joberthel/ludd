@@ -11,6 +11,7 @@ import { createControlClient } from '../../ipc/control-client.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { RUNNER_PID_FILE } from '../../persistence/pid-lock.js'
 import { readRunState } from '../../persistence/state-store.js'
+import { spawn } from '../host-exec.js'
 import { runHarness } from '../run-harness.js'
 
 let tempDir: string
@@ -108,22 +109,67 @@ describe('run.abort RPC method while waiting at gate (AC 6.6.1)', () => {
     expect(events.some(e => e.eventType === 'run.teardown')).toBe(true)
     expect(fs.existsSync(path.join(runDir, RUNNER_PID_FILE))).toBe(false)
   })
+
+  it('invokes harness teardown hook when gate is aborted', async () => {
+    const runId = 'abort-at-gate-hook'
+    const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    const hookTeardown = vi.fn().mockResolvedValue(undefined)
+
+    const runPromise = runHarness(
+      {
+        name: 'gate-hook-teardown',
+        teardown: hookTeardown,
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Approve release:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
+      { runId, workspaceDir: tempDir },
+    )
+
+    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
+    const abortResult = await client.abort({ reason: 'Gate canceled', teardown: true })
+    expect(abortResult.ok).toBe(true)
+    await client.close()
+
+    const result = await runPromise
+    expect(result.status).toBe('failed')
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('run.abort RPC method while executing command (AC 6.6.1)', () => {
-  it('aborts running command immediately, kills child process, records status failed', async () => {
+  it('aborts running command immediately, kills child process, runs harness teardown, records status failed', async () => {
     const runId = 'abort-running-cmd'
     const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    const hookTeardown = vi.fn().mockResolvedValue(undefined)
 
     const runPromise = runHarness(
       {
         name: 'cmd-abort-pipeline',
+        teardown: hookTeardown,
         steps: [
           {
             id: 'long-cmd-step',
-            run: async (ctx) => {
-              const res = await ctx.environments.host.exec(['node', '-e', 'setInterval(() => {}, 1000)'])
-              return res
+            run: {
+              __kind: 'agent',
+              mode: 'workspace-write',
+              prompt: 'wait',
+              executeTurn: async (input) => {
+                const res = await spawn({
+                  command: process.execPath,
+                  args: ['-e', 'setInterval(() => {}, 1000)'],
+                  cwd: input.cwd,
+                  env: input.env,
+                  signal: input.signal,
+                })
+                return { output: res, sessionId: input.sessionId }
+              },
             },
           },
         ],
@@ -138,6 +184,7 @@ describe('run.abort RPC method while executing command (AC 6.6.1)', () => {
 
     const result = await runPromise
     expect(result.status).toBe('failed')
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
 
     const state = readRunState(runDir)
     expect(state.status).toBe('failed')

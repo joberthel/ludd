@@ -196,3 +196,125 @@ describe('runHarness runner failure handling', () => {
     expect(rejRes.error).toBe(rejVal)
   })
 })
+
+describe('runHarness setup, teardown, and cwd/env propagation', () => {
+  let tempDir: string
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-exec-host-'))
+  })
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true })
+  })
+
+  it('runs setup once, resolves per-run and per-step cwd/env without leakage, and runs teardown', async () => {
+    const calls: string[] = []
+    const observed: Array<{ phase: string, cwd: string, env: Record<string, string> }> = []
+
+    const res = await runHarness({
+      name: 'host-exec-pipeline',
+      cwd: 'base',
+      env: ctx => ({ RUN_ID: ctx.runId, LAYER: 'harness' }),
+      setup: async (ctx) => {
+        calls.push(`setup:${ctx.runId}`)
+        return {
+          cwd: 'worktree',
+          env: { LAYER: 'setup', WT: '1' },
+        }
+      },
+      teardown: async (ctx) => {
+        calls.push(`teardown:${ctx.runId}`)
+      },
+      steps: [
+        {
+          id: 'step-override',
+          cwd: 'pkg',
+          env: { LAYER: 'step1', STEP1: 'yes' },
+          beforeStep: [
+            {
+              __kind: 'guardrail',
+              type: 'exec',
+              execute: async (input) => {
+                observed.push({ phase: 's1-before', cwd: input.cwd, env: input.env })
+                return { status: 'pass' }
+              },
+            },
+          ],
+          run: {
+            __kind: 'agent',
+            mode: 'read-only',
+            prompt: 'p1',
+            executeTurn: async (input) => {
+              observed.push({ phase: 's1-agent', cwd: input.cwd, env: input.env })
+              return { output: 's1', sessionId: input.sessionId }
+            },
+          },
+          afterStep: [
+            {
+              __kind: 'guardrail',
+              type: 'exec',
+              execute: async (input) => {
+                observed.push({ phase: 's1-after', cwd: input.cwd, env: input.env })
+                return { status: 'pass' }
+              },
+            },
+          ],
+        },
+        {
+          id: 'step-inherit',
+          run: {
+            __kind: 'agent',
+            mode: 'read-only',
+            prompt: 'p2',
+            executeTurn: async (input) => {
+              observed.push({ phase: 's2-agent', cwd: input.cwd, env: input.env })
+              return { output: 's2', sessionId: input.sessionId }
+            },
+          },
+        },
+      ],
+    }, { runId: 'run-host-1', workspaceDir: tempDir })
+
+    expect(res.status).toBe('passed')
+    expect(calls).toEqual(['setup:run-host-1', 'teardown:run-host-1'])
+    const expectedS1Cwd = path.resolve(tempDir, 'worktree', 'pkg')
+    const expectedS2Cwd = path.resolve(tempDir, 'worktree')
+    expect(observed).toEqual([
+      {
+        phase: 's1-before',
+        cwd: expectedS1Cwd,
+        env: {
+          RUN_ID: 'run-host-1',
+          LAYER: 'step1',
+          WT: '1',
+          STEP1: 'yes',
+        },
+      },
+      {
+        phase: 's1-agent',
+        cwd: expectedS1Cwd,
+        env: {
+          RUN_ID: 'run-host-1',
+          LAYER: 'step1',
+          WT: '1',
+          STEP1: 'yes',
+        },
+      },
+      {
+        phase: 's1-after',
+        cwd: expectedS1Cwd,
+        env: {
+          RUN_ID: 'run-host-1',
+          LAYER: 'step1',
+          WT: '1',
+          STEP1: 'yes',
+        },
+      },
+      {
+        phase: 's2-agent',
+        cwd: expectedS2Cwd,
+        env: { RUN_ID: 'run-host-1', LAYER: 'setup', WT: '1' },
+      },
+    ])
+  })
+})

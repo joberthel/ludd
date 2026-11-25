@@ -127,7 +127,7 @@ describe('runHarness dangerMode safe steps (ADR-0009)', () => {
 })
 
 describe('runHarness dangerMode forwarding to agent (ADR-0009)', () => {
-  it('succeeds and forwards dangerMode to env.exec and agent execution', async () => {
+  it('succeeds and forwards dangerMode to agent execution', async () => {
     const dockerEnv = createMockEnv('docker-worktree', true)
     let capturedTurnInput: AgentTurnInput | undefined
 
@@ -137,12 +137,6 @@ describe('runHarness dangerMode forwarding to agent (ADR-0009)', () => {
       prompt: 'do privileged work',
       executeTurn: async (input) => {
         capturedTurnInput = input
-        await input.environment.exec([
-          'apt-get',
-          'install',
-          '-y',
-          'build-essential',
-        ])
         return { output: 'installed', sessionId: input.sessionId }
       },
     }
@@ -161,26 +155,12 @@ describe('runHarness dangerMode forwarding to agent (ADR-0009)', () => {
 
     expect(result.status).toBe('passed')
     expect(capturedTurnInput?.dangerMode).toBe(true)
-    expect(dockerEnv.exec).toHaveBeenCalledWith(
-      [
-        'apt-get',
-        'install',
-        '-y',
-        'build-essential',
-      ],
-      expect.objectContaining({ dangerMode: true }),
-    )
-
-    await capturedTurnInput?.environment.exec(['ls'], { dangerMode: false })
-    expect(dockerEnv.exec).toHaveBeenLastCalledWith(
-      ['ls'],
-      expect.objectContaining({ dangerMode: false }),
-    )
+    expect(capturedTurnInput?.cwd).toBe(tempDir)
   })
 })
 
 describe('runHarness dangerMode forwarding false to agent (ADR-0009)', () => {
-  it('forwards dangerMode: false to agent and env.exec when step has dangerMode: false', async () => {
+  it('forwards dangerMode: false to agent when step has dangerMode: false', async () => {
     const dockerEnv = createMockEnv('docker-worktree', true)
     let capturedTurnInput: AgentTurnInput | undefined
 
@@ -190,7 +170,6 @@ describe('runHarness dangerMode forwarding false to agent (ADR-0009)', () => {
       prompt: 'safe agent',
       executeTurn: async (input) => {
         capturedTurnInput = input
-        await input.environment.exec(['echo', 'safe'])
         return { output: 'safe-done', sessionId: input.sessionId }
       },
     }
@@ -209,9 +188,6 @@ describe('runHarness dangerMode forwarding false to agent (ADR-0009)', () => {
 
     expect(result.status).toBe('passed')
     expect(capturedTurnInput?.dangerMode).toBe(false)
-    expect(dockerEnv.exec).toHaveBeenCalledWith(
-      ['echo', 'safe'],
-      expect.objectContaining({ dangerMode: false }),
-    )
+    expect(capturedTurnInput?.cwd).toBe(tempDir)
   })
 })

@@ -1,4 +1,6 @@
-import type { ProvisionedEnvironment, StepContext } from '@luddjs/core'
+import type { GuardrailExecutionInput, StepContext } from '@luddjs/core'
+import os from 'node:os'
+import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { execGuardrail } from '../exec-guardrail.js'
 
@@ -13,37 +15,31 @@ function makeMockCtx(): StepContext {
   }
 }
 
-function makeTimedOutEnv(stdout = 'partial out', stderr = 'partial err'): ProvisionedEnvironment {
+function makeInput(): GuardrailExecutionInput {
   return {
-    __kind: 'environment',
-    id: 'mock-env',
-    type: 'mock',
-    workingDir: '/workspace',
-    exec: async () => ({
-      exitCode: null,
-      stdout,
-      stderr,
-      timedOut: true,
-    }),
-    ping: async () => true,
-    teardown: async () => {},
+    ctx: makeMockCtx(),
+    stepId: 's-1',
+    phase: 'afterStep',
+    guardrailIndex: 0,
+    attempt: 1,
+    runDir: '/runs/1',
+    cwd: os.tmpdir(),
+    env: {},
+    mcpServerUrl: '',
+    mcpAuthToken: '',
   }
 }
 
+const timedOutCommand = [
+  process.execPath,
+  '-e',
+  'process.stdout.write("partial out"); process.stderr.write("partial err"); setInterval(() => {}, 1000);',
+] as const
+
 describe('execGuardrail timeout resolution (AC 5.2.2)', () => {
   it('resolves with fail status and Command timed out by default', async () => {
-    const rail = execGuardrail({ command: 'sleep 10' })
-    const verdict = await rail.execute({
-      ctx: makeMockCtx(),
-      stepId: 's-1',
-      phase: 'afterStep',
-      guardrailIndex: 0,
-      attempt: 1,
-      runDir: '/runs/1',
-      environment: makeTimedOutEnv(),
-      mcpServerUrl: '',
-      mcpAuthToken: '',
-    })
+    const rail = execGuardrail({ command: timedOutCommand, timeout: 0.15 })
+    const verdict = await rail.execute(makeInput())
 
     expect(verdict.status).toBe('fail')
     expect(verdict.body).toBe('Command timed out')
@@ -51,33 +47,13 @@ describe('execGuardrail timeout resolution (AC 5.2.2)', () => {
   })
 
   it('respects custom onTimeout status skip or pass', async () => {
-    const skipRail = execGuardrail({ command: 'sleep 10', onTimeout: 'skip' })
-    const skipVerdict = await skipRail.execute({
-      ctx: makeMockCtx(),
-      stepId: 's-1',
-      phase: 'afterStep',
-      guardrailIndex: 0,
-      attempt: 1,
-      runDir: '/runs/1',
-      environment: makeTimedOutEnv(),
-      mcpServerUrl: '',
-      mcpAuthToken: '',
-    })
+    const skipRail = execGuardrail({ command: timedOutCommand, timeout: 0.15, onTimeout: 'skip' })
+    const skipVerdict = await skipRail.execute(makeInput())
     expect(skipVerdict.status).toBe('skip')
     expect(skipVerdict.body).toBe('Command timed out')
 
-    const passRail = execGuardrail({ command: 'sleep 10', onTimeout: 'pass' })
-    const passVerdict = await passRail.execute({
-      ctx: makeMockCtx(),
-      stepId: 's-1',
-      phase: 'afterStep',
-      guardrailIndex: 0,
-      attempt: 1,
-      runDir: '/runs/1',
-      environment: makeTimedOutEnv(),
-      mcpServerUrl: '',
-      mcpAuthToken: '',
-    })
+    const passRail = execGuardrail({ command: timedOutCommand, timeout: 0.15, onTimeout: 'pass' })
+    const passVerdict = await passRail.execute(makeInput())
     expect(passVerdict.status).toBe('pass')
   })
 })

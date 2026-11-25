@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import type { DynamicProperty, ProvisionedEnvironment, StepContext } from './context.js'
+import type { DynamicProperty, StepContext } from './context.js'
 
 export type AgentAccessMode = 'read-only' | 'workspace-write'
 
@@ -12,7 +12,10 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   mode: AgentAccessMode
   dangerMode?: boolean
   runDir: string
-  environment: ProvisionedEnvironment
+  /** Resolved working directory on the host for this step/turn. */
+  cwd: string
+  /** Resolved environment variables for this step/turn. */
+  env: Record<string, string>
   mcpServerUrl: string
   mcpAuthToken: string
   /**

@@ -44,4 +44,51 @@ describe('executeStepRun function step retry', () => {
     expect(result).toEqual({ attempt: 2 })
     expect(new GuardrailRetrySignal('msg')).toBeInstanceOf(Error)
   })
+
+  it('forwards cwd, env, and signal to afterStep guardrails on function steps', async () => {
+    let capturedInput: { cwd: string, env: Record<string, string>, signal?: AbortSignal } | undefined
+    const controller = new AbortController()
+    const step: StepConfig = {
+      id: 'fn-ctx',
+      afterStep: [
+        {
+          __kind: 'guardrail',
+          type: 'fn',
+          execute: async (input) => {
+            capturedInput = { cwd: input.cwd, env: input.env, signal: input.signal }
+            return { status: 'pass' }
+          },
+        },
+      ],
+      run: () => 'done',
+    }
+    const ctx = {
+      runId: 'run-ctx',
+      environments: {},
+      steps: {},
+      step: { id: 'fn-ctx', output: undefined, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    } as unknown as StepContext
+    const snapshot = {
+      runId: 'run-ctx',
+      status: 'running',
+      activeGate: null,
+    } as unknown as RunStateSnapshot
+
+    await executeStepRun(step, {
+      ctx,
+      snapshot,
+      runDir: '/tmp/run-ctx',
+      cwd: '/repo/sub',
+      env: { CUSTOM: 'yes' },
+      signal: controller.signal,
+    }, '')
+
+    expect(capturedInput).toEqual({
+      cwd: '/repo/sub',
+      env: { CUSTOM: 'yes' },
+      signal: controller.signal,
+    })
+  })
 })

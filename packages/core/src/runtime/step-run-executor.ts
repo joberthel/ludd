@@ -1,6 +1,5 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext } from '../types/context.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
@@ -18,7 +17,9 @@ interface StepRunExecutionParams {
   runDir: string
   rehydration?: RehydratedAgentState
   mcpServer?: EmbeddedMcpServer
-  environment?: ProvisionedEnvironment
+  cwd?: string
+  env?: Record<string, string>
+  signal?: AbortSignal
   logStore?: LogStore
   gateWaiter?: GateWaiter
 }
@@ -27,7 +28,7 @@ async function resumeFunctionAfterStepGate(
   step: StepConfig,
   params: StepRunExecutionParams,
 ): Promise<unknown> {
-  const { ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter } = params
+  const { ctx, snapshot, runDir, rehydration, mcpServer, cwd, env, signal, logStore, gateWaiter } = params
   const activeGate = rehydration!.activeGate!
   ctx.step = { id: step.id, output: rehydration!.activeStepOutput, attempt: ctx.step.attempt }
   await runAfterStepGuardrails({
@@ -41,7 +42,9 @@ async function resumeFunctionAfterStepGate(
     initialPrompt: '',
     isAgent: false,
     mcpServer,
-    environment,
+    cwd,
+    env,
+    signal,
     logStore,
     gateWaiter,
     startGuardrailIndex: activeGate.guardrailIndex,
@@ -55,7 +58,7 @@ async function executeFunctionStep(
   runner: (ctx: StepContext) => Promise<unknown> | unknown,
   params: StepRunExecutionParams,
 ): Promise<unknown> {
-  const { ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter } = params
+  const { ctx, snapshot, runDir, rehydration, mcpServer, cwd, env, signal, logStore, gateWaiter } = params
   let shouldResumeGate = rehydration?.activeGate?.phase === 'afterStep'
 
   while (true) {
@@ -79,7 +82,9 @@ async function executeFunctionStep(
         initialPrompt: '',
         isAgent: false,
         mcpServer,
-        environment,
+        cwd,
+        env,
+        signal,
         logStore,
         gateWaiter,
       })
@@ -107,7 +112,7 @@ export async function executeStepRun(
   params: StepRunExecutionParams,
   beforeStepNotification: string,
 ): Promise<unknown> {
-  const { ctx, snapshot, runDir, rehydration, mcpServer, environment, logStore, gateWaiter } = params
+  const { ctx, snapshot, runDir, rehydration, mcpServer, cwd, env, signal, logStore, gateWaiter } = params
   const isFunctionGateResume = rehydration?.activeGate?.phase === 'afterStep'
     && !hasAgentSessionOutput(rehydration.activeStepOutput)
   if (typeof step.run === 'function' && isFunctionGateResume) {
@@ -125,7 +130,7 @@ export async function executeStepRun(
       runDir,
       rehydration,
       mcpServer,
-      environment,
+      { cwd, env, signal },
       logStore,
       beforeStepNotification,
       gateWaiter,

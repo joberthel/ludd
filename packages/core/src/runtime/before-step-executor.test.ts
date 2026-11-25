@@ -510,3 +510,77 @@ describe('runBeforeStepGuardrails partial rehydration', () => {
     expect(notification).toContain('Guardrail #3: logKey="s-rehydrate-2-m0-1-beforeStep-3" (status: pass)')
   })
 })
+
+describe('runBeforeStepGuardrails host execution context forwarding', () => {
+  it('forwards explicit cwd, env, and signal (with gateWaiter fallback) to guardrail.execute', async () => {
+    const { createGateWaiter } = await import('./gate-waiter.js')
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'r-ctx',
+      harnessName: 'test',
+      workflowName: 'test',
+      status: 'running',
+      activeStepId: 's-ctx',
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    }
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const seen: Array<{ cwd: string, env: Record<string, string>, signal?: AbortSignal }> = []
+    const rail: Guardrail = {
+      __kind: 'guardrail',
+      type: 'exec',
+      execute: async (input) => {
+        seen.push({ cwd: input.cwd, env: input.env, signal: input.signal })
+        return { status: 'pass' }
+      },
+    }
+    const ctx = {
+      runId: 'r-ctx',
+      environments: {},
+      steps: {},
+      step: { id: 's-ctx', output: null, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as any,
+    }
+    const explicitController = new AbortController()
+    await runBeforeStepGuardrails({
+      step: {
+        id: 's-ctx',
+        beforeStep: [rail],
+        run: () => null,
+      },
+      ctx,
+      snapshot,
+      runDir: tempDir,
+      cwd: '/custom/worktree',
+      env: { FOO: 'bar' },
+      signal: explicitController.signal,
+    })
+
+    const waiterController = new AbortController()
+    const waiter = createGateWaiter(waiterController.signal)
+    await runBeforeStepGuardrails({
+      step: {
+        id: 's-ctx',
+        beforeStep: [rail],
+        run: () => null,
+      },
+      ctx,
+      snapshot,
+      runDir: tempDir,
+      gateWaiter: waiter,
+    })
+
+    expect(seen[0]).toEqual({
+      cwd: '/custom/worktree',
+      env: { FOO: 'bar' },
+      signal: explicitController.signal,
+    })
+    expect(seen[1]).toEqual({
+      cwd: process.cwd(),
+      env: {},
+      signal: waiterController.signal,
+    })
+  })
+})

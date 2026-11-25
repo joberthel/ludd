@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { mockAgent } from '@luddjs/agents'
-import { hostEnv } from '@luddjs/environments'
 import { agentGuardrail, execGuardrail } from '@luddjs/guardrails'
 import { expect } from 'vitest'
 import { z } from 'zod'
@@ -213,7 +212,6 @@ export function buildReviewStep(dir: string): StepConfig {
     }),
     afterStep: [
       execGuardrail({
-        environment: hostEnv(),
         command: [
           process.execPath,
           path.join(dir, 'push-branch.cjs'),

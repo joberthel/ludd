@@ -1,4 +1,4 @@
-import type { DynamicProperty, EnvironmentAdapter, ProvisionedEnvironment, StepContext } from './context.js'
+import type { StepContext } from './context.js'
 
 export type GuardrailStatus = 'pass' | 'fail' | 'skip'
 export type GuardrailPhase = 'beforeStep' | 'afterStep'
@@ -22,7 +22,9 @@ export interface GuardrailExecutionInput<TContext = StepContext> {
   guardrailIndex: number
   attempt: number
   runDir: string
-  environment: ProvisionedEnvironment
+  cwd: string
+  env: Record<string, string>
+  signal?: AbortSignal
   mcpServerUrl: string
   mcpAuthToken: string
 }
@@ -33,7 +35,6 @@ export interface Guardrail<TBody = unknown, TContext = StepContext> {
   readonly name?: string
   readonly maxRetries?: number
   readonly onMaxRetriesExceeded?: OnMaxRetriesExceededAction
-  readonly environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
   execute: (input: GuardrailExecutionInput<TContext>) => Promise<GuardrailVerdict<TBody>>
 }
 

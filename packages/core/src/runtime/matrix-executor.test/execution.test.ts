@@ -59,6 +59,63 @@ describe('executeMatrixStep sequential execution', () => {
     ])
     expect(ctx.matrix).toBeUndefined()
   })
+
+  it('resolves dynamic step cwd and env per matrix slice with ctx.matrix populated', async () => {
+    const ctx = createDummyContext()
+    const snapshot = createDummySnapshot()
+    const seen: Array<{ cwd: string, env: Record<string, string>, signal?: AbortSignal }> = []
+    const controller = new AbortController()
+
+    const step: StepConfig = {
+      id: 'step-matrix-ctx',
+      matrix: {
+        items: ['alpha', 'beta'],
+      },
+      cwd: c => `packages/${String(c.matrix?.item)}`,
+      env: c => ({
+        SLICE: String(c.matrix?.item),
+      }),
+      beforeStep: [
+        {
+          __kind: 'guardrail',
+          type: 'fn',
+          execute: async (input) => {
+            seen.push({ cwd: input.cwd, env: input.env, signal: input.signal })
+            return { status: 'pass' }
+          },
+        },
+      ],
+      run: () => 'ok',
+    }
+
+    await executeMatrixStep(
+      step,
+      step.matrix,
+      ctx,
+      snapshot,
+      tempDir,
+      undefined,
+      undefined,
+      {
+        cwd: '/repo',
+        env: { BASE: '1' },
+        signal: controller.signal,
+      },
+    )
+
+    expect(seen).toEqual([
+      {
+        cwd: path.resolve('/repo/packages/alpha'),
+        env: { BASE: '1', SLICE: 'alpha' },
+        signal: controller.signal,
+      },
+      {
+        cwd: path.resolve('/repo/packages/beta'),
+        env: { BASE: '1', SLICE: 'beta' },
+        signal: controller.signal,
+      },
+    ])
+  })
 })
 
 describe('executeSingleSlice after-step gate recovery', () => {

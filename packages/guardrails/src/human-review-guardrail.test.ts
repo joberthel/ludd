@@ -19,7 +19,8 @@ const dummyInput: GuardrailExecutionInput = {
   guardrailIndex: 0,
   attempt: 1,
   runDir: '/tmp/run',
-  environment: {} as any,
+  cwd: '/workspace',
+  env: {},
   mcpServerUrl: 'http://localhost:3000',
   mcpAuthToken: 'token',
 }

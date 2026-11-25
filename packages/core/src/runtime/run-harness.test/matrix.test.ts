@@ -1,5 +1,6 @@
 import type { AgentRunner } from '../../types/agent.js'
 import type { HarnessConfig } from '../../types/harness.js'
+import { mkdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -242,5 +243,81 @@ describe('runHarness matrix invalid content errors', () => {
     expect(resEmpty.status).toBe('failed')
     expect(resEmpty.error).toBeInstanceOf(StepMatrixResolutionError)
     expect((resEmpty.error as Error).message).toContain('Matrix "items" must resolve to a non-empty array.')
+  })
+})
+
+describe('runHarness matrix dynamic cwd and env propagation', () => {
+  it('resolves dynamic step.cwd(ctx) and step.env(ctx) per slice without leaking into subsequent steps', async () => {
+    const sliceACwd = path.join(workspaceDir, 'slice-a')
+    const sliceBCwd = path.join(workspaceDir, 'slice-b')
+    mkdirSync(sliceACwd, { recursive: true })
+    mkdirSync(sliceBCwd, { recursive: true })
+
+    const seenTurns: Array<{ cwd: string, env: Record<string, string>, item: unknown }> = []
+    let postMatrixTurn: { cwd: string, env: Record<string, string> } | undefined
+
+    const config: HarnessConfig = {
+      name: 'matrix-dynamic-exec-ctx',
+      env: { HARNESS_VAR: 'base' },
+      steps: [
+        {
+          id: 'step-dyn-matrix',
+          matrix: {
+            items: ['a', 'b'],
+          },
+          cwd: ctx => (ctx.matrix?.item === 'a'
+            ? sliceACwd
+            : sliceBCwd),
+          env: ctx => ({
+            SLICE_ITEM: String(ctx.matrix?.item),
+            SLICE_INDEX: String(ctx.matrix?.index),
+          }),
+          run: {
+            __kind: 'agent',
+            mode: 'read-only',
+            prompt: 'check',
+            executeTurn: async (input) => {
+              seenTurns.push({
+                cwd: input.cwd,
+                env: input.env,
+                item: (input.ctx as { matrix?: { item: unknown } }).matrix?.item,
+              })
+              return { output: 'ok', sessionId: input.sessionId }
+            },
+          },
+        },
+        {
+          id: 'step-after',
+          run: {
+            __kind: 'agent',
+            mode: 'read-only',
+            prompt: 'after',
+            executeTurn: async (input) => {
+              postMatrixTurn = { cwd: input.cwd, env: input.env }
+              return { output: 'done', sessionId: input.sessionId }
+            },
+          },
+        },
+      ],
+    }
+
+    const res = await runHarness(config, { workspaceDir })
+    expect(res.status).toBe('passed')
+    expect(seenTurns).toEqual([
+      {
+        cwd: sliceACwd,
+        env: { HARNESS_VAR: 'base', SLICE_ITEM: 'a', SLICE_INDEX: '0' },
+        item: 'a',
+      },
+      {
+        cwd: sliceBCwd,
+        env: { HARNESS_VAR: 'base', SLICE_ITEM: 'b', SLICE_INDEX: '1' },
+        item: 'b',
+      },
+    ])
+    expect(postMatrixTurn).toEqual({
+      cwd: workspaceDir,
+      env: { HARNESS_VAR: 'base' },
+    })
   })
 })

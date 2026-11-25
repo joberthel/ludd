@@ -1,4 +1,4 @@
-import type { AgentTurnInput, GuardrailExecutionInput, ProvisionedEnvironment, StepContext } from '@luddjs/core'
+import type { AgentTurnInput, GuardrailExecutionInput, StepContext } from '@luddjs/core'
 import { describe, expect, it, vi } from 'vitest'
 
 const piAgentMock = vi.hoisted(() => vi.fn())
@@ -6,18 +6,11 @@ vi.mock('@luddjs/agents', () => ({ piAgent: piAgentMock }))
 
 const { agentGuardrail } = await import('../agent-guardrail.js')
 
-const env = {
-  __kind: 'environment',
-  id: 'e',
-  type: 'host',
-  workingDir: '/w',
-} as unknown as ProvisionedEnvironment
-
 function input(): GuardrailExecutionInput {
   return {
     ctx: {
       runId: 'r',
-      environments: { host: env },
+      environments: {},
       steps: {},
       step: { id: 's', attempt: 1 },
     } as unknown as StepContext,
@@ -26,7 +19,8 @@ function input(): GuardrailExecutionInput {
     guardrailIndex: 0,
     attempt: 1,
     runDir: '',
-    environment: env,
+    cwd: '/w',
+    env: {},
     mcpServerUrl: '',
     mcpAuthToken: '',
   }

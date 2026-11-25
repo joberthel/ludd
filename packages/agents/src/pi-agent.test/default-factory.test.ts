@@ -41,6 +41,9 @@ describe('defaultPiSessionFactory', () => {
       cwd: '/w',
       sessionManager: { manager: true },
       resourceLoader: expect.any(FakeLoader),
+      customTools: [
+        expect.objectContaining({ name: 'bash', cwd: '/w' }),
+      ],
     })
     expect(reload).toHaveBeenCalledOnce()
     expect(bindExtensions).toHaveBeenCalledWith({})
@@ -59,6 +62,9 @@ describe('defaultPiSessionFactory', () => {
       sessionManager: { manager: true },
       resourceLoader: expect.any(FakeLoader),
       model: { id: 'm' },
+      customTools: [
+        expect.objectContaining({ name: 'bash', cwd: '/w' }),
+      ],
     })
   })
 
@@ -77,12 +83,13 @@ describe('defaultPiSessionFactory', () => {
   it('does not forward dangerMode to host-side workspaceWriteExtension', async () => {
     const { defaultPiSessionFactory } = await import('../pi-agent.js')
     await defaultPiSessionFactory({ ...base, mode: 'workspace-write', dangerMode: true })
-    expect(workspaceWriteExtension).toHaveBeenCalledWith('/w', { containerWorkingDir: undefined })
+    expect(workspaceWriteExtension).toHaveBeenCalledWith('/w')
   })
 
-  it('forwards dangerMode from executeTurn to sessionFactory', async () => {
+  it('forwards dangerMode, cwd, env, and signal from executeTurn to sessionFactory', async () => {
     const { piAgent } = await import('../pi-agent.js')
     let listener: ((event: { type: string }) => void) | undefined
+    const controller = new AbortController()
     const factory = vi.fn(async () => ({
       subscribe: (cb: (event: { type: string }) => void) => {
         listener = cb
@@ -103,10 +110,17 @@ describe('defaultPiSessionFactory', () => {
       prompt: 'p',
       mcpServerUrl: '',
       mcpAuthToken: '',
-      environment: { workingDir: '/w' } as never,
+      cwd: '/w',
+      env: { TEST_ENV: '1' },
+      signal: controller.signal,
       ctx: {} as never,
       attempt: 1,
     })
-    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ dangerMode: true }))
+    expect(factory).toHaveBeenCalledWith(expect.objectContaining({
+      dangerMode: true,
+      cwd: '/w',
+      env: { TEST_ENV: '1' },
+      signal: controller.signal,
+    }))
   })
 })

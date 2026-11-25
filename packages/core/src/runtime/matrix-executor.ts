@@ -1,18 +1,26 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext } from '../types/context.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { MatrixConfig, StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentState } from './agent-executor.js'
+import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
+import process from 'node:process'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { runBeforeStepGuardrails } from './before-step-executor.js'
+import { resolveStepExecutionContext } from './execution-context.js'
 import { runInitialInteractiveQuestions } from './interactive-executor.js'
 import { assertMatrixConfig, persistSliceState, resolveMatrixItems } from './matrix-resolver.js'
 import { executeStepRun } from './step-run-executor.js'
 
 export { resolveMatrixItems }
+
+export interface StepSliceExecutionOptions {
+  cwd?: string
+  env?: Record<string, string>
+  signal?: AbortSignal
+}
 
 async function resolveBeforeStepContext(
   step: StepConfig,
@@ -21,7 +29,7 @@ async function resolveBeforeStepContext(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
-  environment?: ProvisionedEnvironment,
+  executionContext?: StepSliceExecutionOptions,
   logStore?: LogStore,
   gateWaiter?: GateWaiter,
 ): Promise<string> {
@@ -51,7 +59,9 @@ async function resolveBeforeStepContext(
     snapshot,
     runDir,
     mcpServer,
-    environment,
+    cwd: executionContext?.cwd,
+    env: executionContext?.env,
+    signal: executionContext?.signal,
     logStore,
     gateWaiter,
     startIndex,
@@ -65,10 +75,26 @@ export async function executeSingleSlice(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
-  environment?: ProvisionedEnvironment,
+  executionContext?: StepSliceExecutionOptions,
   logStore?: LogStore,
   gateWaiter?: GateWaiter,
 ): Promise<unknown> {
+  const baseExecutionContext: ResolvedExecutionContext = {
+    cwd: executionContext?.cwd ?? process.cwd(),
+    env: executionContext?.env ?? {},
+  }
+  const resolvedExecution = await resolveStepExecutionContext({
+    step,
+    stepCtx: ctx,
+    runExecutionContext: baseExecutionContext,
+  })
+  const signal = executionContext?.signal ?? gateWaiter?.signal
+  const sliceExecution: StepSliceExecutionOptions = {
+    cwd: resolvedExecution.cwd,
+    env: resolvedExecution.env,
+    signal,
+  }
+
   const beforeStepNotification = await resolveBeforeStepContext(
     step,
     ctx,
@@ -76,7 +102,7 @@ export async function executeSingleSlice(
     runDir,
     rehydration,
     mcpServer,
-    environment,
+    sliceExecution,
     logStore,
     gateWaiter,
   )
@@ -95,7 +121,9 @@ export async function executeSingleSlice(
     runDir,
     rehydration,
     mcpServer,
-    environment,
+    cwd: resolvedExecution.cwd,
+    env: resolvedExecution.env,
+    signal,
     logStore,
     gateWaiter,
   }, beforeStepNotification)
@@ -109,7 +137,7 @@ export async function executeMatrixStep(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: EmbeddedMcpServer,
-  environment?: ProvisionedEnvironment,
+  executionContext?: StepSliceExecutionOptions,
   logStore?: LogStore,
   gateWaiter?: GateWaiter,
 ): Promise<unknown[]> {
@@ -141,7 +169,7 @@ export async function executeMatrixStep(
       runDir,
       sliceRehydration,
       mcpServer,
-      environment,
+      executionContext,
       logStore,
       gateWaiter,
     )

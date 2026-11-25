@@ -1,4 +1,4 @@
-import type { StepContext } from '../types/context.js'
+import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { EnvironmentAdapter, ProvisionedEnvironment } from '../types/environment.js'
 import type { Guardrail } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
@@ -158,7 +158,9 @@ async function resolveGuardrailAdapterOrEnv(
 }
 
 export async function resolveGuardrailEnvironment(
-  guardrail: Guardrail<any, any>,
+  guardrail: Guardrail<any, any> & {
+    readonly environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, any>
+  },
   ctx: StepContext,
   stepEnvironment: ProvisionedEnvironment,
   snapshot?: RunStateSnapshot,

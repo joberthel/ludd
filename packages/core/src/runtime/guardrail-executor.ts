@@ -1,5 +1,5 @@
 import type { EmbeddedMcpServer } from '../types/artifact.js'
-import type { ProvisionedEnvironment, StepContext } from '../types/context.js'
+import type { StepContext } from '../types/context.js'
 import type { Guardrail, GuardrailVerdict } from '../types/guardrail.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LedgerEventType } from '../types/ledger.js'
@@ -12,7 +12,6 @@ import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { isGuardrail } from '../types/guardrail.js'
 import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
-import { createDefaultHostEnvironment, resolveGuardrailEnvironment } from './environment-manager.js'
 import {
   getEffectiveMaxRetries,
   getEffectiveMaxTotalTurns,
@@ -39,7 +38,9 @@ export interface RunAfterStepGuardrailsParams {
   maxTotalTurns: number
   initialPrompt: string
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
-  environment?: ProvisionedEnvironment
+  cwd?: string
+  env?: Record<string, string>
+  signal?: AbortSignal
   logStore?: LogStore
   gateWaiter?: GateWaiter
   startGuardrailIndex?: number
@@ -87,41 +88,22 @@ export function emitStepRetry(
 
 export { formatGuardrailRetryPrompt }
 
-async function resolveGuardrailEnv(
-  guardrail: Guardrail<any, any>,
-  ctx: StepContext,
-  stepId: string,
-  stepEnvironment?: ProvisionedEnvironment,
-  snapshot?: RunStateSnapshot,
-  runDir?: string,
-): Promise<ProvisionedEnvironment> {
-  const fallback = stepEnvironment
-    ?? ctx.environments[stepId]
-    ?? ctx.environments.host
-    ?? createDefaultHostEnvironment(process.cwd())
-  return resolveGuardrailEnvironment(guardrail, ctx, fallback, snapshot, runDir)
-}
-
 async function executeGuardrail(
   guardrail: Guardrail<any, any>,
-  ctx: StepContext,
-  stepId: string,
+  params: RunAfterStepGuardrailsParams,
   guardrailIndex: number,
-  attempt: number,
-  runDir: string,
-  mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>,
-  stepEnvironment?: ProvisionedEnvironment,
-  snapshot?: RunStateSnapshot,
 ): Promise<GuardrailVerdict> {
-  const env = await resolveGuardrailEnv(guardrail, ctx, stepId, stepEnvironment, snapshot, runDir)
+  const { ctx, step, attempt, runDir, mcpServer, cwd, env, signal, gateWaiter } = params
   return guardrail.execute({
     ctx,
-    stepId,
+    stepId: step.id,
     phase: 'afterStep',
     guardrailIndex,
     attempt,
     runDir,
-    environment: env,
+    cwd: cwd ?? process.cwd(),
+    env: env ?? {},
+    signal: signal ?? gateWaiter?.signal,
     mcpServerUrl: mcpServer?.url ?? '',
     mcpAuthToken: mcpServer?.authToken ?? '',
   })
@@ -177,7 +159,7 @@ async function processGuardrailResult(
   k: number,
   params: RunAfterStepGuardrailsParams,
 ): Promise<void> {
-  const { step, ctx, runDir, attempt, mcpServer, snapshot, environment, logStore } = params
+  const { step, ctx, runDir, attempt, snapshot, logStore } = params
   const guardrailNameField = guardrail.name !== undefined
     ? { guardrailName: guardrail.name }
     : {}
@@ -203,7 +185,7 @@ async function processGuardrailResult(
   }
   const verdict = guardrail.type === 'human_review'
     ? await executeHumanReviewAfterStepGuardrail(params, guardrail, k)
-    : await executeGuardrail(guardrail, ctx, step.id, k, attempt, runDir, mcpServer, environment, snapshot)
+    : await executeGuardrail(guardrail, params, k)
 
   if (verdict.status === 'pass' || verdict.status === 'skip') {
     const eventType = verdict.status === 'pass'

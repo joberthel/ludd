@@ -1,6 +1,5 @@
 import type { StepContext } from '../../types/context.js'
 import type { EnvironmentAdapter, ProvisionedEnvironment } from '../../types/environment.js'
-import type { Guardrail } from '../../types/guardrail.js'
 import type { StepConfig } from '../../types/harness.js'
 import type { RunStateSnapshot } from '../../types/state.js'
 import fs from 'node:fs'
@@ -159,11 +158,11 @@ describe('resolveGuardrailEnvironment with EnvironmentAdapter', () => {
       provision: provisionMock,
     }
 
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'fn',
+    const guardrail = {
+      __kind: 'guardrail' as const,
+      type: 'fn' as const,
       environment: adapter,
-      execute: async () => ({ status: 'pass' }),
+      execute: async () => ({ status: 'pass' as const }),
     }
 
     const resolved = await resolveGuardrailEnvironment(guardrail, ctx, existingEnv)
@@ -184,11 +183,11 @@ describe('resolveGuardrailEnvironment with EnvironmentAdapter', () => {
       provision: provisionMock,
     }
 
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'fn',
+    const guardrail = {
+      __kind: 'guardrail' as const,
+      type: 'fn' as const,
       environment: adapter,
-      execute: async () => ({ status: 'pass' }),
+      execute: async () => ({ status: 'pass' as const }),
     }
 
     const resolved = await resolveGuardrailEnvironment(guardrail, ctx, stepEnv)

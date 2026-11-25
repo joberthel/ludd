@@ -21,6 +21,12 @@ describe('execGuardrail configuration validation: basic properties', () => {
       command: [123 as any],
     })).toThrow(TypeError)
     expect(() => execGuardrail({
+      command: ['', 'arg'],
+    })).toThrow(TypeError)
+    expect(() => execGuardrail({
+      command: ['   ', 'arg'],
+    })).toThrow(TypeError)
+    expect(() => execGuardrail({
       command: 123 as any,
     })).toThrow(TypeError)
   })
@@ -29,6 +35,9 @@ describe('execGuardrail configuration validation: basic properties', () => {
     expect(() => execGuardrail({ command: 'echo ok' })).not.toThrow()
     expect(() => execGuardrail({
       command: ['git', 'status'],
+    })).not.toThrow()
+    expect(() => execGuardrail({
+      command: ['echo', ''],
     })).not.toThrow()
     expect(() => execGuardrail({
       command: () => 'git status',
@@ -78,6 +87,20 @@ describe('execGuardrail configuration validation: advanced properties', () => {
     expect(() => execGuardrail({
       command: 'echo',
       formatter: () => ({ status: 'pass' }),
+    })).not.toThrow()
+  })
+
+  it('validates cwd and env configuration', () => {
+    expect(() => execGuardrail({ command: 'echo', cwd: '' })).toThrow(
+      'execGuardrail "cwd" must be a non-empty string.',
+    )
+    expect(() => execGuardrail({ command: 'echo', env: [] as any })).toThrow(
+      'execGuardrail "env" must be a plain object of string values.',
+    )
+    expect(() => execGuardrail({
+      command: 'echo',
+      cwd: '/sub',
+      env: { A: '1' },
     })).not.toThrow()
   })
 })

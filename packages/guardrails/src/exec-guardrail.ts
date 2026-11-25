@@ -1,17 +1,19 @@
 import type {
   DynamicProperty,
-  EnvironmentAdapter,
-  EnvironmentExecResult,
   ExecLogPaginationConfig,
   Guardrail,
   GuardrailExecutionInput,
   GuardrailStatus,
   GuardrailVerdict,
+  HostSpawnResult,
   OnMaxRetriesExceededAction,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
-import { resolveDynamicProperty } from '@luddjs/core'
+import { resolveDynamicProperty, spawn } from '@luddjs/core'
+import {
+  resolveGuardrailExecutionOverrides,
+  validateCwdAndEnvConfig,
+} from './utils/execution-overrides.js'
 
 export interface ExecGuardrailConfig<
   TBody = unknown,
@@ -19,13 +21,21 @@ export interface ExecGuardrailConfig<
 > {
   name?: string
   command: DynamicProperty<string | readonly string[], TContext>
-  environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
+  cwd?: DynamicProperty<string, TContext>
+  env?: DynamicProperty<Record<string, string>, TContext>
   maxRetries?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   timeout?: number
   onTimeout?: GuardrailStatus
-  formatter?: (result: EnvironmentExecResult) => GuardrailVerdict<TBody> | Promise<GuardrailVerdict<TBody>>
+  formatter?: (result: HostSpawnResult) => GuardrailVerdict<TBody> | Promise<GuardrailVerdict<TBody>>
   pagination?: ExecLogPaginationConfig
+}
+
+function isValidCommandArray(cmd: unknown): cmd is readonly [string, ...string[]] {
+  return Array.isArray(cmd)
+    && cmd.length > 0
+    && cmd.every((c: unknown): c is string => typeof c === 'string')
+    && cmd[0].trim() !== ''
 }
 
 function isValidCommand(cmd: unknown): boolean {
@@ -35,7 +45,36 @@ function isValidCommand(cmd: unknown): boolean {
   if (typeof cmd === 'string' && cmd.trim() !== '') {
     return true
   }
-  return Array.isArray(cmd) && cmd.length > 0 && cmd.every((c: unknown) => typeof c === 'string')
+  return isValidCommandArray(cmd)
+}
+
+function parseExecCommand(command: unknown): {
+  file: string
+  args: readonly string[]
+  shell: boolean
+} {
+  if (Array.isArray(command)) {
+    if (!isValidCommandArray(command)) {
+      throw new TypeError(
+        'execGuardrail "command" array must start with a non-empty string and contain only strings.',
+      )
+    }
+    return {
+      file: command[0],
+      args: command.slice(1),
+      shell: false,
+    }
+  }
+  if (typeof command === 'string' && command.trim() !== '') {
+    return {
+      file: command,
+      args: [],
+      shell: true,
+    }
+  }
+  throw new TypeError(
+    'execGuardrail "command" must resolve to a non-empty string or non-empty array of strings.',
+  )
 }
 
 function validateExecRetries(
@@ -106,6 +145,7 @@ function validateExecConfig<TBody, TContext extends StepContext<any, any, any, a
   if (config.formatter !== undefined && typeof config.formatter !== 'function') {
     throw new TypeError('execGuardrail "formatter" must be a function when provided.')
   }
+  validateCwdAndEnvConfig('execGuardrail', config.cwd, config.env)
   validateExecRetries(config.maxRetries, config.onMaxRetriesExceeded)
   validatePaginationConfig(config.pagination)
 }
@@ -138,7 +178,7 @@ function resolveLogFormat(
 }
 
 async function resolveExecutionVerdict<TBody>(
-  result: EnvironmentExecResult,
+  result: HostSpawnResult,
   combinedOutput: string,
   config: ExecGuardrailConfig<TBody, any>,
 ): Promise<GuardrailVerdict<TBody>> {
@@ -197,18 +237,33 @@ export function execGuardrail<
       : {}),
     maxRetries: config.maxRetries,
     onMaxRetriesExceeded: config.onMaxRetriesExceeded,
-    environment: config.environment,
     execute: async (input: GuardrailExecutionInput<TContext>): Promise<GuardrailVerdict<TBody>> => {
       const command = await resolveDynamicProperty(config.command, input.ctx)
+      const { file, args, shell } = parseExecCommand(command)
+      const { cwd, env } = await resolveGuardrailExecutionOverrides(
+        input.cwd,
+        input.env,
+        config,
+        input.ctx,
+        'execGuardrail',
+      )
       const timeoutMs = config.timeout !== undefined
         ? config.timeout * 1000
         : undefined
-      const result = await input.environment.exec(command, {
-        timeoutMs,
+      const result = await spawn({
+        command: file,
+        args,
+        cwd,
         env: {
+          ...env,
           MCP_SERVER_URL: input.mcpServerUrl,
           MCP_AUTH_TOKEN: input.mcpAuthToken,
         },
+        ...(input.signal === undefined
+          ? {}
+          : { signal: input.signal }),
+        timeoutMs,
+        shell,
       })
       const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n')
       return resolveExecutionVerdict(result, combinedOutput, config)

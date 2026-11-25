@@ -1,6 +1,7 @@
 import type {
   AgentAccessMode,
   AgentRunner,
+  AgentTurnResult,
   DynamicProperty,
   ExecLogPaginationConfig,
   Guardrail,
@@ -8,7 +9,6 @@ import type {
   GuardrailStatus,
   GuardrailVerdict,
   OnMaxRetriesExceededAction,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
 import { randomUUID } from 'node:crypto'
@@ -16,11 +16,16 @@ import { piAgent } from '@luddjs/agents'
 import {
   appendLedgerEvent,
   appendStreamEvent,
+  extractAbortError,
   isAgentRunner,
   resolveDynamicProperty,
   StepOutputValidationError,
 } from '@luddjs/core'
 import { z } from 'zod'
+import {
+  resolveGuardrailExecutionOverrides,
+  validateCwdAndEnvConfig,
+} from './utils/execution-overrides.js'
 
 export interface AgentGuardrailConfig<
   TBody = unknown,
@@ -34,7 +39,8 @@ export interface AgentGuardrailConfig<
   prompt: DynamicProperty<string, TContext>
   /** Defaults to `piAgent({ mode, prompt, sessionId: fresh })` from `@luddjs/agents`. */
   agent?: AgentRunner<any, any>
-  environment?: DynamicProperty<ProvisionedEnvironment, TContext>
+  cwd?: DynamicProperty<string, TContext>
+  env?: DynamicProperty<Record<string, string>, TContext>
   pagination?: ExecLogPaginationConfig
 }
 
@@ -99,6 +105,7 @@ function validateAgentGuardrailConfig<TBody, TContext extends StepContext<any, a
   if (isInvalidSchema) {
     throw new TypeError('agentGuardrail "bodySchema" must be a valid Zod schema.')
   }
+  validateCwdAndEnvConfig('agentGuardrail', config.cwd, config.env)
   validateRetries(config.maxRetries, config.onMaxRetriesExceeded)
   validatePagination(config.pagination)
 }
@@ -189,6 +196,48 @@ function resolveVerdict<TBody>(
   }
 }
 
+async function runGuardrailAgentTurn<TContext extends StepContext<any, any, any, any>>(
+  agent: AgentRunner<any, any>,
+  input: GuardrailExecutionInput<TContext>,
+  prompt: string,
+  sessionId: string,
+  mode: AgentAccessMode,
+  cwd: string,
+  env: Record<string, string>,
+  verdictSchema: z.ZodType,
+): Promise<AgentTurnResult<unknown>> {
+  let turnResult: AgentTurnResult<unknown>
+  try {
+    turnResult = await agent.executeTurn({
+      ctx: input.ctx,
+      stepId: input.stepId,
+      prompt,
+      sessionId,
+      attempt: input.attempt,
+      mode,
+      runDir: input.runDir,
+      cwd,
+      env,
+      ...(input.signal === undefined
+        ? {}
+        : { signal: input.signal }),
+      mcpServerUrl: input.mcpServerUrl,
+      mcpAuthToken: input.mcpAuthToken,
+      outputSchema: verdictSchema,
+    })
+  }
+  catch (err: unknown) {
+    if (input.signal?.aborted) {
+      throw extractAbortError(input.signal)
+    }
+    throw err
+  }
+  if (input.signal?.aborted) {
+    throw extractAbortError(input.signal)
+  }
+  return turnResult
+}
+
 async function executeAgentTurn<TBody, TContext extends StepContext<any, any, any, any>>(
   config: AgentGuardrailConfig<TBody, TContext>,
   input: GuardrailExecutionInput<TContext>,
@@ -199,9 +248,13 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
   if (typeof prompt !== 'string' || prompt.trim() === '') {
     throw new TypeError('agentGuardrail prompt cannot be empty.')
   }
-  const env = config.environment !== undefined
-    ? await resolveDynamicProperty(config.environment, input.ctx)
-    : input.environment
+  const { cwd, env } = await resolveGuardrailExecutionOverrides(
+    input.cwd,
+    input.env,
+    config,
+    input.ctx,
+    'agentGuardrail',
+  )
 
   emitPreExecutionTelemetry(
     input as GuardrailExecutionInput<StepContext>,
@@ -215,19 +268,16 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,
   })
   const agent = config.agent ?? piAgent({ mode, prompt, sessionId })
-  const turnResult = await agent.executeTurn({
-    ctx: input.ctx,
-    stepId: input.stepId,
+  const turnResult = await runGuardrailAgentTurn(
+    agent,
+    input,
     prompt,
     sessionId,
-    attempt: input.attempt,
     mode,
-    runDir: input.runDir,
-    environment: env,
-    mcpServerUrl: input.mcpServerUrl,
-    mcpAuthToken: input.mcpAuthToken,
-    outputSchema: verdictSchema,
-  })
+    cwd,
+    env,
+    verdictSchema,
+  )
   emitPostExecutionTelemetry(input as GuardrailExecutionInput<StepContext>, sessionId, turnResult.output)
 
   const parsed = await verdictSchema.safeParseAsync(turnResult.output)
@@ -254,7 +304,6 @@ export function agentGuardrail<
       : {}),
     maxRetries: config.maxRetries,
     onMaxRetriesExceeded: config.onMaxRetriesExceeded,
-    environment: config.environment,
     execute: async (
       input: GuardrailExecutionInput<TContext>,
     ): Promise<GuardrailVerdict<TBody>> => {

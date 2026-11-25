@@ -131,11 +131,11 @@ describe('resolveGuardrailEnvironment', () => {
     const ctx = makeMockCtx()
     const stepEnv = makeMockEnv('step-env')
     const railEnv = makeMockEnv('rail-override')
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'fn',
+    const guardrail = {
+      __kind: 'guardrail' as const,
+      type: 'fn' as const,
       environment: railEnv,
-      execute: async () => ({ status: 'pass' }),
+      execute: async () => ({ status: 'pass' as const }),
     }
 
     const resolved = await resolveGuardrailEnvironment(guardrail, ctx, stepEnv)
@@ -145,11 +145,11 @@ describe('resolveGuardrailEnvironment', () => {
   it('throws when guardrail.environment resolves to invalid environment', async () => {
     const ctx = makeMockCtx()
     const stepEnv = makeMockEnv('step-env')
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'fn',
+    const guardrail = {
+      __kind: 'guardrail' as const,
+      type: 'fn' as const,
       environment: { notAnEnv: true } as any,
-      execute: async () => ({ status: 'pass' }),
+      execute: async () => ({ status: 'pass' as const }),
     }
 
     await expect(resolveGuardrailEnvironment(guardrail, ctx, stepEnv)).rejects.toThrow(

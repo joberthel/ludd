@@ -49,16 +49,18 @@ export const defaultPiSessionFactory: PiSessionFactory = async (options: PiSessi
     agentDir: getAgentDir(),
     extensionFactories: [
       readOnly
-        ? readOnlyExtension(options.cwd, { containerWorkingDir: options.environment?.containerWorkingDir })
-        : workspaceWriteExtension(options.cwd, {
-            containerWorkingDir: options.environment?.containerWorkingDir,
-          }),
+        ? readOnlyExtension(options.cwd)
+        : workspaceWriteExtension(options.cwd),
     ],
   })
   await resourceLoader.reload()
   const bashTool = readOnly
     ? undefined
-    : environmentBashTool(options.environment)
+    : environmentBashTool({
+        cwd: options.cwd,
+        env: options.env,
+        signal: options.signal,
+      })
   const customTools = [
     ...(bashTool === undefined
       ? []
@@ -251,12 +253,13 @@ async function executePiTurn<TOutput>(
       : [submit.tool]),
   ]
   const session = await factory({
-    cwd: input.environment.workingDir,
+    cwd: input.cwd,
+    env: input.env,
+    signal: input.signal,
     sessionFile: path.join(input.runDir, 'pi-sessions', `${input.sessionId}.jsonl`),
     mode: input.mode,
     dangerMode: input.dangerMode,
     model: config.model,
-    environment: input.environment,
     ...(customTools.length === 0
       ? {}
       : { customTools }),

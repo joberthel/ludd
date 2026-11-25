@@ -33,10 +33,11 @@ describe('piAgent output and streaming', () => {
     expect(session.prompts).toEqual(['hello'])
     expect(seen).toEqual({
       cwd: '/work',
+      env: {},
+      signal: undefined,
       sessionFile: path.join(dir, 'pi-sessions', 'sess-1.jsonl'),
       mode: 'read-only',
       model: { id: 'm' },
-      environment: expect.objectContaining({ type: 'host', workingDir: '/work' }),
     })
   })
 })

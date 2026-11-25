@@ -1,7 +1,7 @@
 import type { PiSessionFactory } from '@luddjs/agents'
 import type { StepContext } from '../../src/index.js'
 import { piAgent } from '@luddjs/agents'
-import { gitWorktreeEnv, hostEnv } from '@luddjs/environments'
+import { gitWorktreeEnv } from '@luddjs/environments'
 import { agentGuardrail, execGuardrail, humanReviewGuardrail } from '@luddjs/guardrails'
 import { z } from 'zod'
 import { defineHarness } from '../../src/index.js'
@@ -188,8 +188,8 @@ function finalStep(sessionFactory: PiSessionFactory) {
         prompt: 'Bitte prüfe die generierte PR-Beschreibung ("pr-description.md"). Bei Freigabe (Pass) wird der Branch gepusht.',
       }),
       execGuardrail({
-        // hostEnv rooted at the worktree so the feature branch (HEAD) is pushed from the host.
-        environment: ctx => hostEnv({ cwd: ctx.environments['feature-env'].workingDir }),
+        // Rooted at the worktree so the feature branch (HEAD) is pushed from the host.
+        cwd: ctx => ctx.environments['feature-env'].workingDir,
         command: ['git', 'push', '-u', 'origin', 'HEAD'],
       }),
     ],

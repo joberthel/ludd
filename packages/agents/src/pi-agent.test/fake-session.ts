@@ -1,6 +1,5 @@
 import type { AgentTurnInput } from '@luddjs/core'
 import type { PiSession, PiSessionEvent } from '../types/pi-sdk.js'
-import { createDefaultHostEnvironment } from '@luddjs/core'
 
 export interface FakeSession extends PiSession {
   prompts: string[]
@@ -39,7 +38,8 @@ export function turnInput(runDir: string, over: Partial<AgentTurnInput<any>> = {
     attempt: 1,
     mode: 'read-only',
     runDir,
-    environment: createDefaultHostEnvironment('/work'),
+    cwd: '/work',
+    env: {},
     mcpServerUrl: '',
     mcpAuthToken: '',
     ...over,

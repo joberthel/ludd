@@ -1,10 +1,8 @@
 import type {
-  DynamicProperty,
   Guardrail,
   GuardrailExecutionInput,
   GuardrailVerdict,
   OnMaxRetriesExceededAction,
-  ProvisionedEnvironment,
   StepContext,
 } from '@luddjs/core'
 
@@ -15,7 +13,6 @@ export interface FnGuardrailConfig<
   name?: string
   maxRetries?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
-  environment?: DynamicProperty<ProvisionedEnvironment, TContext>
   run: (ctx: TContext) => GuardrailVerdict<TBody> | Promise<GuardrailVerdict<TBody>>
 }
 
@@ -76,7 +73,6 @@ export function fnGuardrail<
       : {}),
     maxRetries: normalized.maxRetries,
     onMaxRetriesExceeded: normalized.onMaxRetriesExceeded,
-    environment: normalized.environment,
     execute: async (
       execInput: GuardrailExecutionInput<TContext>,
     ): Promise<GuardrailVerdict<TBody>> => {

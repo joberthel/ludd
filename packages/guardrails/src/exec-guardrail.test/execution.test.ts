@@ -1,12 +1,18 @@
-import type {
-  EnvironmentExecOptions,
-  EnvironmentExecResult,
-  GuardrailExecutionInput,
-  ProvisionedEnvironment,
-  StepContext,
-} from '@luddjs/core'
-import { describe, expect, it } from 'vitest'
+import type { GuardrailExecutionInput, StepContext } from '@luddjs/core'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
+import { afterAll, describe, expect, it } from 'vitest'
 import { execGuardrail } from '../exec-guardrail.js'
+
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ludd-exec-guardrail-'))
+const subDir = path.join(tempDir, 'sub')
+fs.mkdirSync(subDir, { recursive: true })
+
+afterAll(() => {
+  fs.rmSync(tempDir, { recursive: true, force: true })
+})
 
 function makeMockCtx(): StepContext {
   return {
@@ -23,24 +29,8 @@ function makeMockCtx(): StepContext {
   }
 }
 
-function makeMockEnv(
-  execMock: (cmd: any, opts?: any) => Promise<EnvironmentExecResult>,
-): ProvisionedEnvironment {
-  return {
-    __kind: 'environment',
-    id: 'mock-env',
-    type: 'mock',
-    workingDir: '/workspace',
-    exec: execMock,
-    ping: async () => true,
-    teardown: async () => {},
-  }
-}
-
 function makeExecutionInput(
-  environment: ProvisionedEnvironment,
-  mcpServerUrl = 'http://localhost:3000',
-  mcpAuthToken = 'token-abc',
+  overrides: Partial<GuardrailExecutionInput> = {},
 ): GuardrailExecutionInput {
   return {
     ctx: makeMockCtx(),
@@ -49,84 +39,101 @@ function makeExecutionInput(
     guardrailIndex: 0,
     attempt: 1,
     runDir: '/runs/1',
-    environment,
-    mcpServerUrl,
-    mcpAuthToken,
+    cwd: tempDir,
+    env: { BASE_VAR: 'base' },
+    mcpServerUrl: 'http://localhost:3000',
+    mcpAuthToken: 'token-abc',
+    ...overrides,
   }
 }
 
-describe('execGuardrail basic execution', () => {
-  it('executes command, maps exitCode 0 to pass, and forwards pagination', async () => {
-    let capturedCmd: any
-    let capturedOpts: EnvironmentExecOptions | undefined
-    const env = makeMockEnv(async (cmd, opts) => {
-      capturedCmd = cmd
-      capturedOpts = opts
-      return {
-        exitCode: 0,
-        stdout: 'success',
-        stderr: '',
-        timedOut: false,
-      }
-    })
+describe('execGuardrail host execution', () => {
+  it('executes argv command in cwd with merged env + MCP vars and forwards pagination', async () => {
     const rail = execGuardrail({
-      command: ['git', 'status'],
+      command: [
+        process.execPath,
+        '-e',
+        'process.stdout.write(JSON.stringify({ cwd: process.cwd(), base: process.env.BASE_VAR, rail: process.env.RAIL_VAR, mcpUrl: process.env.MCP_SERVER_URL, mcpTok: process.env.MCP_AUTH_TOKEN, arg: process.argv[1] }))',
+        '$HOME && literal',
+      ],
+      cwd: 'sub',
+      env: { RAIL_VAR: 'override' },
       pagination: 'errors',
     })
 
-    const input = makeExecutionInput(env)
-    const verdict = await rail.execute(input)
+    const verdict = await rail.execute(makeExecutionInput())
 
-    expect(capturedCmd).toEqual(['git', 'status'])
-    expect(capturedOpts?.env?.MCP_SERVER_URL).toBe('http://localhost:3000')
-    expect(capturedOpts?.env?.MCP_AUTH_TOKEN).toBe('token-abc')
     expect(verdict.status).toBe('pass')
-    expect(verdict.rawLog).toBe('success')
     expect(verdict.pagination).toBe('errors')
     expect(verdict.logFormat).toBe('json')
+    expect(JSON.parse(verdict.rawLog!)).toEqual({
+      cwd: fs.realpathSync(subDir),
+      base: 'base',
+      rail: 'override',
+      mcpUrl: 'http://localhost:3000',
+      mcpTok: 'token-abc',
+      arg: '$HOME && literal',
+    })
   })
-})
 
-describe('execGuardrail dynamic resolution and failure mapping', () => {
-  it('resolves dynamic command function and converts timeout in seconds to timeoutMs', async () => {
-    let capturedTimeout: number | undefined
-    let capturedCmd: any
-    const env = makeMockEnv(async (cmd, opts) => {
-      capturedCmd = cmd
-      capturedTimeout = opts?.timeoutMs
-      return {
-        exitCode: 0,
-        stdout: '',
-        stderr: '',
-        timedOut: false,
-      }
-    })
+  it('executes string shell commands and dynamic command functions', async () => {
     const rail = execGuardrail({
-      command: (ctx: StepContext<any>) => `git checkout ${ctx.step.output.branch}`,
-      timeout: 5,
+      command: (ctx: StepContext<any>) => `${JSON.stringify(process.execPath)} -e 'process.stdout.write(${JSON.stringify(ctx.step.output.branch)})'`,
     })
 
-    const input = makeExecutionInput(env, '', '')
-    const verdict = await rail.execute(input)
+    const verdict = await rail.execute(makeExecutionInput({ mcpServerUrl: '', mcpAuthToken: '' }))
 
-    expect(capturedCmd).toBe('git checkout feat')
-    expect(capturedTimeout).toBe(5000)
     expect(verdict.status).toBe('pass')
-    expect(verdict.rawLog).toBeUndefined()
+    expect(verdict.rawLog).toBe('feat')
+
+    const silentRail = execGuardrail({
+      command: [process.execPath, '-e', ''],
+    })
+    const silentVerdict = await silentRail.execute(makeExecutionInput())
+    expect(silentVerdict.status).toBe('pass')
+    expect(silentVerdict.rawLog).toBeUndefined()
   })
 
   it('maps non-zero exit code to fail and combines stdout and stderr into rawLog', async () => {
-    const env = makeMockEnv(async () => ({
-      exitCode: 1,
-      stdout: 'some info',
-      stderr: 'fatal error',
-      timedOut: false,
-    }))
-    const rail = execGuardrail({ command: 'test' })
-    const input = makeExecutionInput(env, '', '')
-    const verdict = await rail.execute(input)
+    const rail = execGuardrail({
+      command: [
+        process.execPath,
+        '-e',
+        'process.stdout.write("some info"); process.stderr.write("fatal error"); process.exit(1);',
+      ],
+    })
+    const verdict = await rail.execute(makeExecutionInput())
 
     expect(verdict.status).toBe('fail')
     expect(verdict.rawLog).toBe('some info\nfatal error')
+  })
+})
+
+describe('execGuardrail dynamic validation and signal cancellation', () => {
+  it('rejects invalid dynamically resolved command values', async () => {
+    for (const badCmd of [
+      '',
+      '   ',
+      [],
+      ['   ', 'arg'],
+      [123],
+      42,
+    ]) {
+      const rail = execGuardrail({
+        command: (() => badCmd) as never,
+      })
+      await expect(rail.execute(makeExecutionInput())).rejects.toThrow(TypeError)
+    }
+  })
+
+  it('terminates spawned command when input.signal aborts', async () => {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(new Error('guardrail-aborted')), 60)
+
+    const rail = execGuardrail({
+      command: [process.execPath, '-e', 'setInterval(() => {}, 1000)'],
+    })
+
+    await expect(rail.execute(makeExecutionInput({ signal: controller.signal }))).rejects.toThrow('guardrail-aborted')
   })
 })

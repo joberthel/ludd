@@ -1,50 +1,65 @@
 import type { BashOperations, ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { ProvisionedEnvironment } from '@luddjs/core'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import { createBashToolDefinition } from '@earendil-works/pi-coding-agent'
+import { spawn } from '@luddjs/core'
 
-/** Environment `type` discriminator of the docker adapter. */
-export const DOCKER_ENVIRONMENT_TYPE = 'docker-worktree'
-
-function resolveContainerCwd(cwd: string | undefined, environment: ProvisionedEnvironment): string | undefined {
-  if (cwd === undefined || cwd === '') {
-    return undefined
-  }
-  const containerRoot = environment.containerWorkingDir ?? '/workspace'
-  if (cwd === containerRoot) {
-    return undefined
-  }
-  if (cwd.startsWith(`${containerRoot}/`)) {
-    return cwd
-  }
-  const relative = path.relative(environment.workingDir, cwd)
-  if (relative === '') {
-    return undefined
-  }
-  if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-    return path.posix.join(containerRoot, ...relative.split(path.sep))
-  }
-  return undefined
+export interface HostBashOptions {
+  cwd: string
+  env?: Record<string, string>
+  signal?: AbortSignal
 }
 
-/** Routes shell commands through `environment.exec()` instead of a host shell. */
-export function createEnvironmentBashOperations(environment: ProvisionedEnvironment): BashOperations {
+function combineSignals(a?: AbortSignal, b?: AbortSignal): AbortSignal | undefined {
+  if (a !== undefined && b !== undefined) {
+    return AbortSignal.any([a, b])
+  }
+  return a ?? b
+}
+
+function mergeEnvVars(
+  hostEnv?: Record<string, string>,
+  execEnv?: NodeJS.ProcessEnv,
+): Record<string, string> {
+  const merged: Record<string, string> = {}
+  if (execEnv !== undefined) {
+    for (const [key, value] of Object.entries(execEnv)) {
+      if (value !== undefined) {
+        merged[key] = value
+      }
+    }
+  }
+  if (hostEnv !== undefined) {
+    for (const [key, value] of Object.entries(hostEnv)) {
+      merged[key] = value
+    }
+  }
+  return merged
+}
+
+/** Routes shell commands through `@luddjs/core` host `spawn` using `{ cwd, env, signal }`. */
+export function createEnvironmentBashOperations(hostOptions: HostBashOptions): BashOperations {
   return {
     exec: async (command, cwd, options) => {
-      const containerCwd = resolveContainerCwd(cwd, environment)
-      const result = await environment.exec(['sh', '-c', command], {
-        ...(options.signal === undefined
+      const resolvedCwd = typeof cwd === 'string' && cwd.trim() !== ''
+        ? path.resolve(hostOptions.cwd, cwd)
+        : hostOptions.cwd
+      const signal = combineSignals(hostOptions.signal, options.signal)
+      const env = mergeEnvVars(hostOptions.env, options.env)
+      const result = await spawn({
+        command: 'sh',
+        args: ['-c', command],
+        cwd: resolvedCwd,
+        env,
+        ...(signal === undefined
           ? {}
-          : { signal: options.signal }),
-        ...(containerCwd === undefined
-          ? {}
-          : { cwd: containerCwd }),
+          : { signal }),
         ...(options.timeout === undefined
           ? {}
           : { timeoutMs: options.timeout * 1000 }),
+        onStdout: chunk => options.onData(Buffer.from(chunk)),
+        onStderr: chunk => options.onData(Buffer.from(chunk)),
       })
-      options.onData(Buffer.from(result.stdout + result.stderr))
       if (result.timedOut) {
         throw new Error(`timeout:${options.timeout}`)
       }
@@ -53,12 +68,12 @@ export function createEnvironmentBashOperations(environment: ProvisionedEnvironm
   }
 }
 
-/** Overrides `bash` with a container-delegating tool for docker environments; undefined otherwise. */
-export function environmentBashTool(environment: ProvisionedEnvironment | undefined): ToolDefinition | undefined {
-  if (environment?.type !== DOCKER_ENVIRONMENT_TYPE) {
+/** Provides a host-`spawn`-backed `bash` tool bound to `{ cwd, env, signal }`. */
+export function environmentBashTool(options: HostBashOptions | undefined): ToolDefinition | undefined {
+  if (options === undefined) {
     return undefined
   }
-  return createBashToolDefinition(environment.workingDir, {
-    operations: createEnvironmentBashOperations(environment),
+  return createBashToolDefinition(options.cwd, {
+    operations: createEnvironmentBashOperations(options),
   }) as unknown as ToolDefinition
 }

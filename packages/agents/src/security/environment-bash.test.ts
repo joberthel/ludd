@@ -1,126 +1,135 @@
-import type { EnvironmentExecResult, ProvisionedEnvironment } from '@luddjs/core'
-import { Buffer } from 'node:buffer'
-import { describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
+import { afterAll, describe, expect, it } from 'vitest'
 import { createEnvironmentBashOperations, environmentBashTool } from './environment-bash.js'
 
-function fakeEnv(type: string, result: Partial<EnvironmentExecResult> = {}) {
-  const exec = vi.fn(async (..._a: unknown[]): Promise<EnvironmentExecResult> => ({
-    exitCode: 0,
-    stdout: 'out',
-    stderr: 'err',
-    timedOut: false,
-    ...result,
-  }))
-  return {
-    env: { type, workingDir: '/w', exec } as unknown as ProvisionedEnvironment,
-    exec,
-  }
-}
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ludd-env-bash-'))
+const subDir = path.join(tmpDir, 'sub')
+fs.mkdirSync(subDir, { recursive: true })
 
-describe('environment bash delegation', () => {
-  it('runs commands through environment.exec() and streams output', async () => {
-    const { env, exec } = fakeEnv('docker-worktree')
-    const onData = vi.fn()
-    const signal = new AbortController().signal
-    const res = await createEnvironmentBashOperations(env).exec('echo hi', '/w', { onData, signal, timeout: 2 })
-    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'echo hi'], { signal, timeoutMs: 2000 })
-    expect(onData).toHaveBeenCalledWith(Buffer.from('outerr'))
+afterAll(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true })
+})
+
+describe('environment bash host spawn delegation', () => {
+  it('runs commands via host spawn, streams stdout/stderr, resolves cwd, and merges env', async () => {
+    const chunks: string[] = []
+    const ops = createEnvironmentBashOperations({
+      cwd: tmpDir,
+      env: { HOST_VAR: 'from-host', SHARED: 'host-wins' },
+    })
+
+    const cmd = `${JSON.stringify(process.execPath)} -e "process.stdout.write(JSON.stringify({ cwd: process.cwd(), host: process.env.HOST_VAR, exec: process.env.EXEC_VAR, shared: process.env.SHARED, undef: process.env.UNDEF_VAR ?? null })); process.stderr.write('|err-part');"`
+    const res = await ops.exec(cmd, 'sub', {
+      onData: data => chunks.push(data.toString('utf8')),
+      env: { EXEC_VAR: 'from-exec', SHARED: 'from-exec', UNDEF_VAR: undefined },
+    })
+
     expect(res).toEqual({ exitCode: 0 })
+    const combined = chunks.join('')
+    expect(combined).toContain('|err-part')
+    const jsonPart = combined.replace('|err-part', '')
+    expect(JSON.parse(jsonPart)).toEqual({
+      cwd: fs.realpathSync(subDir),
+      host: 'from-host',
+      exec: 'from-exec',
+      shared: 'host-wins',
+      undef: null,
+    })
   })
 
-  it('omits timeout when unset', async () => {
-    const { env, exec } = fakeEnv('docker-worktree')
-    await createEnvironmentBashOperations(env).exec('true', '/w', {
-      onData: vi.fn(),
-    })
-    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'true'], { signal: undefined })
+  it('falls back to hostOptions.cwd when cwd is empty, whitespace, or non-string and handles omitted hostOptions.env', async () => {
+    const chunks: string[] = []
+    const ops = createEnvironmentBashOperations({ cwd: tmpDir })
+    const cmd = `${JSON.stringify(process.execPath)} -e "process.stdout.write(process.cwd())"`
+
+    for (const fallbackCwd of ['', '   ', undefined as never]) {
+      chunks.length = 0
+      const res = await ops.exec(cmd, fallbackCwd, {
+        onData: data => chunks.push(data.toString('utf8')),
+      })
+
+      expect(res).toEqual({ exitCode: 0 })
+      expect(chunks.join('')).toBe(fs.realpathSync(tmpDir))
+    }
   })
 
-  it('throws a timeout error when the command timed out', async () => {
-    const { env } = fakeEnv('docker-worktree', { timedOut: true, exitCode: null })
-    await expect(createEnvironmentBashOperations(env).exec('sleep 9', '/w', {
-      onData: vi.fn(),
-      timeout: 1,
-    }))
-      .rejects
-      .toThrow('timeout:1')
-  })
+  it('throws timeout:<seconds> when command exceeds timeout', async () => {
+    const ops = createEnvironmentBashOperations({ cwd: tmpDir })
+    const cmd = `${JSON.stringify(process.execPath)} -e "setInterval(() => {}, 1000)"`
 
-  it('only overrides bash for docker-worktree environments', () => {
-    expect(environmentBashTool(undefined)).toBeUndefined()
-    expect(environmentBashTool(fakeEnv('host').env)).toBeUndefined()
-    expect(environmentBashTool(fakeEnv('docker-worktree').env)?.name).toBe('bash')
-  })
-
-  it('bash tool executes through the fake environment', async () => {
-    const { env, exec } = fakeEnv('docker-worktree')
-    const tool = environmentBashTool(env)!
-    await tool.execute('id', { command: 'ls' }, undefined, undefined, {
-      sessionManager: {
-        getSessionId: () => 's',
-        getSessionFile: () => undefined,
-      },
-      cwd: '/w',
-    } as never)
-    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'ls'], expect.anything())
-  })
-
-  it('maps host subdirectory cwd to containerWorkingDir and preserves container subpaths', async () => {
-    const { env, exec } = fakeEnv('docker-worktree')
-    await createEnvironmentBashOperations(env).exec('ls', '/w/packages/core', {
-      onData: vi.fn(),
-    })
-    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'ls'], { signal: undefined, cwd: '/workspace/packages/core' })
-
-    await createEnvironmentBashOperations(env).exec('pwd', '/workspace/sub', {
-      onData: vi.fn(),
-    })
-    expect(exec).toHaveBeenCalledWith(['sh', '-c', 'pwd'], { signal: undefined, cwd: '/workspace/sub' })
-  })
-
-  it('omits container cwd when cwd is empty, equals containerRoot, or is outside workingDir', async () => {
-    const { env, exec } = fakeEnv('docker-worktree')
-    const ops = createEnvironmentBashOperations(env)
-    await ops.exec('pwd', '', {
-      onData: vi.fn(),
-    })
-    await ops.exec('pwd', '/workspace', {
-      onData: vi.fn(),
-    })
-    await ops.exec('pwd', '/outside/dir', {
-      onData: vi.fn(),
-    })
-    expect(exec).toHaveBeenNthCalledWith(1, ['sh', '-c', 'pwd'], { signal: undefined })
-    expect(exec).toHaveBeenNthCalledWith(2, ['sh', '-c', 'pwd'], { signal: undefined })
-    expect(exec).toHaveBeenNthCalledWith(3, ['sh', '-c', 'pwd'], { signal: undefined })
+    await expect(ops.exec(cmd, '', {
+      onData: () => {},
+      timeout: 0.05,
+    })).rejects.toThrow('timeout:0.05')
   })
 })
 
-describe('environment-bash signal handling (#78)', () => {
-  it('does not pass signal: undefined to environment.exec when options.signal is undefined', async () => {
-    const execMock = vi.fn().mockResolvedValue({
-      exitCode: 0,
-      stdout: 'ok',
-      stderr: '',
-      timedOut: false,
-    })
-    const ops = createEnvironmentBashOperations({
-      __kind: 'environment',
-      id: 'dock',
-      type: 'docker-worktree',
-      workingDir: '/tmp/wt',
-      exec: execMock,
-      ping: async () => true,
-      teardown: async () => {},
-    })
+describe('environment bash signal handling', () => {
+  it('terminates on host signal, exec signal, or combined signals', async () => {
+    const longCmd = `${JSON.stringify(process.execPath)} -e "console.log('ready'); setInterval(() => {}, 1000)"`
 
-    await ops.exec('echo hi', '/tmp/wt', {
-      onData: () => {},
-      signal: undefined,
-    })
+    const hostCtrl = new AbortController()
+    const hostOnlyOps = createEnvironmentBashOperations({ cwd: tmpDir, signal: hostCtrl.signal })
+    await expect(hostOnlyOps.exec(longCmd, '', {
+      onData: (chunk) => {
+        if (chunk.toString('utf8').includes('ready')) {
+          hostCtrl.abort(new Error('host-aborted'))
+        }
+      },
+    })).rejects.toThrow('host-aborted')
 
-    expect(execMock).toHaveBeenCalledTimes(1)
-    const [, execOpts] = execMock.mock.calls[0]
-    expect('signal' in execOpts).toBe(false)
+    const execCtrl = new AbortController()
+    const execOnlyOps = createEnvironmentBashOperations({ cwd: tmpDir })
+    await expect(execOnlyOps.exec(longCmd, '', {
+      signal: execCtrl.signal,
+      onData: (chunk) => {
+        if (chunk.toString('utf8').includes('ready')) {
+          execCtrl.abort(new Error('exec-aborted'))
+        }
+      },
+    })).rejects.toThrow('exec-aborted')
+
+    const combinedHostCtrl = new AbortController()
+    const combinedExecCtrl = new AbortController()
+    const combinedOps = createEnvironmentBashOperations({ cwd: tmpDir, signal: combinedHostCtrl.signal })
+    await expect(combinedOps.exec(longCmd, '', {
+      signal: combinedExecCtrl.signal,
+      onData: (chunk) => {
+        if (chunk.toString('utf8').includes('ready')) {
+          combinedExecCtrl.abort(new Error('combined-aborted'))
+        }
+      },
+    })).rejects.toThrow('combined-aborted')
+  })
+})
+
+describe('environmentBashTool wrapper', () => {
+  it('returns undefined when options are omitted and executes bash via spawn when provided', async () => {
+    expect(environmentBashTool(undefined)).toBeUndefined()
+
+    const tool = environmentBashTool({
+      cwd: tmpDir,
+      env: { TOOL_ENV: 'hello-tool' },
+    })!
+    expect(tool.name).toBe('bash')
+
+    const result = await tool.execute(
+      'call-1',
+      { command: `${JSON.stringify(process.execPath)} -e "console.log(process.env.TOOL_ENV)"` },
+      undefined,
+      undefined,
+      {
+        cwd: tmpDir,
+        sessionManager: {
+          getSessionId: () => 's-1',
+          getSessionFile: () => undefined,
+        },
+      } as never,
+    )
+    const content = result.content[0] as { text?: string }
+    expect(content.text).toContain('hello-tool')
   })
 })

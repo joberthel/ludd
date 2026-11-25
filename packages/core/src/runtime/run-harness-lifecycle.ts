@@ -2,11 +2,12 @@ import type { RunControlHandlerContext } from '../ipc/run-control-handlers.js'
 import type { ArtifactClient, EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext, StepResult } from '../types/context.js'
 import type { ProvisionedEnvironment } from '../types/environment.js'
-import type { HarnessRunResult, RunHarnessOptions } from '../types/harness.js'
+import type { HarnessConfig, HarnessRunResult, RunHarnessOptions, RunLifecycleContext } from '../types/harness.js'
 import type { ControlServer } from '../types/ipc.js'
 import type { LedgerEventType } from '../types/ledger.js'
 import type { LogStore } from '../types/log.js'
 import type { RunStateSnapshot } from '../types/state.js'
+import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
@@ -19,6 +20,7 @@ import { createLogStore } from '../mcp/log-store.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { acquireRunPidLock, releaseRunPidLock } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
+import { executeWithHarnessLifecycle } from './execution-context.js'
 
 export function resolveOption(value: string | undefined, fallback: () => string): string {
   const trimmed = value?.trim()
@@ -80,6 +82,10 @@ export function emitLedgerEvent(
   })
 }
 
+function formatErrorMessage(error: unknown): string {
+  return (error as { message?: string } | null)?.message ?? String(error)
+}
+
 export function handleStepFailure(
   runDir: string,
   snapshot: RunStateSnapshot,
@@ -87,7 +93,7 @@ export function handleStepFailure(
   error: unknown,
   matrixIndex?: number,
 ): HarnessRunResult {
-  const errorMessage = (error as { message?: string } | null)?.message ?? String(error)
+  const errorMessage = formatErrorMessage(error)
   emitLedgerEvent(runDir, snapshot.runId, stepId, 'step.failed', { error: errorMessage }, matrixIndex)
   if (snapshot.status !== 'failed') {
     emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', { failedStepId: stepId, error: errorMessage })
@@ -184,7 +190,82 @@ export function handleRunError(error: unknown, runDir: string, runId: string, sn
     const state = snapshot ?? readRunState(runDir)
     state.status = 'failed'
     persistSnapshot(runDir, state)
+    return
   }
+  if (snapshot !== undefined && snapshot.status !== 'failed') {
+    emitLedgerEvent(runDir, runId, null, 'run.failed', {
+      error: formatErrorMessage(error),
+    })
+    snapshot.status = 'failed'
+    persistSnapshot(runDir, snapshot)
+  }
+}
+
+export function formatAbortedResult(
+  runDir: string,
+  snapshot: RunStateSnapshot,
+  steps: Record<string, StepResult<unknown>>,
+  reason: unknown,
+): HarnessRunResult {
+  if (snapshot.status !== 'failed') {
+    emitLedgerEvent(runDir, snapshot.runId, null, 'run.failed', {
+      error: formatErrorMessage(reason),
+      aborted: true,
+    })
+    snapshot.status = 'failed'
+    persistSnapshot(runDir, snapshot)
+  }
+  return {
+    runId: snapshot.runId,
+    status: 'failed',
+    steps,
+    error: reason,
+  }
+}
+
+export interface ExecuteHarnessLifecycleParams {
+  config: HarnessConfig
+  lifecycleCtx: RunLifecycleContext
+  snapshot: RunStateSnapshot
+  steps: Record<string, StepResult<unknown>>
+  runDir: string
+  abortController: AbortController
+  run: (executionContext: ResolvedExecutionContext) => Promise<HarnessRunResult | null>
+}
+
+export async function executeHarnessLifecycle(
+  params: ExecuteHarnessLifecycleParams,
+): Promise<HarnessRunResult> {
+  const { config, lifecycleCtx, snapshot, steps, runDir, abortController, run } = params
+  let stepFailure: HarnessRunResult | null = null
+
+  try {
+    stepFailure = await executeWithHarnessLifecycle({
+      config,
+      lifecycleCtx,
+      run: async (executionContext) => {
+        stepFailure = await run(executionContext)
+        return stepFailure
+      },
+    })
+  }
+  catch (error: unknown) {
+    if (stepFailure !== null) {
+      return stepFailure
+    }
+    if (abortController.signal.aborted) {
+      return formatAbortedResult(runDir, snapshot, steps, abortController.signal.reason)
+    }
+    throw error
+  }
+
+  if (stepFailure !== null) {
+    return stepFailure
+  }
+  if (abortController.signal.aborted) {
+    return formatAbortedResult(runDir, snapshot, steps, abortController.signal.reason)
+  }
+  return { runId: snapshot.runId, status: 'passed', steps }
 }
 
 export function resolveAndLockRunDir(

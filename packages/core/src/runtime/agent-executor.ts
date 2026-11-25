@@ -1,11 +1,11 @@
 import type { AgentRunner } from '../types/agent.js'
 import type { EmbeddedMcpServer } from '../types/artifact.js'
 import type { StepContext } from '../types/context.js'
-import type { ProvisionedEnvironment } from '../types/environment.js'
 import type { StepConfig } from '../types/harness.js'
 import type { LogStore } from '../types/log.js'
 import type { ActiveGateState, RunStateSnapshot } from '../types/state.js'
 import type { RehydratedAgentPromptState } from './agent-prompt.js'
+import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
 import process from 'node:process'
@@ -22,12 +22,12 @@ import {
 } from './agent-step-output.js'
 import { emitPreTurnEvents, emitTurnCompleted } from './agent-telemetry.js'
 import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
-import { createDefaultHostEnvironment } from './environment-manager.js'
 import {
   emitStepRetry,
   GuardrailRetrySignal,
   runAfterStepGuardrails,
 } from './guardrail-executor.js'
+import { extractAbortError } from './host-exec.js'
 import { createInteractiveQuestionHandler } from './interactive-executor.js'
 
 export type RehydratedAgentState = RehydratedAgentPromptState
@@ -41,9 +41,13 @@ interface TurnRetryParams {
   ctx: StepContext
   sessionId: string
   initialPrompt: string
+  signal?: AbortSignal
 }
 
 function handleTurnRetry(err: unknown, params: TurnRetryParams): string {
+  if (params.signal?.aborted) {
+    throw extractAbortError(params.signal)
+  }
   if (err instanceof GuardrailRetrySignal) {
     return err.prompt
   }
@@ -89,7 +93,6 @@ async function finalizeAgentTurn(
     ...params,
     step,
     sessionId: turnResult.sessionId,
-    environment: params.environment,
     isAgent: true,
   })
   return stepOutput
@@ -104,7 +107,9 @@ interface AgentTurnExecutionScope {
   sessionId: string
   initialPrompt: string
   maxTotalTurns: number
-  environment: ProvisionedEnvironment
+  cwd: string
+  env: Record<string, string>
+  signal?: AbortSignal
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken' | 'setAskUserHandler'>
   logStore?: LogStore
   gateWaiter?: GateWaiter
@@ -145,6 +150,9 @@ async function runTurnLoopAttempt(
   currentPrompt: string,
   attempt: number,
 ): Promise<{ success: true, result: unknown } | { success: false, nextPrompt: string }> {
+  if (scope.signal?.aborted) {
+    throw extractAbortError(scope.signal)
+  }
   scope.ctx.step.attempt = attempt
   if (scope.activeGate?.phase === 'afterStep') {
     const gate = scope.activeGate
@@ -164,7 +172,8 @@ async function runTurnLoopAttempt(
     mode: scope.agent.mode,
     dangerMode: Boolean(scope.step.dangerMode),
     runDir: scope.runDir,
-    environment: scope.environment,
+    cwd: scope.cwd,
+    env: scope.env,
     mcpServerUrl: scope.mcpServer?.url ?? '',
     mcpAuthToken: scope.mcpServer?.authToken ?? '',
     ...(scope.step.outputSchema === undefined
@@ -173,8 +182,11 @@ async function runTurnLoopAttempt(
     ...(scope.step.interactive !== undefined && scope.step.interactive !== false
       ? { interactive: true }
       : {}),
-    signal: scope.gateWaiter?.signal,
+    signal: scope.signal,
   })
+  if (scope.signal?.aborted) {
+    throw extractAbortError(scope.signal)
+  }
   emitTurnCompleted(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, turnResult.output, attempt)
 
   try {
@@ -194,6 +206,10 @@ async function runTurnLoopAttempt(
   }
 }
 
+export interface AgentStepExecutionOptions extends Partial<ResolvedExecutionContext> {
+  signal?: AbortSignal
+}
+
 export async function executeAgentStep(
   step: StepConfig,
   agent: AgentRunner,
@@ -202,7 +218,7 @@ export async function executeAgentStep(
   runDir: string,
   rehydration?: RehydratedAgentState,
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken' | 'setAskUserHandler'>,
-  environment?: ProvisionedEnvironment,
+  executionContext?: AgentStepExecutionOptions,
   logStore?: LogStore,
   beforeStepNotification?: string,
   gateWaiter?: GateWaiter,
@@ -210,10 +226,9 @@ export async function executeAgentStep(
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
   const maxTotalTurns = step.maxTotalTurns ?? DEFAULT_MAX_TOTAL_TURNS
-  const resolvedEnv = environment
-    ?? ctx.environments[step.id]
-    ?? ctx.environments.host
-    ?? createDefaultHostEnvironment(process.cwd())
+  const cwd = executionContext?.cwd ?? process.cwd()
+  const env = executionContext?.env ?? {}
+  const signal = executionContext?.signal ?? gateWaiter?.signal
   let attempt = rehydration?.attempt ?? 1
   let currentPrompt = resolveInitialPrompt(initialPrompt, runDir, step.id, rehydration, ctx.matrix?.index, mcpServer?.url)
   if (attempt === 1 && typeof beforeStepNotification === 'string' && beforeStepNotification.length > 0) {
@@ -228,7 +243,9 @@ export async function executeAgentStep(
     sessionId,
     initialPrompt,
     maxTotalTurns,
-    environment: resolvedEnv,
+    cwd,
+    env,
+    signal,
     mcpServer,
     logStore,
     gateWaiter,
