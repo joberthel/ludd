@@ -59,15 +59,26 @@ describe('gc runner status & pid lock handling', () => {
     expect(res).toEqual({ cleanedRunIds: [], skippedActiveRunIds: [] })
   })
 
-  it('skips active runs with live pid and records in skippedActiveRunIds', async () => {
-    createRun('active-run', 'running', new Date().toISOString(), process.pid)
+  it('skips active runs matching filters and omits non-matching active runs from skippedActiveRunIds', async () => {
+    createRun('active-running', 'running', new Date().toISOString(), process.pid)
+    createRun('active-passed-shaped', 'passed', new Date().toISOString(), process.pid)
     createRun('dead-run', 'passed', new Date(Date.now() - 60000).toISOString(), 999999)
 
-    const res = await gc({ workspaceDir: tempDir })
-    expect(res.skippedActiveRunIds).toEqual(['active-run'])
-    expect(res.cleanedRunIds).toEqual(['dead-run'])
+    const resAll = await gc({ workspaceDir: tempDir })
+    expect(resAll.skippedActiveRunIds.sort()).toEqual([
+      'active-passed-shaped',
+      'active-running',
+    ])
+    expect(resAll.cleanedRunIds).toEqual(['dead-run'])
     expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'dead-run'))).toBe(false)
-    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'active-run'))).toBe(true)
+    expect(fs.existsSync(path.join(tempDir, '.harness', 'runs', 'active-running'))).toBe(true)
+
+    const resFiltered = await gc({
+      workspaceDir: tempDir,
+      status: ['passed'],
+    })
+    expect(resFiltered.skippedActiveRunIds).toEqual(['active-passed-shaped'])
+    expect(resFiltered.cleanedRunIds).toEqual([])
   })
 })
 
@@ -127,15 +138,58 @@ it('skips runs missing state or valid updatedAt when filters apply', async () =>
   const corruptDir = path.join(tempDir, '.harness', 'runs', 'corrupt-state')
   fs.mkdirSync(corruptDir, { recursive: true })
   fs.writeFileSync(path.join(corruptDir, 'state.json'), 'not-json', 'utf-8')
+  const invalidDateDir = createRun('invalid-updated-at', 'passed', 'not-a-valid-date')
 
   const resStatus = await gc({
     workspaceDir: tempDir,
     status: ['passed'],
   })
-  expect(resStatus.cleanedRunIds).toEqual([])
+  expect(resStatus.cleanedRunIds).toEqual(['invalid-updated-at'])
 
+  // Recreate invalid-updated-at to verify olderThanMs skips invalid updatedAt strings.
+  createRun('invalid-updated-at-time', 'passed', 'not-a-valid-date')
   const resTime = await gc({ workspaceDir: tempDir, olderThanMs: 1000 })
   expect(resTime.cleanedRunIds).toEqual([])
+  expect(fs.existsSync(invalidDateDir)).toBe(false)
+
+  const resUnfiltered = await gc({ workspaceDir: tempDir })
+  expect(resUnfiltered.cleanedRunIds.sort()).toEqual(['corrupt-state', 'invalid-updated-at-time', 'no-state'])
+  expect(fs.existsSync(rawDir)).toBe(false)
+  expect(fs.existsSync(corruptDir)).toBe(false)
+})
+
+it('prunes only run directories on disk without inspecting external paths or loading configs', async () => {
+  const externalWorktree = path.join(tempDir, '.harness', 'worktrees', 'ext-wt')
+  fs.mkdirSync(externalWorktree, { recursive: true })
+  fs.writeFileSync(path.join(externalWorktree, 'keep.txt'), 'keep', 'utf-8')
+
+  const missingConfigPath = path.join(tempDir, 'nonexistent.config.ts')
+  const runDir = path.join(tempDir, '.harness', 'runs', 'fs-only-run')
+  fs.mkdirSync(runDir, { recursive: true })
+  writeRunStateAtomic(runDir, {
+    schemaVersion: 1,
+    runId: 'fs-only-run',
+    harnessName: 'test-harness',
+    workflowName: 'test-harness',
+    configPath: missingConfigPath,
+    status: 'passed',
+    activeStepId: null,
+    environments: {
+      wt: {
+        id: 'wt',
+        type: 'git-worktree',
+        workingDir: externalWorktree,
+        branchName: 'ludd/fs-only-run',
+      },
+    },
+    steps: {},
+    updatedAt: new Date().toISOString(),
+  })
+
+  const res = await gc({ workspaceDir: tempDir })
+  expect(res.cleanedRunIds).toEqual(['fs-only-run'])
+  expect(fs.existsSync(runDir)).toBe(false)
+  expect(fs.existsSync(path.join(externalWorktree, 'keep.txt'))).toBe(true)
 })
 
 describe('gc dryRun mode & duration parsing', () => {

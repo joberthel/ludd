@@ -146,7 +146,9 @@ describe('runHarness AbortSignal teardown lifecycle', () => {
 
   it('triggers config.teardown on mid-step options.signal abort and detaches signal listeners on completion', async () => {
     const midStepCtrl = new AbortController()
-    const teardownSpy = vi.fn(async () => {})
+    const teardownSpy = vi.fn(async (ctx) => {
+      expect(ctx.signal.aborted).toBe(false)
+    })
     const step2Spy = vi.fn()
 
     const midStepRes = await runHarness({

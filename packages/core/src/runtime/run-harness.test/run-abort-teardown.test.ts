@@ -237,6 +237,155 @@ describe('run.teardown RPC method on live runner', () => {
     await client.close()
     await runPromise
   })
+
+  it('invokes harness teardown hook via IPC run.teardown once without duplicating on abort', async () => {
+    const runId = 'live-teardown-hook'
+    const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    const hookTeardown = vi.fn().mockResolvedValue(undefined)
+
+    const runPromise = runHarness(
+      {
+        name: 'live-td-hook-pipeline',
+        teardown: hookTeardown,
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Wait before teardown:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
+      { runId, workspaceDir: tempDir },
+    )
+
+    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
+    const tdResult = await client.teardown({ force: true })
+    expect(tdResult.ok).toBe(true)
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+
+    await client.abort({ reason: 'Finished after hook teardown' })
+    await client.close()
+    const result = await runPromise
+    expect(result.status).toBe('failed')
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+
+    const tdEvents = readLedgerEvents(runDir).filter(e => e.eventType === 'run.teardown')
+    expect(tdEvents.map(e => e.payload)).toEqual([
+      { hookInvoked: true, forced: true },
+    ])
+  })
+
+  it('deduplicates concurrent IPC run.teardown and run.abort, and resets on failure', async () => {
+    const runId = 'concurrent-teardown-abort'
+    const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    let releaseTeardown!: () => void
+    const teardownGate = new Promise<void>((resolve) => {
+      releaseTeardown = resolve
+    })
+    let callCount = 0
+    const hookTeardown = vi.fn(async (ctx) => {
+      callCount++
+      expect(ctx.signal.aborted).toBe(false)
+      if (callCount === 1) {
+        await teardownGate
+      }
+    })
+
+    const runPromise = runHarness(
+      {
+        name: 'concurrent-td-pipeline',
+        teardown: hookTeardown,
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Hold for concurrent teardown:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
+      { runId, workspaceDir: tempDir },
+    )
+
+    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
+    const tdPromise = client.teardown({ force: true })
+    await vi.waitFor(() => expect(hookTeardown).toHaveBeenCalledTimes(1))
+
+    // Trigger abort while IPC teardown is still in-flight; abort awaits the same promise.
+    const abortPromise = client.abort({ reason: 'Concurrent abort' })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+
+    releaseTeardown()
+    const [tdResult, abortResult] = await Promise.all([tdPromise, abortPromise])
+    expect(tdResult.ok).toBe(true)
+    expect(abortResult.ok).toBe(true)
+    await client.close()
+
+    const result = await runPromise
+    expect(result.status).toBe('failed')
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows shutdown teardown to retry if prior IPC run.teardown failed, and skips second IPC teardown after success', async () => {
+    const runId = 'retry-after-td-failure'
+    const runDir = path.join(tempDir, '.harness', 'runs', runId)
+    let attempts = 0
+    const hookTeardown = vi.fn(async (ctx) => {
+      attempts++
+      expect(ctx.signal.aborted).toBe(false)
+      const res = await spawn({
+        command: process.execPath,
+        args: ['-e', 'process.exit(0)'],
+        cwd: ctx.workspaceRoot,
+        signal: ctx.signal,
+      })
+      expect(res.exitCode).toBe(0)
+      if (attempts === 1) {
+        throw new Error('transient teardown failure')
+      }
+    })
+
+    const runPromise = runHarness(
+      {
+        name: 'retry-td-pipeline',
+        teardown: hookTeardown,
+        steps: [
+          {
+            id: 'gate-step',
+            beforeStep: [
+              humanReviewGuardrail({ prompt: 'Hold for retry test:' }),
+            ],
+            run: async () => 'ok',
+          },
+        ],
+      },
+      { runId, workspaceDir: tempDir },
+    )
+
+    const client = await waitForRunState(runDir, s => s.status === 'waiting_for_gate' && Boolean(s.activeGate))
+    await expect(client.teardown()).rejects.toThrow('transient teardown failure')
+    expect(hookTeardown).toHaveBeenCalledTimes(1)
+
+    // Retry IPC teardown succeeds, and subsequent IPC teardown records hookInvoked: false.
+    await expect(client.teardown()).resolves.toEqual({ ok: true })
+    await expect(client.teardown()).resolves.toEqual({ ok: true })
+    expect(hookTeardown).toHaveBeenCalledTimes(2)
+
+    await client.abort({ reason: 'Done after retry' })
+    await client.close()
+    await runPromise
+    expect(hookTeardown).toHaveBeenCalledTimes(2)
+
+    const tdEvents = readLedgerEvents(runDir).filter(e => e.eventType === 'run.teardown')
+    expect(tdEvents.map(e => e.payload)).toEqual([
+      { hookInvoked: true, forced: false },
+      { hookInvoked: false, forced: false },
+    ])
+  })
 })
 
 describe('run.abort pipeline interruption between steps', () => {

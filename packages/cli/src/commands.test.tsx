@@ -95,7 +95,7 @@ it('dispatches resume and status commands', async () => {
   s2.unmount()
 })
 
-it('dispatches gate, abort, teardown, and gc commands', async () => {
+it('dispatches gate and abort commands', async () => {
   const g1 = render(
     <Gate
       args={['run-a']}
@@ -137,8 +137,13 @@ it('dispatches gate, abort, teardown, and gc commands', async () => {
 })
 
 it('dispatches teardown and gc commands', async () => {
-  const t1 = render(<Teardown args={['run-a']} options={{ workspace: '/w', force: true }} />)
-  await vi.waitFor(() => expect(actions.teardown).toHaveBeenCalledWith({ runId: 'run-a', workspace: '/w', force: true }))
+  const t1 = render(<Teardown args={['run-a']} options={{ workspace: '/w', config: 'custom.config.ts', force: true }} />)
+  await vi.waitFor(() => expect(actions.teardown).toHaveBeenCalledWith({
+    runId: 'run-a',
+    workspace: '/w',
+    configPath: 'custom.config.ts',
+    force: true,
+  }))
   t1.unmount()
 
   const t2 = render(<Teardown args={['run-b']} options={{}} />)

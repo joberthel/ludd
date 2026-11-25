@@ -91,9 +91,6 @@ function printTextDetails(runId: string, state: RunStateSnapshot, detail: Return
     console.log(`  ${id}: ${result.status}`)
   if (state.activeMatrixIndex !== undefined && state.activeMatrixIndex !== null)
     console.log(`Matrix cursor: ${state.activeMatrixIndex + 1}`)
-  console.log('Environments:')
-  for (const [id, env] of Object.entries(state.environments ?? {}))
-    console.log(`  ${id}: ${env.type} (${env.workingDir})`)
   if (state.activeGate)
     console.log(`\nGate (${state.activeGate.gateType}):\n${state.activeGate.prompt}`)
 }
@@ -109,7 +106,6 @@ async function showRunDetails(workspace: string, runId: string, json: boolean): 
     activeGate: state.activeGate ?? null,
     steps: state.steps,
     activeMatrixIndex: state.activeMatrixIndex ?? null,
-    environments: state.environments ?? {},
     updatedAt: state.updatedAt,
   }
   if (json)

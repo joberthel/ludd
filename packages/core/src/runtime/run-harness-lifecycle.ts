@@ -284,11 +284,15 @@ export async function initControlServer(
   environments: Record<string, ProvisionedEnvironment>,
   abortController: AbortController,
   gateWaiter: GateWaiter,
+  onTeardown?: () => boolean | Promise<boolean>,
 ): Promise<ControlServer> {
   const controlCtx: RunControlHandlerContext = {
     runDir,
     getSnapshot: () => snapshot,
     getEnvironments: () => environments,
+    ...(onTeardown !== undefined
+      ? { onTeardown }
+      : {}),
     abortController,
     gateWaiter,
   }

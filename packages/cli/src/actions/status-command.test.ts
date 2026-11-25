@@ -58,17 +58,19 @@ it('prints run overview as machine-readable JSON', async () => {
   finally { log.mockRestore() }
 })
 
-it('includes gate prompt and step progress in detailed JSON', async () => {
+it('includes gate prompt and step progress in detailed JSON without environments', async () => {
   const workspace = setup()
   const log = vi.spyOn(console, 'log').mockImplementation(() => {})
   try {
     await statusCommand({ workspace, runId: 'test-run', json: true })
-    expect(JSON.parse(log.mock.calls[0][0] as string)).toMatchObject({
+    const parsed = JSON.parse(log.mock.calls[0][0] as string)
+    expect(parsed).toMatchObject({
       activeGate: { prompt: 'Approve it?' },
       steps: {
         done: { status: 'passed' },
       },
     })
+    expect(parsed).not.toHaveProperty('environments')
   }
   finally { log.mockRestore() }
 })
@@ -123,20 +125,18 @@ it('throws when a requested run has no state file', async () => {
   await expect(statusCommand({ workspace, runId: 'missing' })).rejects.toThrow('Run "missing" was not found.')
 })
 
-it('prints detailed text including matrices, environments, and gates', async () => {
+it('prints detailed text including matrices and gates without environments', async () => {
   const workspace = setup()
   const statePath = path.join(workspace, '.harness', 'runs', 'test-run', 'state.json')
   const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
   state.activeMatrixIndex = 0
-  state.environments = {
-    host: { id: 'host', type: 'host', workingDir: '/tmp' },
-  }
   fs.writeFileSync(statePath, JSON.stringify(state))
   const log = vi.spyOn(console, 'log').mockImplementation(() => {})
   await expect(statusCommand({ workspace, runId: 'test-run' })).resolves.toBe(0)
-  expect(log.mock.calls.map(call => call[0]).join('\n')).toContain('Matrix cursor: 1')
-  expect(log.mock.calls.map(call => call[0]).join('\n')).toContain('Gate (human_review):')
-  expect(log.mock.calls.map(call => call[0]).join('\n')).toContain('host: host (/tmp)')
+  const output = log.mock.calls.map(call => call[0]).join('\n')
+  expect(output).toContain('Matrix cursor: 1')
+  expect(output).toContain('Gate (human_review):')
+  expect(output).not.toContain('Environments:')
 })
 
 it('prints legacy details with no optional state properties or workspace option', async () => {
@@ -156,7 +156,7 @@ it('prints legacy details with no optional state properties or workspace option'
     const output = log.mock.calls.map(call => call[0]).join('\n')
     expect(output).toContain('Config: -')
     expect(output).toContain('Active step: -')
-    expect(output).toContain('Environments:')
+    expect(output).not.toContain('Environments:')
     expect(output).not.toContain('Matrix cursor:')
     expect(output).not.toContain('Gate (')
   }

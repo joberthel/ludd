@@ -4,7 +4,6 @@ import path from 'node:path'
 import process from 'node:process'
 import { isProcessAlive, RUNNER_PID_FILE } from '../persistence/pid-lock.js'
 import { readRunState } from '../persistence/state-store.js'
-import { teardownRun } from './teardown-run.js'
 
 export interface GcOptions {
   workspaceDir?: string
@@ -124,18 +123,16 @@ export async function gc(options?: GcOptions): Promise<GcResult> {
       continue
     }
     const runDir = path.join(runsDir, runId)
+    const state = readStateIfPresent(runDir)
+    if (shouldSkipRun(state, options?.status, threshold)) {
+      continue
+    }
     if (isRunnerAlive(runDir)) {
       skippedActiveRunIds.push(runId)
       continue
     }
 
-    const state = readStateIfPresent(runDir)
-    if (shouldSkipRun(state, options?.status, threshold)) {
-      continue
-    }
-
     if (options?.dryRun !== true) {
-      await teardownRun(runId, { workspaceDir, force: true })
       fs.rmSync(runDir, { recursive: true, force: true })
     }
     cleanedRunIds.push(runId)

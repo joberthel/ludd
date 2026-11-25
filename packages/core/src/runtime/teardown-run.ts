@@ -1,22 +1,22 @@
-import type { ProvisionedEnvironment } from '../types/environment.js'
-import type { EnvironmentDescriptor, RunStateSnapshot } from '../types/state.js'
+import type { HarnessConfig, RunLifecycleContext } from '../types/harness.js'
+import type { RunStateSnapshot } from '../types/state.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { HarnessConfigLoadError } from '../errors/harness-config-load-error.js'
 import { RunAlreadyActiveError } from '../errors/run-already-active-error.js'
+import { loadHarnessConfig } from '../loader/load-harness-config.js'
 import { appendLedgerEvent } from '../persistence/ledger-writer.js'
 import { isProcessAlive, RUNNER_PID_FILE } from '../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../persistence/state-store.js'
-import {
-  createDockerWorktreeEnvironmentFromDescriptor,
-  createGitWorktreeEnvironmentFromDescriptor,
-  createHostEnvironmentFromDescriptor,
-} from './environment-manager.js'
 
 export interface TeardownRunOptions {
   workspaceDir?: string
   force?: boolean
-  environments?: Record<string, ProvisionedEnvironment>
+  configPath?: string
+  config?: Pick<HarnessConfig, 'teardown'>
+  teardown?: (ctx: RunLifecycleContext) => void | Promise<void>
+  signal?: AbortSignal
 }
 
 export interface TeardownRunResult {
@@ -30,53 +30,90 @@ function verifyRunnerNotActive(runDir: string, runId: string, force?: boolean): 
   }
   const content = fs.readFileSync(pidPath, 'utf-8')
   const pid = Number.parseInt(content.trim(), 10)
-  if (isProcessAlive(pid)) {
-    if (!force) {
-      throw new RunAlreadyActiveError(runId, pid)
-    }
-  }
-  if (force) {
-    fs.rmSync(pidPath, { force: true })
+  if (isProcessAlive(pid) && !force) {
+    throw new RunAlreadyActiveError(runId, pid)
   }
 }
 
-function createEnvironmentFromDescriptor(
-  desc: EnvironmentDescriptor,
-  workspaceDir?: string,
-): ProvisionedEnvironment {
-  if (desc.type === 'docker-worktree') {
-    return createDockerWorktreeEnvironmentFromDescriptor(desc, undefined, workspaceDir)
-  }
-  return desc.type === 'git-worktree'
-    ? createGitWorktreeEnvironmentFromDescriptor(desc, undefined, workspaceDir)
-    : createHostEnvironmentFromDescriptor(desc)
-}
-
-function collectEnvironmentsToTeardown(
+async function resolveTeardownHook(
+  workspaceDir: string,
   snapshot: RunStateSnapshot,
   options?: TeardownRunOptions,
-): Map<string, ProvisionedEnvironment> {
-  const envMap = new Map<string, ProvisionedEnvironment>()
-  if (options?.environments !== undefined) {
-    for (const [id, env] of Object.entries(options.environments)) {
-      envMap.set(id, env)
-    }
+): Promise<HarnessConfig['teardown']> {
+  if (options?.teardown !== undefined) {
+    return options.teardown
   }
-  if (snapshot.environments !== undefined) {
-    for (const [id, desc] of Object.entries(snapshot.environments)) {
-      if (!envMap.has(id)) {
-        envMap.set(id, createEnvironmentFromDescriptor(desc, options?.workspaceDir))
-      }
-    }
+  if (options?.config !== undefined) {
+    return options.config.teardown
   }
-  return envMap
+  if (options?.configPath !== undefined) {
+    const targetPath = options.configPath.trim() === ''
+      ? options.configPath
+      : path.resolve(workspaceDir, options.configPath)
+    const loaded = await loadHarnessConfig(targetPath)
+    return loaded.teardown
+  }
+  if (snapshot.configPath === undefined || snapshot.configPath.trim() === '') {
+    return undefined
+  }
+  try {
+    const loaded = await loadHarnessConfig(path.resolve(workspaceDir, snapshot.configPath))
+    return loaded.teardown
+  }
+  catch (error: unknown) {
+    if (options?.force && error instanceof HarnessConfigLoadError) {
+      return undefined
+    }
+    throw error
+  }
 }
 
+function finalizeRunState(
+  runDir: string,
+  runId: string,
+  snapshot: RunStateSnapshot,
+  hookInvoked: boolean,
+  force?: boolean,
+): void {
+  appendLedgerEvent(runDir, {
+    schemaVersion: 1,
+    timestamp: new Date().toISOString(),
+    runId,
+    stepId: null,
+    eventType: 'run.teardown',
+    payload: {
+      hookInvoked,
+      forced: Boolean(force),
+    },
+  })
+
+  const isIncomplete = snapshot.status === 'running' || snapshot.status === 'waiting_for_gate'
+  const updatedSnapshot: RunStateSnapshot = {
+    ...snapshot,
+    ...(isIncomplete
+      ? {
+          status: 'failed' as const,
+          activeStepId: null,
+          activeGate: null,
+          activeSessionId: null,
+          activeMatrixIndex: null,
+        }
+      : {}),
+    updatedAt: new Date().toISOString(),
+  }
+  writeRunStateAtomic(runDir, updatedSnapshot)
+
+  if (force) {
+    fs.rmSync(path.join(runDir, RUNNER_PID_FILE), { force: true })
+  }
+}
+
+/** Runs optional harness teardown hook and finalizes run state on disk. */
 export async function teardownRun(
   runId: string,
   options?: TeardownRunOptions,
 ): Promise<TeardownRunResult> {
-  const workspaceDir = options?.workspaceDir ?? process.cwd()
+  const workspaceDir = path.resolve(options?.workspaceDir ?? process.cwd())
   const runDir = resolveRunDir(workspaceDir, runId)
 
   verifyRunnerNotActive(runDir, runId, options?.force)
@@ -87,26 +124,17 @@ export async function teardownRun(
   }
 
   const snapshot = readRunState(runDir)
-  const envMap = collectEnvironmentsToTeardown(snapshot, options)
-  const envList = Array.from(envMap.values())
-
-  await Promise.all(envList.map(async env => env.teardown()))
-
-  appendLedgerEvent(runDir, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
+  const teardownHook = await resolveTeardownHook(workspaceDir, snapshot, options)
+  const lifecycleCtx: RunLifecycleContext = {
     runId,
-    stepId: null,
-    eventType: 'run.teardown',
-    payload: {
-      environments: Array.from(envMap.keys()),
-      forced: Boolean(options?.force),
-    },
-  })
+    workspaceRoot: workspaceDir,
+    signal: options?.signal ?? new AbortController().signal,
+  }
 
-  snapshot.environments = {}
-  snapshot.updatedAt = new Date().toISOString()
-  writeRunStateAtomic(runDir, snapshot)
+  if (teardownHook !== undefined) {
+    await teardownHook(lifecycleCtx)
+  }
 
+  finalizeRunState(runDir, runId, snapshot, teardownHook !== undefined, options?.force)
   return { ok: true }
 }

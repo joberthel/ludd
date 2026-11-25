@@ -1,3 +1,4 @@
+import type { RunStatus } from '@luddjs/core'
 import path from 'node:path'
 import process from 'node:process'
 import { gc, parseDurationToMs } from '@luddjs/core'
@@ -22,7 +23,7 @@ export async function gcCommand(options: GcCommandOptions): Promise<number> {
         }
       : {}),
     ...(options.status !== undefined
-      ? { status: options.status as ('running' | 'waiting_for_gate' | 'passed' | 'failed')[] }
+      ? { status: options.status as RunStatus[] }
       : {}),
     ...(options.dryRun
       ? { dryRun: true }

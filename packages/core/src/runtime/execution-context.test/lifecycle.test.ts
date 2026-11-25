@@ -145,7 +145,9 @@ describe('executeWithHarnessLifecycle AbortSignal cancellation', () => {
     const preAborted = createLifecycleCtx('/repo')
     preAborted.controller.abort(new Error('already aborted'))
     const setupSpy = vi.fn()
-    const teardownPre = vi.fn()
+    const teardownPre = vi.fn((ctx: RunLifecycleContext) => {
+      expect(ctx.signal.aborted).toBe(false)
+    })
 
     await expect(executeWithHarnessLifecycle({
       config: { setup: setupSpy, teardown: teardownPre },
@@ -156,7 +158,9 @@ describe('executeWithHarnessLifecycle AbortSignal cancellation', () => {
     expect(teardownPre).toHaveBeenCalledTimes(1)
 
     const midSetup = createLifecycleCtx('/repo')
-    const teardownMidSetup = vi.fn()
+    const teardownMidSetup = vi.fn((ctx: RunLifecycleContext) => {
+      expect(ctx.signal.aborted).toBe(false)
+    })
     await expect(executeWithHarnessLifecycle({
       config: {
         setup: () => {

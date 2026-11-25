@@ -195,6 +195,32 @@ describe('createRunAbortHandler with teardown', () => {
     expect(result.ok).toBe(true)
     expect(events).toEqual(['teardown:start', 'teardown:end', 'abort'])
   })
+
+  it('skips emitting run.teardown during abort with teardown: true when no environments exist', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'abort-no-envs',
+      harnessName: 'test-harness',
+      workflowName: 'test-harness',
+      status: 'running',
+      activeStepId: 'step-1',
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    }
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const abortController = new AbortController()
+    const handler = createRunAbortHandler({
+      runDir: tempDir,
+      getSnapshot: () => snapshot,
+      abortController,
+      gateWaiter: createGateWaiter(abortController.signal),
+    })
+
+    const result = await handler({ teardown: true })
+    expect(result.ok).toBe(true)
+    expect(readLedgerEvents(tempDir).some(e => e.eventType === 'run.teardown')).toBe(false)
+  })
 })
 
 describe('createRunTeardownHandler', () => {
@@ -227,7 +253,46 @@ describe('createRunTeardownHandler', () => {
     expect(readRunState(tempDir).environments).toEqual({})
 
     const tdEvent = readLedgerEvents(tempDir).find(e => e.eventType === 'run.teardown')
-    expect(tdEvent?.payload.forced).toBe(true)
-    expect(tdEvent?.payload.environments).toEqual(['e1'])
+    expect(tdEvent?.payload).toEqual({
+      hookInvoked: false,
+      forced: true,
+      environments: ['e1'],
+    })
+  })
+
+  it('records hookInvoked boolean from onTeardown when getEnvironments is omitted', async () => {
+    const snapshot: RunStateSnapshot = {
+      schemaVersion: 1,
+      runId: 'td-hook-run',
+      harnessName: 'test-harness',
+      workflowName: 'test-harness',
+      status: 'waiting_for_gate',
+      activeStepId: 'step-1',
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    }
+    writeRunStateAtomic(tempDir, snapshot)
+
+    const onTeardown = vi.fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+    const handler = createRunTeardownHandler({
+      runDir: tempDir,
+      getSnapshot: () => snapshot,
+      onTeardown,
+      abortController: new AbortController(),
+      gateWaiter: createGateWaiter(),
+    })
+
+    expect(await handler({})).toEqual({ ok: true })
+    expect(await handler({})).toEqual({ ok: true })
+    expect(onTeardown).toHaveBeenCalledTimes(2)
+
+    const tdEvents = readLedgerEvents(tempDir).filter(e => e.eventType === 'run.teardown')
+    expect(tdEvents.map(e => e.payload)).toEqual([
+      { hookInvoked: true, forced: false },
+      { hookInvoked: false, forced: false },
+    ])
+    expect(readRunState(tempDir).environments).toBeUndefined()
   })
 })

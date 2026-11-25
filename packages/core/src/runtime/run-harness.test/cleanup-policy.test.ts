@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
-import { readRunState } from '../../persistence/state-store.js'
+import { readRunState, resolveRunDir, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { applyCleanupPolicy } from '../cleanup-policy.js'
 import { runHarness } from '../run-harness.js'
 
@@ -178,5 +178,28 @@ describe('applyCleanupPolicy unit branches', () => {
       status: 'passed',
       steps: {},
     }, 'r-1', tempDir)).resolves.toBeUndefined()
+  })
+
+  it('handles destroy policy when environments argument is omitted', async () => {
+    const runDir = resolveRunDir(tempDir, 'r-empty-envs')
+    writeRunStateAtomic(runDir, {
+      schemaVersion: 1,
+      runId: 'r-empty-envs',
+      harnessName: 'empty-envs',
+      workflowName: 'empty-envs',
+      status: 'passed',
+      activeStepId: null,
+      steps: {},
+      updatedAt: new Date().toISOString(),
+    })
+
+    await expect(applyCleanupPolicy({ onSuccess: 'destroy' }, {
+      runId: 'r-empty-envs',
+      status: 'passed',
+      steps: {},
+    }, 'r-empty-envs', tempDir)).resolves.toBeUndefined()
+
+    expect(readRunState(runDir).environments).toEqual({})
+    expect(readLedgerEvents(runDir).find(e => e.eventType === 'run.teardown')?.payload.environments).toEqual([])
   })
 })

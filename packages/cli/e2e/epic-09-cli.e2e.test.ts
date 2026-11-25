@@ -186,8 +186,76 @@ it('controls detached runs over the socket, resumes them, and garbage-collects o
   ], dir)
   expect(status.status).toBe('waiting_for_gate')
   expect(status.process).toMatch(/^alive/)
+  expect(status).not.toHaveProperty('environments')
   const resumedPid = await terminateAndResume(dir, pid)
   await passDetachedGates(dir)
   await verifyTargetedGc(dir, resumedPid)
   await verifyAbortWithTeardown(dir)
 }, 60_000)
+
+it('invokes user-defined teardown hooks via ludd teardown and prunes run directories via ludd gc', async () => {
+  const dir = workspace()
+  const externalWorktree = path.join(dir, 'external-worktree')
+  fs.mkdirSync(externalWorktree, { recursive: true })
+  fs.writeFileSync(path.join(externalWorktree, 'keep.txt'), 'keep')
+
+  const config = [
+    `import fs from 'node:fs'`,
+    `import path from 'node:path'`,
+    `import { defineHarness } from '@luddjs/core'`,
+    `export default defineHarness({`,
+    `  name: 'e2e-teardown',`,
+    `  async teardown(ctx) {`,
+    `    fs.writeFileSync(path.join(ctx.workspaceRoot, 'teardown-marker.json'), JSON.stringify({ runId: ctx.runId, workspaceRoot: ctx.workspaceRoot }))`,
+    `  },`,
+    `  steps: [{ id: 'step', run: async () => ({ ok: true }) }],`,
+    `})`,
+  ].join('\n')
+  fs.writeFileSync(path.join(dir, 'teardown.config.ts'), config)
+
+  const runResult = await launch([
+    'run',
+    'teardown.config.ts',
+    '--run-id',
+    'td-run',
+    '--workspace',
+    dir,
+  ], dir)
+  expect(runResult.code, runResult.stderr).toBe(0)
+
+  const statusText = await launch([
+    'status',
+    'td-run',
+    '--workspace',
+    dir,
+  ], dir)
+  expect(statusText.code, statusText.stderr).toBe(0)
+  expect(statusText.stdout).not.toContain('Environments:')
+
+  const markerPath = path.join(dir, 'teardown-marker.json')
+  fs.rmSync(markerPath)
+
+  const tdResult = await launch([
+    'teardown',
+    'td-run',
+    '--workspace',
+    dir,
+  ], dir)
+  expect(tdResult.code, tdResult.stderr).toBe(0)
+  expect(tdResult.stdout).toContain('Tore down run td-run')
+  expect(JSON.parse(fs.readFileSync(markerPath, 'utf8'))).toEqual({
+    runId: 'td-run',
+    workspaceRoot: path.resolve(dir),
+  })
+
+  const gcResult = await launch([
+    'gc',
+    '--workspace',
+    dir,
+    '--run-id',
+    'td-run',
+  ], dir)
+  expect(gcResult.code, gcResult.stderr).toBe(0)
+  expect(fs.existsSync(path.join(dir, '.harness/runs/td-run'))).toBe(false)
+  expect(fs.existsSync(path.join(externalWorktree, 'keep.txt'))).toBe(true)
+}, 20_000)

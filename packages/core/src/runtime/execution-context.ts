@@ -204,8 +204,11 @@ export async function executeWithHarnessLifecycle<TResult>(
   }
 
   if (config.teardown !== undefined) {
+    const teardownCtx: RunLifecycleContext = lifecycleCtx.signal.aborted
+      ? { ...lifecycleCtx, signal: new AbortController().signal }
+      : lifecycleCtx
     try {
-      await config.teardown(lifecycleCtx)
+      await config.teardown(teardownCtx)
     }
     catch (teardownError: unknown) {
       if (!hasPrimaryError) {

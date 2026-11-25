@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { teardownCommand } from '../actions/teardown-command.js'
 import { CommandRunner } from '../ui/command-runner.js'
 
-export const description = 'Tear down provisioned environments for a run'
+export const description = 'Run teardown cleanup and finalize state for a run'
 
 export const args = z.tuple([
   z.string().describe(argument({
@@ -18,8 +18,12 @@ export const options = z.object({
     alias: 'w',
     description: 'Workspace directory',
   })),
+  config: z.string().optional().describe(option({
+    alias: 'c',
+    description: 'Path to harness config file',
+  })),
   force: z.boolean().optional().describe(option({
-    description: 'Force teardown even if environments are busy',
+    description: 'Force state finalization and hook cleanup even if active or socket/config is unavailable',
   })),
 })
 
@@ -34,10 +38,18 @@ export default function Teardown({ args: [runId], options: opts }: TeardownProps
     ...(opts.workspace !== undefined
       ? { workspace: opts.workspace }
       : {}),
+    ...(opts.config !== undefined
+      ? { configPath: opts.config }
+      : {}),
     ...(opts.force
       ? { force: true }
       : {}),
-  }), [runId, opts.force, opts.workspace])
+  }), [
+    runId,
+    opts.config,
+    opts.force,
+    opts.workspace,
+  ])
 
   return <CommandRunner execute={execute} spinnerLabel={`Tearing down run ${runId}...`} />
 }

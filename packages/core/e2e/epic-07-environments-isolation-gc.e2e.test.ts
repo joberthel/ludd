@@ -112,8 +112,8 @@ describe('epic 7 E2E environments isolation & gc (AC 7.6)', () => {
     expect(gcResult.cleanedRunIds).toContain(run2Id)
     expect(gcResult.skippedActiveRunIds).toEqual([])
 
-    expect(fs.existsSync(wt1Dir)).toBe(false)
-    expect(fs.existsSync(wt2Dir)).toBe(false)
+    expect(fs.existsSync(wt1Dir)).toBe(true)
+    expect(fs.existsSync(wt2Dir)).toBe(true)
     expect(fs.existsSync(run1Dir)).toBe(false)
     expect(fs.existsSync(run2Dir)).toBe(false)
   })

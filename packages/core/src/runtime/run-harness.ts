@@ -145,10 +145,51 @@ export async function runHarness(
     const prep = await prepareRunContext(validatedConfig, runDir, runId, workspaceDir, configPath, abortController.signal)
     mcpServer = prep.mcpServer
     snapshot = prep.snapshot
-    controlServer = await initControlServer(runDir, snapshot, prep.ctx.environments, abortController, gateWaiter)
+    let teardownCompleted = false
+    let teardownInFlight: Promise<boolean> | undefined
+    const runTeardownHook = validatedConfig.teardown
+      ? async (ctx: RunLifecycleContext): Promise<boolean> => {
+        if (teardownCompleted) {
+          return false
+        }
+        if (teardownInFlight !== undefined) {
+          return teardownInFlight
+        }
+        const execution = Promise.resolve()
+          .then(async () => validatedConfig.teardown!(ctx))
+          .then(() => {
+            teardownCompleted = true
+            return true
+          })
+          .finally(() => {
+            teardownInFlight = undefined
+          })
+        teardownInFlight = execution
+        return execution
+      }
+      : undefined
+    const effectiveConfig = runTeardownHook
+      ? {
+          ...validatedConfig,
+          teardown: async (ctx: RunLifecycleContext) => {
+            await runTeardownHook(ctx)
+          },
+        }
+      : validatedConfig
+
+    controlServer = await initControlServer(
+      runDir,
+      snapshot,
+      prep.ctx.environments,
+      abortController,
+      gateWaiter,
+      runTeardownHook
+        ? async () => runTeardownHook({ ...lifecycleCtx, signal: new AbortController().signal })
+        : undefined,
+    )
 
     const lifecycleResult = await executeHarnessLifecycle({
-      config: validatedConfig,
+      config: effectiveConfig,
       lifecycleCtx,
       snapshot,
       steps: prep.ctx.steps,

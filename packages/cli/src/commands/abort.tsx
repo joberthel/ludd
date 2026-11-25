@@ -22,7 +22,7 @@ export const options = z.object({
     description: 'Reason for aborting the run',
   })),
   teardown: z.boolean().optional().describe(option({
-    description: 'Also tear down provisioned environments',
+    description: 'Also trigger teardown cleanup when aborting',
   })),
 })
 
