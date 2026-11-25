@@ -1,5 +1,4 @@
-export { createHarness, defineHarness, validateHarnessConfig } from './define-harness.js'
-export type { HarnessBuilder } from './define-harness.js'
+export { createHarness, type CreateHarnessOptions, defineHarness, type HarnessBuilder, validateHarnessConfig } from './define-harness.js'
 export { EnvironmentUnreachableError } from './errors/environment-unreachable-error.js'
 export { ForbiddenMountPathError } from './errors/forbidden-mount-path-error.js'
 export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries-exceeded-error.js'
@@ -100,6 +99,17 @@ export {
   handleGuardrailEscalation,
 } from './runtime/escalation-manager.js'
 export {
+  executeWithHarnessLifecycle,
+  type ExecuteWithHarnessLifecycleOptions,
+  type ResolvedExecutionContext,
+  resolveExecutionContext,
+  type ResolveExecutionContextOptions,
+  resolveRunExecutionContext,
+  type ResolveRunExecutionContextOptions,
+  resolveStepExecutionContext,
+  type ResolveStepExecutionContextOptions,
+} from './runtime/execution-context.js'
+export {
   createGateWaiter,
   type GateWaiter,
 } from './runtime/gate-waiter.js'
@@ -114,6 +124,11 @@ export {
   GuardrailRetrySignal,
   runAfterStepGuardrails,
 } from './runtime/guardrail-executor.js'
+export {
+  type HostSpawnOptions,
+  type HostSpawnResult,
+  spawn,
+} from './runtime/host-exec.js'
 export {
   askInteractiveQuestion,
   createInteractiveQuestionHandler,
@@ -187,6 +202,7 @@ export {
   type CleanupPolicyAction,
   type DerivedStepContext,
   type HarnessConfig,
+  type HarnessExecutionConfig,
   type InferArrayItem,
   type InferMatrixItem,
   type InferSingleStepOutput,
@@ -198,6 +214,8 @@ export {
   type MatrixItemsConfig,
   type PlainStepDef,
   type PriorStepContext,
+  type RunLifecycleContext,
+  type SetupResult,
   type StepArtifactItemMap,
   type StepConfig,
   type StepHasMatrix,

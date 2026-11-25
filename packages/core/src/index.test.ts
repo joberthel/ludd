@@ -1,8 +1,13 @@
 import type {
   AgentStreamEvent,
   AgentStreamEventType,
+  CreateHarnessOptions,
+  ExecuteWithHarnessLifecycleOptions,
   GcOptions,
   GcResult,
+  HarnessExecutionConfig,
+  HostSpawnOptions,
+  HostSpawnResult,
   JsonRpcRequest,
   JsonRpcResponse,
   LedgerEvent,
@@ -10,6 +15,12 @@ import type {
   MatrixArtifactConfig,
   MatrixConfig,
   MatrixItemsConfig,
+  ResolvedExecutionContext,
+  ResolveExecutionContextOptions,
+  ResolveRunExecutionContextOptions,
+  ResolveStepExecutionContextOptions,
+  RunLifecycleContext,
+  SetupResult,
   StepContext,
 } from './index.js'
 import { describe, expect, it } from 'vitest'
@@ -59,6 +70,11 @@ describe('@luddjs/core harness and configuration exports', () => {
     expect(typeof core.resolveMatrixItems).toBe('function')
     expect(typeof core.executeMatrixStep).toBe('function')
     expect(typeof core.teardownRun).toBe('function')
+    expect(typeof core.spawn).toBe('function')
+    expect(typeof core.resolveRunExecutionContext).toBe('function')
+    expect(typeof core.resolveStepExecutionContext).toBe('function')
+    expect(typeof core.resolveExecutionContext).toBe('function')
+    expect(typeof core.executeWithHarnessLifecycle).toBe('function')
   })
 })
 
@@ -197,5 +213,56 @@ describe('@luddjs/core typed structures and matrix exports', () => {
     const unionConfig2: MatrixConfig = artifactConfig
     expect(unionConfig1.items).toEqual([1, 2, 3])
     expect(unionConfig2.itemsFromArtifact).toBe('todos.json')
+  })
+
+  it('exports explicit host execution config and spawn types', () => {
+    const lifecycleCtx: RunLifecycleContext = {
+      runId: 'r-1',
+      workspaceRoot: '/tmp',
+      signal: new AbortController().signal,
+    }
+    const setupResult: SetupResult = {
+      cwd: '/tmp/wt',
+      env: { WT: '1' },
+    }
+    const execCfg: HarnessExecutionConfig = {
+      cwd: '/tmp',
+      env: { A: '1' },
+    }
+    const createOpts: CreateHarnessOptions = {
+      ...execCfg,
+      cleanupPolicy: { onSuccess: 'destroy' },
+    }
+    const spawnOpts: HostSpawnOptions = {
+      command: 'node',
+      args: ['-v'],
+    }
+    const spawnRes: HostSpawnResult = {
+      exitCode: 0,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false,
+    }
+    const resolved: ResolvedExecutionContext = { cwd: '/tmp', env: {} }
+    const runOpts: ResolveRunExecutionContextOptions = { config: execCfg, lifecycleCtx, setupResult }
+    const stepOpts: ResolveStepExecutionContextOptions = {
+      step: {},
+      stepCtx: {} as StepContext,
+      runExecutionContext: resolved,
+    }
+    const combinedOpts: ResolveExecutionContextOptions = { config: execCfg, lifecycleCtx }
+    const lifecycleOpts: ExecuteWithHarnessLifecycleOptions<void> = {
+      config: execCfg,
+      lifecycleCtx,
+      run: () => {},
+    }
+    expect(createOpts.cwd).toBe('/tmp')
+    expect(spawnOpts.command).toBe('node')
+    expect(spawnRes.exitCode).toBe(0)
+    expect(runOpts.lifecycleCtx.runId).toBe('r-1')
+    expect(stepOpts.runExecutionContext.cwd).toBe('/tmp')
+    expect(combinedOpts.config.env).toEqual({ A: '1' })
+    expect(lifecycleOpts.lifecycleCtx.workspaceRoot).toBe('/tmp')
   })
 })

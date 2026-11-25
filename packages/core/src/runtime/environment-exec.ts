@@ -1,41 +1,11 @@
-import type { ChildProcess } from 'node:child_process'
 import type {
   EnvironmentExecOptions,
   EnvironmentExecResult,
 } from '../types/environment.js'
-import { spawn } from 'node:child_process'
 import path from 'node:path'
-import process from 'node:process'
+import { killProcessTree, spawn } from './host-exec.js'
 
-interface ExecutionState {
-  stdout: string
-  stderr: string
-  settled: boolean
-}
-
-export function killProcessTree(pid: number | undefined, gracePeriodMs = 200): void {
-  if (pid === undefined || pid === 0) {
-    return
-  }
-  const target = process.platform === 'win32'
-    ? pid
-    : -pid
-  try {
-    process.kill(target, 'SIGTERM')
-  }
-  catch {
-    return
-  }
-  const timer = setTimeout(() => {
-    try {
-      process.kill(target, 'SIGKILL')
-    }
-    catch {
-      // Process already terminated
-    }
-  }, gracePeriodMs)
-  timer.unref?.()
-}
+export { killProcessTree }
 
 function parseCommand(command: string | readonly string[]): {
   file: string
@@ -66,100 +36,6 @@ function resolveExecCwd(workingDir: string, cwdOption?: string): string {
   return workingDir
 }
 
-function attachChildStreams(child: ChildProcess, state: ExecutionState): void {
-  child.stdout?.on('data', (chunk: unknown) => {
-    state.stdout += String(chunk)
-  })
-  child.stderr?.on('data', (chunk: unknown) => {
-    state.stderr += String(chunk)
-  })
-}
-
-function setupTimeoutTimer(
-  pid: number | undefined,
-  timeoutMs: number | undefined,
-  state: ExecutionState,
-  resolve: (res: EnvironmentExecResult) => void,
-): NodeJS.Timeout | undefined {
-  if (timeoutMs === undefined || timeoutMs <= 0) {
-    return undefined
-  }
-  return setTimeout(() => {
-    state.settled = true
-    killProcessTree(pid)
-    resolve({
-      exitCode: null,
-      stdout: state.stdout,
-      stderr: state.stderr,
-      timedOut: true,
-    })
-  }, timeoutMs)
-}
-
-function extractAbortError(signal: AbortSignal | undefined): Error {
-  if (signal?.reason instanceof Error) {
-    return signal.reason
-  }
-  return new Error(String(signal?.reason ?? 'Command aborted'))
-}
-
-function setupAbortSignal(
-  signal: AbortSignal | undefined,
-  child: ChildProcess,
-  timer: NodeJS.Timeout | undefined,
-  state: ExecutionState,
-  reject: (err: Error) => void,
-): void {
-  if (!signal) {
-    return
-  }
-  const onAbort = (): void => {
-    state.settled = true
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-    killProcessTree(child.pid)
-    reject(extractAbortError(signal))
-  }
-  const cleanup = (): void => {
-    signal.removeEventListener('abort', onAbort)
-  }
-  signal.addEventListener('abort', onAbort, { once: true })
-  child.once('close', cleanup)
-  child.once('error', cleanup)
-}
-
-function attachProcessLifecycle(
-  child: ChildProcess,
-  timer: NodeJS.Timeout | undefined,
-  state: ExecutionState,
-  resolve: (res: EnvironmentExecResult) => void,
-  reject: (err: Error) => void,
-): void {
-  child.on('error', (err: Error) => {
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-    state.settled = true
-    reject(err)
-  })
-
-  child.on('close', (code: number | null) => {
-    if (timer !== undefined) {
-      clearTimeout(timer)
-    }
-    if (!state.settled) {
-      state.settled = true
-      resolve({
-        exitCode: code,
-        stdout: state.stdout,
-        stderr: state.stderr,
-        timedOut: false,
-      })
-    }
-  })
-}
-
 export async function execHostCommand(
   workingDir: string,
   command: string | readonly string[],
@@ -167,32 +43,20 @@ export async function execHostCommand(
 ): Promise<EnvironmentExecResult> {
   const { file, args, shell } = parseCommand(command)
   const cwd = resolveExecCwd(workingDir, options?.cwd)
-  const env: NodeJS.ProcessEnv = options?.inheritEnv === false
-    ? {
-        ...options?.env,
-      }
-    : {
-        ...process.env,
-        ...options?.env,
-      }
-
-  return new Promise((resolve, reject) => {
-    if (options?.signal?.aborted) {
-      reject(extractAbortError(options.signal))
-      return
-    }
-
-    const child = spawn(file, args as string[], {
-      cwd,
-      env,
-      shell,
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    const state: ExecutionState = { stdout: '', stderr: '', settled: false }
-    attachChildStreams(child, state)
-    const timer = setupTimeoutTimer(child.pid, options?.timeoutMs, state, resolve)
-    attachProcessLifecycle(child, timer, state, resolve, reject)
-    setupAbortSignal(options?.signal, child, timer, state, reject)
+  const result = await spawn({
+    command: file,
+    args,
+    cwd,
+    env: options?.env,
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+    shell,
+    inheritEnv: options?.inheritEnv,
   })
+  return {
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    timedOut: result.timedOut,
+  }
 }

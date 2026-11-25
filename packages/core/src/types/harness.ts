@@ -110,6 +110,28 @@ export type MatrixConfig<
   TArtifactKey extends string = string,
 > = MatrixItemsConfig<TItem, TContext> | MatrixArtifactConfig<TArtifactKey>
 
+export interface RunLifecycleContext {
+  runId: string
+  workspaceRoot: string
+  signal: AbortSignal
+}
+
+export interface SetupResult {
+  cwd?: string
+  env?: Record<string, string>
+}
+
+export interface HarnessExecutionConfig {
+  /** Working directory for steps, guardrails, and agents. Defaults to process.cwd(). */
+  cwd?: DynamicProperty<string, RunLifecycleContext>
+  /** Additional environment variables passed to commands and agents. */
+  env?: DynamicProperty<Record<string, string>, RunLifecycleContext>
+  /** Optional one-time run setup hook (e.g., create a git worktree). */
+  setup?: (ctx: RunLifecycleContext) => void | SetupResult | Promise<void | SetupResult>
+  /** Optional run cleanup hook guaranteed to execute on completion, failure, or abort. */
+  teardown?: (ctx: RunLifecycleContext) => void | Promise<void>
+}
+
 export interface StepConfig<
   TId extends string = string,
   TOutput = unknown,
@@ -124,6 +146,8 @@ export interface StepConfig<
   dangerMode?: boolean
   if?: (ctx: TMatrixContext) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, TContext>
+  cwd?: DynamicProperty<string, TContext>
+  env?: DynamicProperty<Record<string, string>, TContext>
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
@@ -138,7 +162,7 @@ export interface StepConfig<
 export interface HarnessConfig<
   TSteps extends readonly StepConfig<any, any, any, any, any, any, any>[] = readonly StepConfig[],
   TName extends string = string,
-> {
+> extends HarnessExecutionConfig {
   name: TName
   cleanupPolicy?: CleanupPolicy
   steps: TSteps

@@ -1,14 +1,41 @@
 import type { z } from 'zod'
-import type { CleanupPolicy, HarnessConfig } from './types/harness.js'
+import type { DynamicProperty } from './types/context.js'
+import type { CleanupPolicy, HarnessConfig, HarnessExecutionConfig } from './types/harness.js'
 import type {
   ArtifactMatrixStepDef,
   ItemsMatrixStepDef,
   PlainStepDef,
+  PriorStepContext,
 } from './types/inference.js'
-import { validateCleanupPolicy, validateStep } from './define-harness-validators.js'
+import {
+  validateCleanupPolicy,
+  validateCwdConfig,
+  validateEnvConfig,
+  validateLifecycleHook,
+  validateStep,
+} from './define-harness-validators.js'
 import { HarnessConfigError } from './errors/harness-config-error.js'
 
 export { isAgentRunner } from './types/harness.js'
+
+export interface CreateHarnessOptions extends HarnessExecutionConfig {
+  cleanupPolicy?: CleanupPolicy
+}
+
+type DefinedHarnessConfig<TName extends string, TSteps> = HarnessExecutionConfig & {
+  name: TName
+  cleanupPolicy?: CleanupPolicy
+  steps: TSteps
+}
+
+interface Step0Constraint {
+  id: string
+  artifacts?: any
+  outputSchema?: any
+  run?: any
+  cwd?: DynamicProperty<string, PriorStepContext<[]>>
+  env?: DynamicProperty<Record<string, string>, PriorStepContext<[]>>
+}
 
 export function validateHarnessConfig(config: unknown): HarnessConfig {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
@@ -23,6 +50,10 @@ export function validateHarnessConfig(config: unknown): HarnessConfig {
   }
 
   validateCleanupPolicy(rawConfig.cleanupPolicy)
+  validateCwdConfig(rawConfig.cwd, 'Harness config')
+  validateEnvConfig(rawConfig.env, 'Harness config')
+  validateLifecycleHook(rawConfig.setup, 'setup')
+  validateLifecycleHook(rawConfig.teardown, 'teardown')
 
   if (!Array.isArray(rawConfig.steps) || rawConfig.steps.length === 0) {
     throw new HarnessConfigError(
@@ -54,10 +85,9 @@ export function defineHarness<
   S3Out = any,
   S3Art = any,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     PlainStepDef<[], S0Id, S0Out, S0Art>,
     PlainStepDef<
       [{ id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } }],
@@ -86,10 +116,9 @@ export function defineHarness<
       S3Art
     >,
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     PlainStepDef<[], S0Id, S0Out, S0Art>,
     PlainStepDef<
       [{ id: S0Id, outputSchema?: z.ZodType<S0Out>, artifacts?: S0Art, run?: { readonly __kind: 'agent' } }],
@@ -118,11 +147,11 @@ export function defineHarness<
       S3Art
     >,
   ]
-}
+>
 
 // 2. 3-step pipeline: Plain -> ArtifactMatrix -> Plain (AC 4.4.1 & AC 4.4.4)
 export function defineHarness<
-  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  const TStep0 extends Step0Constraint,
   S1Id extends string = string,
   S1Out = any,
   S1Art = any,
@@ -131,10 +160,9 @@ export function defineHarness<
   S2Out = any,
   S2Art = any,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
     PlainStepDef<
@@ -147,10 +175,9 @@ export function defineHarness<
       S2Art
     >,
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
     PlainStepDef<
@@ -163,80 +190,74 @@ export function defineHarness<
       S2Art
     >,
   ]
-}
+>
 
 // Two plain steps, with the second step's beforeStep result inferred in its run context.
 export function defineHarness<
-  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  const TStep0 extends Step0Constraint,
   S1Id extends string = string,
   S1Out = any,
   S1Art = any,
   const S1BeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet
     | ((ctx: import('./types/inference.js').PriorStepContext<[TStep0]>) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     PlainStepDef<[TStep0], S1Id, S1Out, S1Art, S1BeforeStep> & { beforeStep: S1BeforeStep },
   ]
-}
+>
 
 // 3. 2-step pipeline: Plain -> ArtifactMatrix
 export function defineHarness<
-  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  const TStep0 extends Step0Constraint,
   S1Id extends string = string,
   S1Out = any,
   S1Art = any,
   const S1Key extends string = string,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ArtifactMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Key>,
   ]
-}
+>
 
 // 4. 2-step pipeline: Plain -> ItemsMatrix
 export function defineHarness<
-  const TStep0 extends { id: string, artifacts?: any, outputSchema?: any, run?: any },
+  const TStep0 extends Step0Constraint,
   S1Id extends string = string,
   S1Out = any,
   S1Art = any,
   S1Item = any,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ItemsMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Item>,
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     TStep0,
     ItemsMatrixStepDef<[TStep0], S1Id, S1Out, S1Art, S1Item>,
   ]
-}
+>
 
 // 5. 1-step pipeline: ItemsMatrix (AC 4.4.2 static matrix)
 export function defineHarness<
@@ -245,19 +266,17 @@ export function defineHarness<
   S0Art = any,
   S0Item = any,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [
     ItemsMatrixStepDef<[], S0Id, S0Out, S0Art, S0Item>,
   ]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [
+>): DefinedHarnessConfig<
+  TName,
+  readonly [
     ItemsMatrixStepDef<[], S0Id, S0Out, S0Art, S0Item>,
   ]
-}
+>
 
 // 6. 1-step pipeline: Plain step. Keep this overload before the broad fallback
 // so the step's output schema contextually types its afterStep factory.
@@ -268,15 +287,13 @@ export function defineHarness<
   const S0BeforeStep extends import('./types/harness.js').BeforeStepGuardrailSet | ((ctx: import('./types/context.js').StepContext) => import('./types/harness.js').BeforeStepGuardrailSet | Promise<import('./types/harness.js').BeforeStepGuardrailSet>) = readonly import('./types/guardrail.js').Guardrail[],
   const S0Interactive extends import('./types/interactive.js').StepInteractiveConfig<any> = boolean,
   TName extends string = string,
->(config: {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
-}): {
-  name: TName
-  cleanupPolicy?: CleanupPolicy
-  steps: readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
-}
+>(config: DefinedHarnessConfig<
+  TName,
+  readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
+>): DefinedHarnessConfig<
+  TName,
+  readonly [PlainStepDef<[], S0Id, S0Out, S0Art, S0BeforeStep, S0Interactive>]
+>
 
 // Fallback overload preserving step configuration
 export function defineHarness<const TConfig extends HarnessConfig = HarnessConfig>(
@@ -334,19 +351,36 @@ export interface HarnessBuilder<
       readonly [...TSteps, ArtifactMatrixStepDef<TSteps, SId, SOut, SArt, SKey, SBeforeStep>]
     >
   }
-  build: () => {
-    name: TName
-    cleanupPolicy?: CleanupPolicy
-    steps: TSteps
+  build: () => DefinedHarnessConfig<TName, TSteps>
+}
+
+const HARNESS_OPTION_KEYS = [
+  'cleanupPolicy',
+  'cwd',
+  'env',
+  'setup',
+  'teardown',
+] as const
+
+function pickHarnessOptions(options?: CreateHarnessOptions): Record<string, unknown> {
+  if (options === undefined) {
+    return {}
   }
+  const picked: Record<string, unknown> = {}
+  for (const key of HARNESS_OPTION_KEYS) {
+    if (options[key] !== undefined) {
+      picked[key] = options[key]
+    }
+  }
+  return picked
 }
 
 export function createHarness<TName extends string>(
   name: TName,
-  options?: { cleanupPolicy?: CleanupPolicy },
+  options?: CreateHarnessOptions,
 ): HarnessBuilder<TName> {
   const steps: unknown[] = []
-  const cleanupPolicy = options?.cleanupPolicy
+  const pickedOptions = pickHarnessOptions(options)
   const builder = {
     step(step: unknown) {
       steps.push(step)
@@ -355,9 +389,7 @@ export function createHarness<TName extends string>(
     build() {
       const config = {
         name,
-        ...(cleanupPolicy !== undefined
-          ? { cleanupPolicy }
-          : {}),
+        ...pickedOptions,
         steps: [...steps],
       }
       validateHarnessConfig(config)

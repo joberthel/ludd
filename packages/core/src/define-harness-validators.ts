@@ -23,6 +23,69 @@ export function validateCleanupPolicy(policy: unknown): void {
   }
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  const proto = Object.getPrototypeOf(value) as unknown
+  return proto === Object.prototype || proto === null
+}
+
+export function validateResolvedCwd(cwd: unknown, targetLabel: string): asserts cwd is string {
+  if (typeof cwd !== 'string' || cwd.trim() === '') {
+    throw new HarnessConfigError(
+      `${targetLabel} "cwd" must be a non-empty trimmed string.`,
+    )
+  }
+}
+
+export function validateCwdConfig(cwd: unknown, targetLabel: string): void {
+  if (cwd === undefined || typeof cwd === 'function') {
+    return
+  }
+  if (typeof cwd === 'string' && cwd.trim() !== '') {
+    return
+  }
+  throw new HarnessConfigError(
+    `${targetLabel} "cwd" must be a non-empty trimmed string or a function when provided.`,
+  )
+}
+
+export function validateEnvRecord(env: unknown, targetLabel: string): asserts env is Record<string, string> {
+  if (!isPlainRecord(env)) {
+    throw new HarnessConfigError(
+      `${targetLabel} "env" must be a plain object of string values.`,
+    )
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (key.trim() === '' || key.includes('=') || key.includes('\0')) {
+      throw new HarnessConfigError(
+        `${targetLabel} "env" keys must be non-empty trimmed strings without "=" or null bytes.`,
+      )
+    }
+    if (typeof value !== 'string' || value.includes('\0')) {
+      throw new HarnessConfigError(
+        `${targetLabel} "env" entry "${key}" must be a string without null bytes.`,
+      )
+    }
+  }
+}
+
+export function validateEnvConfig(env: unknown, targetLabel: string): void {
+  if (env === undefined || typeof env === 'function') {
+    return
+  }
+  validateEnvRecord(env, targetLabel)
+}
+
+export function validateLifecycleHook(hook: unknown, hookName: 'setup' | 'teardown'): void {
+  if (hook !== undefined && typeof hook !== 'function') {
+    throw new HarnessConfigError(
+      `Harness config "${hookName}" must be a function when provided.`,
+    )
+  }
+}
+
 function validateArtifactRule(id: string, key: string, rule: unknown): void {
   if (typeof rule !== 'object' || rule === null || Array.isArray(rule)) {
     throw new HarnessConfigError(
@@ -197,6 +260,9 @@ export function validateStep(step: unknown, index: number, seenIds: Set<string>)
       `Step "${id}" "environment" must be a ProvisionedEnvironment or a function.`,
     )
   }
+
+  validateCwdConfig(rawStep.cwd, `Step "${id}"`)
+  validateEnvConfig(rawStep.env, `Step "${id}"`)
 
   validateStepRetriesConfig(id, rawStep)
   validateStepArtifactsConfig(id, rawStep.artifacts)

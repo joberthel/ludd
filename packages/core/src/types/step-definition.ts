@@ -37,6 +37,8 @@ export interface PlainStepDef<
   dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+  cwd?: DynamicProperty<string, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
+  env?: DynamicProperty<Record<string, string>, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   matrix?: never
   outputSchema?: z.ZodType<TOutput>
   maxTotalTurns?: number
@@ -81,6 +83,8 @@ export interface ItemsMatrixStepDef<
   dangerMode?: boolean
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+  cwd?: DynamicProperty<string, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
+  env?: DynamicProperty<Record<string, string>, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
   matrix: {
     items: DynamicProperty<readonly TItem[], PriorStepContext<TPriorSteps>>
     itemsFromArtifact?: never
@@ -129,6 +133,24 @@ export interface ArtifactMatrixStepDef<
   if?: (ctx: PriorStepContext<TPriorSteps>) => boolean | Promise<boolean>
   environment?: DynamicProperty<
     ProvisionedEnvironment | EnvironmentAdapter,
+    StepContext<
+      unknown,
+      AccumulatePriorSteps<TPriorSteps>,
+      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+      true
+    >
+  >
+  cwd?: DynamicProperty<
+    string,
+    StepContext<
+      unknown,
+      AccumulatePriorSteps<TPriorSteps>,
+      InferMatrixItem<{ matrix: { itemsFromArtifact: TKey } }, AccumulateArtifactItemMap<TPriorSteps>>,
+      true
+    >
+  >
+  env?: DynamicProperty<
+    Record<string, string>,
     StepContext<
       unknown,
       AccumulatePriorSteps<TPriorSteps>,
@@ -237,6 +259,8 @@ export interface StepTupleEntry<
 > {
   id: TId
   environment?: DynamicProperty<ProvisionedEnvironment | EnvironmentAdapter, any>
+  cwd?: DynamicProperty<string, any>
+  env?: DynamicProperty<Record<string, string>, any>
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   outputSchema?: z.ZodType<TOutput>
