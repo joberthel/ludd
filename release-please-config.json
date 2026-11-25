@@ -10,7 +10,6 @@
   "packages": {
     "packages/core": {},
     "packages/agents": {},
-    "packages/environments": {},
     "packages/guardrails": {},
     "packages/cli": {}
   }

@@ -14,7 +14,6 @@ export interface LoadHarnessConfigOptions {
 const OPTIONAL_WORKSPACE_PACKAGES = [
   '@luddjs/agents',
   '@luddjs/guardrails',
-  '@luddjs/environments',
 ] as const
 
 function validateConfigPath(configPath: unknown): string {

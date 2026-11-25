@@ -57,13 +57,13 @@ describe('runHarness dangerMode host rejection (ADR-0009)', () => {
   })
 
   it('fails with UnsafeDangerModeError when dangerMode: true on explicit host environment', async () => {
-    const hostEnv = createMockEnv('host', false)
+    const mockHostEnv = createMockEnv('host', false)
     const result = await runHarness({
       name: 'explicit-host-danger',
       steps: [
         {
           id: 'step-danger-host',
-          environment: hostEnv,
+          environment: mockHostEnv,
           dangerMode: true,
           run: async () => 'not-reached',
         },

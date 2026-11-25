@@ -1,15 +1,24 @@
-import type { HarnessConfig, StepContext } from '../src/index.js'
+import type { HarnessConfig, HostSpawnResult } from '../src/index.js'
 import cp from 'node:child_process'
 import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { gitWorktreeEnv } from '@luddjs/environments'
+import process from 'node:process'
+import { mockAgent } from '@luddjs/agents'
 import { execGuardrail } from '@luddjs/guardrails'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { gc, runHarness } from '../src/index.js'
+import { gc, runHarness, spawn } from '../src/index.js'
 
+const RUN_ID_PATTERN = /^[\w.-]+$/
 let tempDir: string
+
+function validateRunId(runId: string): string {
+  if (runId === '.' || runId === '..' || !RUN_ID_PATTERN.test(runId)) {
+    throw new Error(`Invalid runId "${runId}" for worktree path.`)
+  }
+  return runId
+}
 
 function initTestGitRepo(dir: string): void {
   cp.execSync('git init', { cwd: dir })
@@ -21,47 +30,131 @@ function initTestGitRepo(dir: string): void {
   cp.execSync('git commit -m "initial commit"', { cwd: dir })
 }
 
+function resolveWorktreeDir(workspaceRoot: string, runId: string): string {
+  const root = path.resolve(workspaceRoot)
+  return path.resolve(root, '.harness', 'worktrees', `${validateRunId(runId)}-feature-env`)
+}
+
+function formatGitError(result: HostSpawnResult): string {
+  return result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode ?? 'unknown'}`
+}
+
+async function createWorktree(workspaceRoot: string, runId: string, signal?: AbortSignal): Promise<string> {
+  const root = path.resolve(workspaceRoot)
+  const worktreeDir = resolveWorktreeDir(root, runId)
+  fs.mkdirSync(path.dirname(worktreeDir), { recursive: true })
+  const res = await spawn({
+    command: 'git',
+    args: [
+      'worktree',
+      'add',
+      '-b',
+      `ludd/${validateRunId(runId)}-feature-env`,
+      worktreeDir,
+      'HEAD',
+    ],
+    cwd: root,
+    signal,
+  })
+  if (res.exitCode !== 0) {
+    throw new Error(`Failed to create worktree: ${formatGitError(res)}`)
+  }
+  return worktreeDir
+}
+
+async function removeWorktree(workspaceRoot: string, runId: string, signal?: AbortSignal): Promise<void> {
+  const root = path.resolve(workspaceRoot)
+  const worktreeDir = resolveWorktreeDir(root, runId)
+  if (fs.existsSync(worktreeDir)) {
+    const removeRes = await spawn({
+      command: 'git',
+      args: [
+        'worktree',
+        'remove',
+        '--force',
+        worktreeDir,
+      ],
+      cwd: root,
+      signal,
+    })
+    if (removeRes.exitCode !== 0) {
+      throw new Error(`Failed to remove worktree "${worktreeDir}": ${formatGitError(removeRes)}`)
+    }
+    return
+  }
+
+  const pruneRes = await spawn({
+    command: 'git',
+    args: ['worktree', 'prune'],
+    cwd: root,
+    signal,
+  })
+  if (pruneRes.exitCode !== 0) {
+    throw new Error(`Failed to prune worktrees: ${formatGitError(pruneRes)}`)
+  }
+}
+
+function createSliceMockAgent() {
+  return mockAgent({
+    mode: 'workspace-write',
+    prompt: 'Update app in isolated worktree',
+    responses: [
+      async (input) => {
+        const appPath = path.join(input.cwd, 'src', 'app.ts')
+        fs.writeFileSync(appPath, `export const app = "${input.ctx.runId}"\n`, 'utf-8')
+        const checkRes = await spawn({
+          command: process.execPath,
+          args: ['-e', 'console.log("DB=" + process.env.DB_DATABASE)'],
+          cwd: input.cwd,
+          env: input.env,
+        })
+        expect(checkRes.exitCode).toBe(0)
+        const addRes = await spawn({
+          command: 'git',
+          args: ['add', 'src/app.ts'],
+          cwd: input.cwd,
+        })
+        expect(addRes.exitCode).toBe(0)
+        const commitRes = await spawn({
+          command: 'git',
+          args: ['commit', '-m', `feat: update app for ${input.ctx.runId}`],
+          cwd: input.cwd,
+        })
+        expect(commitRes.exitCode).toBe(0)
+        return {
+          runId: input.ctx.runId,
+          observedDb: checkRes.stdout.trim(),
+        }
+      },
+    ],
+  })
+}
+
 function buildConcurrentHarnessConfig(harnessName: string): HarnessConfig {
   return {
     name: harnessName,
-    cleanupPolicy: { onSuccess: 'keep', onFailure: 'keep' },
+    setup: async ({ runId, workspaceRoot, signal }) => {
+      const worktreeDir = await createWorktree(workspaceRoot, runId, signal)
+      return { cwd: worktreeDir }
+    },
+    env: ctx => ({
+      DB_DATABASE: `test_run_${ctx.runId}`,
+    }),
     steps: [
       {
         id: 'feature-step',
-        environment: gitWorktreeEnv({
-          id: 'feature-env',
-          env: (ctx: StepContext) => ({
-            DB_DATABASE: `test_run_${ctx.runId}`,
-          }),
-        }),
         afterStep: [
           execGuardrail({
             command: ['git', 'status', '--porcelain'],
           }),
         ],
-        run: async (ctx: StepContext) => {
-          const env = ctx.environments['feature-env']
-          const appPath = path.join(env.workingDir, 'src', 'app.ts')
-          fs.writeFileSync(appPath, `export const app = "${ctx.runId}"\n`, 'utf-8')
-          const checkRes = await env.exec(['node', '-e', 'console.log("DB=" + process.env.DB_DATABASE)'])
-          await env.exec(['git', 'add', 'src/app.ts'])
-          await env.exec([
-            'git',
-            'commit',
-            '-m',
-            `feat: update app for ${ctx.runId}`,
-          ])
-          return {
-            runId: ctx.runId,
-            observedDb: checkRes.stdout.trim(),
-          }
-        },
+        run: createSliceMockAgent(),
       },
     ],
   }
 }
 
-describe('epic 7 E2E environments isolation & gc (AC 7.6)', () => {
+describe('epic 7 E2E explicit host worktree isolation & gc', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-e2e-epic7-'))
     initTestGitRepo(tempDir)
@@ -94,13 +187,15 @@ describe('epic 7 E2E environments isolation & gc (AC 7.6)', () => {
     const baseApp = fs.readFileSync(path.join(tempDir, 'src', 'app.ts'), 'utf-8')
     expect(baseApp).toContain('export const app = "base"')
 
-    const wt1Dir = path.join(tempDir, '.harness', 'worktrees', `${run1Id}-feature-env`)
-    const wt2Dir = path.join(tempDir, '.harness', 'worktrees', `${run2Id}-feature-env`)
+    const wt1Dir = resolveWorktreeDir(tempDir, run1Id)
+    const wt2Dir = resolveWorktreeDir(tempDir, run2Id)
     const run1Dir = path.join(tempDir, '.harness', 'runs', run1Id)
     const run2Dir = path.join(tempDir, '.harness', 'runs', run2Id)
 
     expect(fs.existsSync(wt1Dir)).toBe(true)
     expect(fs.existsSync(wt2Dir)).toBe(true)
+    expect(fs.readFileSync(path.join(wt1Dir, 'src', 'app.ts'), 'utf-8')).toBe(`export const app = "${run1Id}"\n`)
+    expect(fs.readFileSync(path.join(wt2Dir, 'src', 'app.ts'), 'utf-8')).toBe(`export const app = "${run2Id}"\n`)
     expect(fs.existsSync(run1Dir)).toBe(true)
     expect(fs.existsSync(run2Dir)).toBe(true)
 
@@ -116,5 +211,33 @@ describe('epic 7 E2E environments isolation & gc (AC 7.6)', () => {
     expect(fs.existsSync(wt2Dir)).toBe(true)
     expect(fs.existsSync(run1Dir)).toBe(false)
     expect(fs.existsSync(run2Dir)).toBe(false)
+  })
+
+  it('guarantees DIY worktree teardown when a step fails', async () => {
+    const runId = 'e2e-wt-teardown-fail'
+    const wtDir = resolveWorktreeDir(tempDir, runId)
+
+    const res = await runHarness({
+      name: 'epic-07-teardown-fail',
+      setup: async ({ runId: id, workspaceRoot, signal }) => {
+        const cwd = await createWorktree(workspaceRoot, id, signal)
+        return { cwd }
+      },
+      teardown: async ({ runId: id, workspaceRoot, signal }) => {
+        await removeWorktree(workspaceRoot, id, signal)
+      },
+      steps: [
+        {
+          id: 'failing-step',
+          run: () => {
+            expect(fs.existsSync(wtDir)).toBe(true)
+            throw new Error('simulated failure')
+          },
+        },
+      ],
+    }, { runId, workspaceDir: tempDir })
+
+    expect(res.status).toBe('failed')
+    expect(fs.existsSync(wtDir)).toBe(false)
   })
 })

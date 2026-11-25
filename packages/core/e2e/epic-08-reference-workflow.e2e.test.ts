@@ -75,17 +75,18 @@ function assertAgentTurns(fake: FakePi): void {
 }
 
 function assertGitHistory(workspaceDir: string, runId: string, remoteDir: string): void {
-  // Git history in the worktree and the pushed branch on the bare remote.
+  // Teardown removes the temporary worktree while the pushed branch remains on the bare remote.
   const worktreeDir = path.join(workspaceDir, '.harness', 'worktrees', `${runId}-feature-env`)
-  expect(git(worktreeDir, 'log', '--format=%s').split('\n')).toEqual([
+  const branch = `ludd/${runId}-feature-env`
+  expect(fs.existsSync(worktreeDir)).toBe(false)
+  expect(git(remoteDir, 'log', branch, '--format=%s').split('\n')).toEqual([
     'feat: implement slice 2',
     'feat: implement slice 1',
     'chore: initial commit',
   ])
-  expect(git(worktreeDir, 'status', '--porcelain')).toBe('')
-  const branch = git(worktreeDir, 'rev-parse', '--abbrev-ref', 'HEAD')
-  expect(branch).not.toBe('main')
-  expect(git(remoteDir, 'rev-parse', branch)).toBe(git(worktreeDir, 'rev-parse', 'HEAD'))
+  const indexContent = git(remoteDir, 'show', `${branch}:src/index.js`)
+  expect(indexContent).toContain('exports.slice1')
+  expect(indexContent).toContain('exports.slice2')
   expect(git(workspaceDir, 'log', '--format=%s', 'main')).toBe('chore: initial commit')
 }
 

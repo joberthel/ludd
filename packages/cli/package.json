@@ -19,7 +19,6 @@
   "dependencies": {
     "@luddjs/agents": "workspace:*",
     "@luddjs/core": "workspace:*",
-    "@luddjs/environments": "workspace:*",
     "@luddjs/guardrails": "workspace:*",
     "ink": "^8.0.0",
     "react": "^19.3.1",

@@ -196,7 +196,7 @@ describe('loadHarnessConfig virtualModules resolution', () => {
     expect(loaded.name).toBe('core-exports')
   })
 
-  it('resolves @luddjs/agents, @luddjs/guardrails, and @luddjs/environments', async () => {
+  it('resolves @luddjs/agents and @luddjs/guardrails', async () => {
     const filePath = path.join(tempDir, 'workspace-pkgs.ts')
     await writeFile(
       filePath,
@@ -204,8 +204,7 @@ describe('loadHarnessConfig virtualModules resolution', () => {
         `import { defineHarness } from '@luddjs/core'`,
         `import * as agents from '@luddjs/agents'`,
         `import * as guardrails from '@luddjs/guardrails'`,
-        `import * as environments from '@luddjs/environments'`,
-        `if (!agents || !guardrails || !environments) throw new Error('missing workspace package')`,
+        `if (!agents || !guardrails) throw new Error('missing workspace package')`,
         `export default defineHarness({ name: 'workspace-pkgs', steps: [{ id: 's1', run: async () => ({}) }] })`,
       ].join('\n'),
     )

@@ -24,7 +24,6 @@
     "@eslint-react/eslint-plugin": "^5.30.5",
     "@luddjs/agents": "workspace:*",
     "@luddjs/core": "workspace:*",
-    "@luddjs/environments": "workspace:*",
     "@luddjs/guardrails": "workspace:*",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
