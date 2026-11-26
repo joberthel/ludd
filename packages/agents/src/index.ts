@@ -9,6 +9,12 @@ import type {
   AgentTurnResult,
 } from '@luddjs/core'
 import type {
+  AcpAgentConfig,
+  AcpMcpBridgeConfig,
+  AcpPermissionMode,
+  AcpStdioMcpServerConfig,
+} from './acp-agent.js'
+import type {
   MockAgentConfig,
   MockAgentResponse,
   MockAgentRunner,
@@ -16,6 +22,7 @@ import type {
 import type { PiAgentConfig } from './pi-agent.js'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 
+export { acpAgent } from './acp-agent.js'
 export { mockAgent } from './mock-agent.js'
 export { piAgent } from './pi-agent.js'
 export {
@@ -25,6 +32,10 @@ export {
 } from '@luddjs/core'
 
 export type {
+  AcpAgentConfig,
+  AcpMcpBridgeConfig,
+  AcpPermissionMode,
+  AcpStdioMcpServerConfig,
   AgentAccessMode,
   AgentMcpConnection,
   AgentRunner,

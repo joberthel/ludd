@@ -224,6 +224,9 @@ importers:
 
   packages/agents:
     dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: ^2.12.0
+        version: 2.12.0(zod@4.6.7)
       '@earendil-works/pi-coding-agent':
         specifier: 1.5.1
         version: 1.5.1(@aws-sdk/credential-provider-node@3.972.94)(@smithy/signature-v4@5.7.5)(ws@8.22.2)(zod@4.6.7)
@@ -320,6 +323,15 @@ importers:
         version: 6.0.3
 
 packages:
+
+  '@agentclientprotocol/sdk@2.12.0':
+    resolution: {integrity: sha512-nSkamfY4Lw9/AVBU5G5V9p82ScXhANDMBybQwcPH/9+euUtZm04/VFUMaLj4gLFEXxQEy+QP1VQiKgSRbYVIPg==}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.4.0
+      zod: ^3.25.76 || ^4.0.0
+    peerDependenciesMeta:
+      '@modelcontextprotocol/server':
+        optional: true
 
   '@alcalzone/ansi-tokenize@0.3.2':
     resolution: {integrity: sha512-GZdcaU9RV2Gn9SAg1hcsSoQ4nIWZfutPqIvxayUYsOzfBPJioJ+aQIXnMJiGDz+35Gg2pskkPxioYnSblPELEw==}
@@ -3474,6 +3486,10 @@ packages:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@agentclientprotocol/sdk@2.12.0(zod@4.6.7)':
+    dependencies:
+      zod: 4.6.7
 
   '@alcalzone/ansi-tokenize@0.3.2':
     dependencies:
