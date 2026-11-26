@@ -1,17 +1,14 @@
-import type { AgentRunner } from '@luddjs/core'
+import { acpAgent, mockAgent } from '@luddjs/agents'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
 
-const dummyAgent: AgentRunner<any, any> = {
-  __kind: 'agent',
-  mode: 'read-only',
+const dummyAgent = mockAgent({
   prompt: 'default-prompt',
-  executeTurn: async () => ({
-    output: { status: 'pass' },
-    sessionId: 's-1',
-  }),
-}
+  responses: [
+    { status: 'pass' },
+  ],
+})
 
 describe('agentGuardrail validation: object and agent', () => {
   it('rejects non-object or null configs', () => {
@@ -26,7 +23,14 @@ describe('agentGuardrail validation: object and agent', () => {
     )
   })
 
-  it('rejects invalid agent runners', () => {
+  it('requires agent at compile time and rejects missing or invalid agent runners', () => {
+    // @ts-expect-error -- agent is strictly required on AgentGuardrailConfig
+    expect(() => agentGuardrail({ prompt: 'hello' })).toThrow(
+      new TypeError('agentGuardrail "agent" must be a valid AgentRunner.'),
+    )
+    expect(() => agentGuardrail({ agent: undefined, prompt: 'hello' } as any)).toThrow(
+      new TypeError('agentGuardrail "agent" must be a valid AgentRunner.'),
+    )
     expect(() => agentGuardrail({ agent: null, prompt: 'hello' } as any)).toThrow(
       new TypeError('agentGuardrail "agent" must be a valid AgentRunner.'),
     )
@@ -44,6 +48,17 @@ describe('agentGuardrail validation: object and agent', () => {
         prompt: 'hello',
       } as any),
     ).toThrow(new TypeError('agentGuardrail "agent" must be a valid AgentRunner.'))
+  })
+
+  it('accepts explicit mockAgent and acpAgent runners', () => {
+    const mockRail = agentGuardrail({ agent: dummyAgent, prompt: 'Review' })
+    expect(mockRail.type).toBe('agent')
+
+    const acpRail = agentGuardrail({
+      agent: acpAgent({ command: 'claude' }),
+      prompt: 'Review',
+    })
+    expect(acpRail.type).toBe('agent')
   })
 })
 

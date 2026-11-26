@@ -12,7 +12,6 @@ import type {
   StepContext,
 } from '@luddjs/core'
 import { randomUUID } from 'node:crypto'
-import { piAgent } from '@luddjs/agents'
 import {
   extractAbortError,
   isAgentRunner,
@@ -35,8 +34,8 @@ export interface AgentGuardrailConfig<
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   bodySchema?: z.ZodType<TBody>
   prompt: DynamicProperty<string, TContext>
-  /** Defaults to `piAgent({ mode, prompt, sessionId: fresh })` from `@luddjs/agents`. */
-  agent?: AgentRunner<any, any>
+  /** Explicit agent runner executed for guardrail verification. */
+  agent: AgentRunner<any, any>
   cwd?: DynamicProperty<string, TContext>
   env?: DynamicProperty<Record<string, string>, TContext>
   pagination?: ExecLogPaginationConfig
@@ -88,7 +87,7 @@ function validateAgentGuardrailConfig<TBody, TContext extends StepContext<any, a
   if (config.name !== undefined && (typeof config.name !== 'string' || config.name.trim() === '')) {
     throw new TypeError('agentGuardrail "name" must be a non-empty string.')
   }
-  if (config.agent !== undefined && !isAgentRunner(config.agent)) {
+  if (!isAgentRunner(config.agent)) {
     throw new TypeError('agentGuardrail "agent" must be a valid AgentRunner.')
   }
   const isValidPrompt = (typeof config.prompt === 'string' && config.prompt.trim() !== '') || typeof config.prompt === 'function'
@@ -204,9 +203,8 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     status: z.enum(['pass', 'fail', 'skip']),
     body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,
   })
-  const agent = config.agent ?? piAgent({ mode, prompt, sessionId })
   const turnResult = await runGuardrailAgentTurn(
-    agent,
+    config.agent,
     input,
     prompt,
     sessionId,

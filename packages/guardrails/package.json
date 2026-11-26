@@ -31,11 +31,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@luddjs/agents": "workspace:*",
     "@luddjs/core": "workspace:*",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@luddjs/agents": "workspace:*",
     "@types/node": "^26.6.6",
     "typescript": "^6.0.3"
   },

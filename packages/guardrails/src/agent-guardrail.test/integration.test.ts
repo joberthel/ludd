@@ -2,6 +2,7 @@ import type { AgentRunner, AgentTurnInput } from '@luddjs/core'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { mockAgent } from '@luddjs/agents'
 import {
   GuardrailMaxRetriesExceededError,
   resolveRunDir,
@@ -12,53 +13,48 @@ import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
 
 function createMainAgent(prompts: string[]): AgentRunner<{ code: string }> {
-  return {
-    __kind: 'agent',
+  const handleTurn = (input: AgentTurnInput) => {
+    prompts.push(input.prompt)
+    return {
+      code: input.attempt === 1
+        ? 'buggy code'
+        : 'fixed clean code',
+    }
+  }
+  return mockAgent({
     mode: 'workspace-write',
     prompt: 'Write code slice',
-    executeTurn: async (input: AgentTurnInput) => {
-      prompts.push(input.prompt)
-      const code = input.attempt === 1
-        ? 'buggy code'
-        : 'fixed clean code'
-      return {
-        output: { code },
-        sessionId: input.sessionId,
-      }
-    },
-  }
+    responses: [handleTurn, handleTurn],
+  })
 }
 
 function createReviewAgent(tracking: { modes: string[], sessionIds: string[] }): AgentRunner<any> {
-  let count = 0
-  return {
-    __kind: 'agent',
+  const recordTurn = (input: AgentTurnInput) => {
+    tracking.modes.push(input.mode)
+    tracking.sessionIds.push(input.sessionId)
+  }
+  return mockAgent({
     mode: 'read-only',
     prompt: 'Review git diff',
-    executeTurn: async (input: AgentTurnInput) => {
-      tracking.modes.push(input.mode)
-      tracking.sessionIds.push(input.sessionId)
-      count++
-      if (count === 1) {
+    responses: [
+      (input) => {
+        recordTurn(input)
         return {
-          output: {
-            status: 'fail',
-            body: {
-              findings: ['Security vulnerability: SQL injection detected'],
-            },
+          status: 'fail',
+          body: {
+            findings: ['Security vulnerability: SQL injection detected'],
           },
-          sessionId: input.sessionId,
         }
-      }
-      return {
-        output: {
+      },
+      (input) => {
+        recordTurn(input)
+        return {
           status: 'pass',
           body: { findings: [] },
-        },
-        sessionId: input.sessionId,
-      }
-    },
-  }
+        }
+      },
+    ],
+  })
 }
 
 async function verifyOffloadedLogs(runDir: string): Promise<void> {
@@ -132,28 +128,24 @@ describe('agentGuardrail integration: retry exhaustion', () => {
   })
 
   it('fails with GuardrailMaxRetriesExceededError when retries exceeded', async () => {
-    const mainAgent: AgentRunner<{ ok: boolean }> = {
-      __kind: 'agent',
+    const mainAgent = mockAgent<{ ok: boolean }>({
       mode: 'workspace-write',
       prompt: 'Task',
-      executeTurn: async input => ({
-        output: { ok: true },
-        sessionId: input.sessionId,
-      }),
-    }
+      responses: [
+        { ok: true },
+        { ok: true },
+      ],
+    })
 
-    const reviewAgent: AgentRunner<any> = {
-      __kind: 'agent',
+    const failVerdict = {
+      status: 'fail',
+      body: { error: 'Always fails' },
+    }
+    const reviewAgent = mockAgent({
       mode: 'read-only',
       prompt: 'Review',
-      executeTurn: async input => ({
-        output: {
-          status: 'fail',
-          body: { error: 'Always fails' },
-        },
-        sessionId: input.sessionId,
-      }),
-    }
+      responses: [failVerdict, failVerdict],
+    })
 
     const rail = agentGuardrail({ maxRetries: 1, prompt: 'Check', agent: reviewAgent })
     const result = await runHarness({

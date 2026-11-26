@@ -3,8 +3,9 @@ import type {
   GuardrailExecutionInput,
   StepContext,
 } from '@luddjs/core'
+import { mockAgent } from '@luddjs/agents'
 import { StepOutputValidationError } from '@luddjs/core'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
 
@@ -34,15 +35,10 @@ function createExecutionInput(): GuardrailExecutionInput {
 }
 
 function makeAgent(output: unknown): AgentRunner<any, any> {
-  return {
-    __kind: 'agent',
-    mode: 'read-only',
+  return mockAgent({
     prompt: 'p',
-    executeTurn: async turnInput => ({
-      output,
-      sessionId: turnInput.sessionId,
-    }),
-  }
+    responses: [output],
+  })
 }
 
 describe('agentGuardrail verdict: pass and skip statuses', () => {
@@ -164,12 +160,14 @@ describe('agentGuardrail verdict: validation errors and exceptions', () => {
   })
 
   it('bubbles up error when agent.executeTurn throws', async () => {
-    const failingAgent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const failingAgent = mockAgent({
       prompt: 'p',
-      executeTurn: vi.fn().mockRejectedValue(new Error('Agent crashed')),
-    }
+      responses: [
+        () => {
+          throw new Error('Agent crashed')
+        },
+      ],
+    })
 
     const rail = agentGuardrail({ agent: failingAgent, prompt: 'p' })
     await expect(rail.execute(createExecutionInput())).rejects.toThrow('Agent crashed')

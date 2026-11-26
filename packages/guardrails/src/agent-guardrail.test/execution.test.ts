@@ -1,12 +1,16 @@
 import type {
-  AgentRunner,
   AgentTurnInput,
   GuardrailExecutionInput,
   StepContext,
 } from '@luddjs/core'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
+import { acpAgent, mockAgent } from '@luddjs/agents'
 import { StepOutputValidationError } from '@luddjs/core'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { agentGuardrail } from '../agent-guardrail.js'
 
 function createDummyContext(): StepContext {
@@ -40,18 +44,14 @@ function createExecutionInput(
 describe('agentGuardrail execution: sessionId and mode', () => {
   it('generates a fresh sessionId on every invocation', async () => {
     const sessionIds: string[] = []
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        sessionIds.push(turnInput.sessionId)
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
+    const recordSession = (turnInput: AgentTurnInput) => {
+      sessionIds.push(turnInput.sessionId)
+      return { status: 'pass' }
     }
+    const agent = mockAgent({
+      prompt: 'p',
+      responses: [recordSession, recordSession],
+    })
 
     const rail = agentGuardrail({ agent, prompt: 'Review' })
     await rail.execute(createExecutionInput())
@@ -65,18 +65,14 @@ describe('agentGuardrail execution: sessionId and mode', () => {
 
   it('defaults mode to "read-only" and allows "workspace-write"', async () => {
     let capturedMode = ''
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedMode = turnInput.mode
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
+    const recordMode = (turnInput: AgentTurnInput) => {
+      capturedMode = turnInput.mode
+      return { status: 'pass' }
     }
+    const agent = mockAgent({
+      prompt: 'p',
+      responses: [recordMode, recordMode],
+    })
 
     const defaultRail = agentGuardrail({ agent, prompt: 'p' })
     await defaultRail.execute(createExecutionInput())
@@ -92,18 +88,15 @@ describe('agentGuardrail execution: cwd, env, and signal handling', () => {
   it('forwards parent step cwd, env, and signal by default', async () => {
     let capturedTurn: AgentTurnInput | undefined
     const controller = new AbortController()
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const agent = mockAgent({
       prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedTurn = turnInput
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
-    }
+      responses: [
+        (turnInput) => {
+          capturedTurn = turnInput
+          return { status: 'pass' }
+        },
+      ],
+    })
 
     const rail = agentGuardrail({ agent, prompt: 'p' })
     await rail.execute(createExecutionInput({
@@ -118,18 +111,14 @@ describe('agentGuardrail execution: cwd, env, and signal handling', () => {
 
   it('applies static and dynamic cwd and env overrides when configured', async () => {
     let capturedTurn: AgentTurnInput | undefined
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedTurn = turnInput
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
+    const captureTurn = (turnInput: AgentTurnInput) => {
+      capturedTurn = turnInput
+      return { status: 'pass' }
     }
+    const agent = mockAgent({
+      prompt: 'p',
+      responses: [captureTurn, captureTurn],
+    })
 
     const staticRail = agentGuardrail({
       agent,
@@ -156,18 +145,14 @@ describe('agentGuardrail execution: cwd, env, and signal handling', () => {
 describe('agentGuardrail execution: MCP context', () => {
   it('passes mcp connection info to agent.executeTurn when configured and omits when empty', async () => {
     const capturedMcp: Array<AgentTurnInput['mcp']> = []
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedMcp.push(turnInput.mcp)
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
+    const recordMcp = (turnInput: AgentTurnInput) => {
+      capturedMcp.push(turnInput.mcp)
+      return { status: 'pass' }
     }
+    const agent = mockAgent({
+      prompt: 'p',
+      responses: [recordMcp, recordMcp],
+    })
 
     const rail = agentGuardrail({ agent, prompt: 'p' })
     await rail.execute(createExecutionInput({
@@ -186,21 +171,18 @@ describe('agentGuardrail execution: MCP context', () => {
   })
 })
 
-describe('agentGuardrail execution: prompt resolution', () => {
+describe('agentGuardrail execution: prompt resolution and ACP runner', () => {
   it('resolves prompt dynamically', async () => {
     let capturedPrompt = ''
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const agent = mockAgent({
       prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedPrompt = turnInput.prompt
-        return {
-          output: { status: 'pass' },
-          sessionId: turnInput.sessionId,
-        }
-      },
-    }
+      responses: [
+        (turnInput) => {
+          capturedPrompt = turnInput.prompt
+          return { status: 'pass' }
+        },
+      ],
+    })
 
     const dynamicRail = agentGuardrail({
       agent,
@@ -211,15 +193,12 @@ describe('agentGuardrail execution: prompt resolution', () => {
   })
 
   it('rejects empty resolved prompt', async () => {
-    const agent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const agent = mockAgent({
       prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => ({
-        output: { status: 'pass' },
-        sessionId: turnInput.sessionId,
-      }),
-    }
+      responses: [
+        { status: 'pass' },
+      ],
+    })
 
     const emptyRail = agentGuardrail({
       agent,
@@ -232,41 +211,90 @@ describe('agentGuardrail execution: prompt resolution', () => {
 
   it('throws abort error rather than StepOutputValidationError when signal aborts mid-turn', async () => {
     const resolvedAbortCtrl = new AbortController()
-    const resolvedAfterAbortAgent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const resolvedAfterAbortAgent = mockAgent({
       prompt: 'p',
-      executeTurn: async (turnInput: AgentTurnInput) => {
-        resolvedAbortCtrl.abort(new Error('guardrail-turn-aborted'))
-        return { output: 'incomplete-non-verdict', sessionId: turnInput.sessionId }
-      },
-    }
+      responses: [
+        () => {
+          resolvedAbortCtrl.abort(new Error('guardrail-turn-aborted'))
+          return 'incomplete-non-verdict'
+        },
+      ],
+    })
     const rail1 = agentGuardrail({ agent: resolvedAfterAbortAgent, prompt: 'p' })
     await expect(
       rail1.execute(createExecutionInput({ signal: resolvedAbortCtrl.signal })),
     ).rejects.toThrow('guardrail-turn-aborted')
 
     const thrownAbortCtrl = new AbortController()
-    const thrownValidationOnAbortAgent: AgentRunner<any, any> = {
-      __kind: 'agent',
-      mode: 'read-only',
+    const thrownValidationOnAbortAgent = mockAgent({
       prompt: 'p',
-      executeTurn: async () => {
-        thrownAbortCtrl.abort(new Error('pi-turn-aborted'))
-        throw new StepOutputValidationError('step-1', undefined, [
-          {
-            code: 'custom',
-            path: ['status'],
-            message: 'missing submission',
-          },
-        ])
-      },
-    }
+      responses: [
+        () => {
+          thrownAbortCtrl.abort(new Error('agent-turn-aborted'))
+          throw new StepOutputValidationError('step-1', undefined, [
+            {
+              code: 'custom',
+              path: ['status'],
+              message: 'missing submission',
+            },
+          ])
+        },
+      ],
+    })
     const rail2 = agentGuardrail({ agent: thrownValidationOnAbortAgent, prompt: 'p' })
     const err = await rail2
       .execute(createExecutionInput({ signal: thrownAbortCtrl.signal }))
       .catch((e: unknown) => e)
     expect(err).not.toBeInstanceOf(StepOutputValidationError)
-    expect((err as Error).message).toBe('pi-turn-aborted')
+    expect((err as Error).message).toBe('agent-turn-aborted')
+  })
+
+  it('executes seamlessly with an explicit acpAgent runner', async () => {
+    const fakeAcpScript = [
+      'import readline from "node:readline";',
+      'const rl = readline.createInterface({ input: process.stdin });',
+      'const send = (m) => process.stdout.write(JSON.stringify(m) + "\\n");',
+      'rl.on("line", (line) => {',
+      '  if (!line.trim()) return;',
+      '  const req = JSON.parse(line);',
+      '  if (req.method === "initialize") send({ jsonrpc: "2.0", id: req.id, result: { protocolVersion: req.params.protocolVersion, agentCapabilities: {} } });',
+      '  else if (req.method === "session/new") send({ jsonrpc: "2.0", id: req.id, result: { sessionId: "acp-sess-1" } });',
+      '  else if (req.method === "session/prompt") {',
+      '    send({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "acp-sess-1", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "{\\"status\\":\\"pass\\",\\"body\\":{\\"checked\\":true}}" } } } });',
+      '    send({ jsonrpc: "2.0", id: req.id, result: { stopReason: "end_turn" } });',
+      '  }',
+      '});',
+    ].join('\n')
+
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-guardrail-acp-'))
+    try {
+      const rail = agentGuardrail({
+        agent: acpAgent({
+          command: process.execPath,
+          args: ['--input-type=module', '-e', fakeAcpScript],
+        }),
+        bodySchema: z.object({
+          checked: z.boolean(),
+        }),
+        prompt: 'Verify build with ACP agent',
+      })
+
+      const verdict = await rail.execute(createExecutionInput({
+        runDir: tmpDir,
+        cwd: tmpDir,
+        mcpServerUrl: '',
+        mcpAuthToken: '',
+      }))
+      expect(verdict).toEqual({
+        status: 'pass',
+        body: { checked: true },
+        rawLog: undefined,
+        logFormat: undefined,
+        pagination: undefined,
+      })
+    }
+    finally {
+      await rm(tmpDir, { recursive: true, force: true })
+    }
   })
 })
