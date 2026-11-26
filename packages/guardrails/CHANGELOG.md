@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.2](https://github.com/joberthel/ludd/compare/guardrails-v0.1.1...guardrails-v0.1.2) (2026-11-26)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @luddjs/core bumped to 0.2.0
+  * devDependencies
+    * @luddjs/agents bumped to 0.2.0
+
 ## [0.1.1](https://github.com/joberthel/ludd/compare/guardrails-v0.1.0...guardrails-v0.1.1) (2026-11-22)
 
 

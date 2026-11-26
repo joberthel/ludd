@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/joberthel/ludd/compare/agents-v0.1.1...agents-v0.2.0) (2026-11-26)
+
+
+### Features
+
+* add ACP session resumption and presets ([622bb70](https://github.com/joberthel/ludd/commit/622bb70d79a418a2a345578475d223dc6daa4061)), closes [#96](https://github.com/joberthel/ludd/issues/96)
+* **agents:** implement AcpAgent runtime, permission modes, and MCP wiring ([2a485cf](https://github.com/joberthel/ludd/commit/2a485cf13e4434b41fe3a6648e7ae3e9459562c6)), closes [#95](https://github.com/joberthel/ludd/issues/95)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @luddjs/core bumped to 0.2.0
+
 ## [0.1.1](https://github.com/joberthel/ludd/compare/agents-v0.1.0...agents-v0.1.1) (2026-11-22)
 
 
