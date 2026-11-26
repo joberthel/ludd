@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0006` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | `Accepted` (Partially amended by [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md)) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
 | **Target Packages** | `@luddjs/core`, `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 5.2, 5.7.2, 5.7.3, 6\) |
+
+> **Amended by ADR-0012 (Turn Circuit Breaker & Telemetry):** Full-chain guardrail restart from index 0 and cumulative per-guardrail `maxRetries` remain unchanged, while the step-level `maxTotalTurns` turn circuit breaker and agent telemetry have been removed in favor of `AbortSignal` cancellation mapped to ACP `session/cancel`. See [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md).
 
 ## **1\. Context and Problem Statement**
 

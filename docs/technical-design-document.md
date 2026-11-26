@@ -13,7 +13,7 @@
 | **Decision Owner** | Johannes Berthel (Final sign-off & veto authority) |
 | **Decision Needed By** | N/A (Approved) |
 | **Cost of Delay** | Continued reliance on non-deterministic interactive agent sessions; inability to safely parallelize multi-slice feature development; potential API churn across `@luddjs/core`, `@luddjs/agents`, and `@luddjs/guardrails`. |
-| **Pays For It (Build / Maintenance / On-Call)** | Core Maintainer(s) of `@luddjs/*` (Engine, Pi SDK adapter, host execution runtime, IPC protocol maintenance). |
+| **Pays For It (Build / Maintenance / On-Call)** | Core Maintainer(s) of `@luddjs/*` (Engine, ACP agent adapter, host execution runtime, IPC protocol maintenance). |
 | **Executes** | Core Maintainer(s) & Early Adopter Workflow Authors. |
 | **Reviewers per System Boundary** | 1\. Core State Machine & IPC (`@luddjs/core`) — Core Maintainer 2\. Host Execution & Isolation (`@luddjs/core`) — Infrastructure Lead 3\. Frontend / TUI / CLI Consumers — TUI Maintainer |
 | **Related Artifacts** | Original Draft (`ludd — Technical Design Document`); Target ADRs (see Section 10.3). |
@@ -59,7 +59,7 @@ To separate established design facts from unproven assumptions and open architec
 
 To prevent scope creep and the Second-System Effect, `ludd` explicitly does not aim to do the following:
 
-1. **Not an LLM or Coding Agent Implementation \[DECISION\]:** `ludd` does not implement its own foundational coding agent loop or LLM prompt routing; it orchestrates external agent SDKs (initially standardizing on the **Pi SDK** via `@luddjs/agents`).  
+1. **Not an LLM or Coding Agent Implementation \[DECISION\]:** `ludd` does not implement its own foundational coding agent loop or LLM prompt routing; it orchestrates external ACP-compatible coding agents via the open **Agent Client Protocol (ACP)** in `@luddjs/agents` (`acpAgent`, `claudeAcp`, `codexAcp`, `agyAcp`).  
 2. **Not a Proprietary DSL or YAML Workflow Engine \[DECISION\]:** `ludd` will not invent a YAML syntax, expression parser, or proprietary sub-workflow templating language. Composition is handled via native TypeScript (`harness.config.ts`).  
 3. **Not a Distributed Cloud Cluster Scheduler \[DECISION\]:** `ludd` is designed as a single-host (local workstation or dedicated CI VM) orchestrator executing directly on the host with optional user-defined `setup`/`teardown` isolation hooks (such as DIY Git worktrees)—not a multi-node Kubernetes cluster orchestrator.  
 4. **No Implicit Git Magic \[DECISION\]:** `ludd` will never perform hidden automatic Git commits, branch rebases, or destructive working tree resets behind the workflow author's back.
@@ -82,10 +82,10 @@ When evaluating design alternatives or resolving implementation ambiguities, con
 
 | Option | Description | Pros | Cons & Why Rejected / Accepted |
 | :---- | :---- | :---- | :---- |
-| **Option A: Baseline ("Do Nothing")** | Run interactive coding agents (Codex, Claude Code, Pi) directly in terminals using static markdown instructions (`AGENTS.md` / `CLAUDE.md`). | Zero framework build cost; immediate start; no orchestrator maintenance. | **Rejected:** Markdown instructions are advisory, not enforced. Agents skip `phpstan`/`phpunit`, flood context windows with logs, require constant developer babysitting, and cannot run in parallel without Git/DB collisions. |
+| **Option A: Baseline ("Do Nothing")** | Run interactive coding agents (Codex, Claude Code, Agy) directly in terminals using static markdown instructions (`AGENTS.md` / `CLAUDE.md`). | Zero framework build cost; immediate start; no orchestrator maintenance. | **Rejected:** Markdown instructions are advisory, not enforced. Agents skip `phpstan`/`phpunit`, flood context windows with logs, require constant developer babysitting, and cannot run in parallel without Git/DB collisions. |
 | **Option B: Pure Agentic Multi-Agent Graph** *(e.g., LangGraph / CrewAI / AutoGen style)* | Model the pipeline as a conversational graph where a "Supervisor Agent" decides when to call a "Coder Agent" and a "QA Agent". | Flexible, dynamic routing for unstructured exploratory tasks. | **Rejected:** Violates **Constraint \#1**. Using an LLM supervisor to decide whether deterministic tools (`phpstan`, `phpunit`) should run—or whether their output passes—wastes tokens, adds latency, and reintroduces non-determinism into verification gates. |
 | **Option C: Local CI/CD YAML Runners** *(e.g., `act` / GitHub Actions locally)* | Express workflows as YAML DAGs executed inside local Docker containers. | Familiar CI syntax; existing ecosystem of reusable steps. | **Rejected:** CI runners are stateless and non-interactive. They lack native concepts for resuming stateful LLM `sessionId` threads, self-healing retry loops that restart guardrail chains from index 0, interactive `humanReviewGuardrail` sockets, and context-friendly MCP log offloading. |
-| **Option D: `ludd` Deterministic TypeScript Harness** *(Recommended)* | Headless Node.js state machine configured via TypeScript (`harness.config.ts`), combining polymorphic steps (`piAgent` or TS callbacks), an embedded HTTP/SSE MCP server, and `control.sock` JSON-RPC IPC. | Enforces hard verification gates (Constraint \#1), isolates parallel runs (Constraint \#2), keeps logs out of prompts via MCP, and allows TUI/GUI/CLI clients to attach/detach at will (Constraint \#4). | **Accepted.** **Accepted Trade-Offs:** 1\. Higher initial engineering complexity (maintaining custom IPC and MCP server). 2\. Requires workflow authors to write TypeScript configurations, author any DIY `setup`/`teardown` worktree hooks, and explicitly declare Git checkpoints rather than relying on zero-config defaults. |
+| **Option D: `ludd` Deterministic TypeScript Harness** *(Recommended)* | Headless Node.js state machine configured via TypeScript (`harness.config.ts`), combining polymorphic steps (`acpAgent`/`claudeAcp`/`codexAcp`/`agyAcp` or TS callbacks), an embedded HTTP/SSE MCP server (bridged via `ludd mcp-bridge`), and `control.sock` JSON-RPC IPC. | Enforces hard verification gates (Constraint \#1), isolates parallel runs (Constraint \#2), keeps logs out of prompts via MCP, and allows TUI/GUI/CLI clients to attach/detach at will (Constraint \#4). | **Accepted.** **Accepted Trade-Offs:** 1\. Higher initial engineering complexity (maintaining custom IPC and MCP server). 2\. Requires workflow authors to write TypeScript configurations, author any DIY `setup`/`teardown` worktree hooks, and explicitly declare Git checkpoints rather than relying on zero-config defaults. |
 
 ---
 
@@ -107,7 +107,7 @@ When evaluating design alternatives or resolving implementation ambiguities, con
 |  | Deterministic State Machine |<--->| .harness/runs/<runId>/                  |  |
 |  | - Step Lifecycle (run / if) |     | - state.json (Rehydration Snapshot)     |  |
 |  | - Sequential Matrix Engine  |     | - ledger.jsonl (High-Level Event Log)   |  |
-|  | - Guardrail Engine (0..N)   |     | - streams/<sessionId>.jsonl (Telemetry) |  |
+|  | - Guardrail Engine (0..N)   |     | - streams/<sessionId>.jsonl (Updates)   |  |
 |  +--------------+--------------+     | - control.sock (Unix Socket / Pipe)     |  |
 |                 |                    +-----------------------------------------+  |
 |                 v                                                                 |
@@ -117,15 +117,16 @@ When evaluating design alternatives or resolving implementation ambiguities, con
 |  | - Context-Friendly Offloading (beforeStep outputs & failing CLI logs)       |  |
 |  +-----------------------------------+-----------------------------------------+  |
 +--------------------------------------|--------------------------------------------+
-                                       | Localhost HTTP/SSE (127.0.0.1)
+                                       | HTTP (127.0.0.1) <-> ludd mcp-bridge (stdio)
                                        v
 +-----------------------------------------------------------------------------------+
 | Host Execution Context (Explicit cwd / env + Optional setup / teardown Worktree)  |
-|  +-----------------------------------+  +--------------------------------------+  |
-|  | AI Worker (@luddjs/agents: Pi SDK)|  | Guardrail Processes (@luddjs/guardrails)| |
-|  | - Mode: read-only | workspace-write|  | - execGuardrail (host-exec spawn)    | |
-|  | - Scoped cwd / env                |  | - agentGuardrail / fnGuardrail       | |
-|  +-----------------------------------+  +--------------------------------------+  |
+|  +--------------------------------------+  +--------------------------------------+  |
+|  | AI Worker (@luddjs/agents: ACP)      |  | Guardrails (@luddjs/guardrails)      |  |
+|  | - readOnly | acceptEdits | bypass    |  | - execGuardrail (host-exec spawn)    |  |
+|  | - Scoped cwd / env                   |  | - agentGuardrail (explicit agent)    |  |
+|  |                                      |  | - fnGuardrail / humanReview          |  |
+|  +--------------------------------------+  +--------------------------------------+  |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -138,9 +139,9 @@ To eliminate ambiguity during crash recovery and concurrent execution, every dat
 | **Workflow Definition** | Host Orchestrator (`@luddjs/core`) | `harness.config.ts` | Read-only at run initialization; evaluated dynamically via `StepContext` callbacks. |
 | **Active Execution Pointer** | Host State Machine | `.harness/runs/<runId>/state.json` | Mutated atomically by the host orchestrator after every state transition. Authoritative for crash rehydration. |
 | **Audit & Lifecycle History** | Host State Machine | `.harness/runs/<runId>/ledger.jsonl` | Strictly append-only JSON Lines written by the host orchestrator. |
-| **Token-Level Agent Telemetry** | Agent Adapter (`@luddjs/agents`) | `.harness/runs/<runId>/streams/<sessionId>.jsonl` | Strictly append-only per-session stream; referenced via pointer event in `ledger.jsonl`. |
-| **Step Artifacts (`spec.md`, `todos.json`) & Offloaded Guardrail Logs** | Embedded Host MCP Server | `.harness/runs/<runId>/artifacts/` & `.harness/runs/<runId>/logs/` | Written/read via MCP tool calls (`put_artifact`, `get_artifact`) and host guardrail offloader; validated against Zod schemas. |
-| **Source Code & Git History** | Explicit Host Workspace (or DIY `setup` Worktree) | Host Filesystem / Worktree (`cwd`) | Modified only by agents in `workspace-write` mode or explicit `execGuardrail` commands. `.harness/runs/` is strictly blacklisted by SDK path guards. |
+| **Agent Session Stream Events** | Agent Adapter (`@luddjs/agents`) | `.harness/runs/<runId>/streams/<sessionId>.jsonl` | Strictly append-only per-session stream of normalized ACP `session/update` events (`thought`, `tool_call`, `message_chunk`); token/cost telemetry is omitted per ADR-0012. |
+| **Step Artifacts (`spec.md`, `todos.json`) & Offloaded Guardrail Logs** | Embedded Host MCP Server | `.harness/runs/<runId>/artifacts/` & `.harness/runs/<runId>/logs/` | Written/read via MCP tool calls (`put_artifact`, `get_artifact`, bridged via `ludd mcp-bridge` for ACP agents) and host guardrail offloader; validated against Zod schemas. |
+| **Source Code & Git History** | Explicit Host Workspace (or DIY `setup` Worktree) | Host Filesystem / Worktree (`cwd`) | Modified by agents when ACP `permissionMode` permits (`'acceptEdits'` / `'bypassPermissions'`) or explicit `execGuardrail` commands; agent filesystem enforcement is delegated to the external ACP CLI. |
 
 ### 5.3 System Purpose and Core Principles
 
@@ -153,7 +154,7 @@ To eliminate ambiguity during crash recovery and concurrent execution, every dat
 
 Each workflow is structured into sequential steps governed by a strict Input and Output contract:
 
-* **Polymorphic Execution (`run`) \[DECISION\]:** Execution within a step is handled via a unified `run` property that accepts either an AI agent instance (e.g., `piAgent(...)`) or a purely deterministic TypeScript callback function (`async (ctx) => { ... }`).  
+* **Polymorphic Execution (`run`) \[DECISION\]:** Execution within a step is handled via a unified `run` property that accepts either an AI agent instance (e.g., `claudeAcp(...)`, `codexAcp(...)`, `agyAcp(...)`, `acpAgent(...)`) or a purely deterministic TypeScript callback function (`async (ctx) => { ... }`).  
 * **Bounded Agent Autonomy \[DECISION\]:** When an AI agent is invoked, its autonomy is strictly bounded to that specific step: it receives the defined input context and works solely toward producing the required output (structured return schemas and/or validated MCP artifacts) so the step turns "green" and the state machine can advance to the next stage.  
 * **Conditional Step Execution (`if`) \[DECISION\]:** Steps support an optional `if: (ctx) => boolean | Promise<boolean>` predicate (which can execute simple logic or even invoke a lightweight decision agent). If the condition evaluates to `false`, the state machine marks the step as `skipped` in the ledger and sets its output to `undefined` for downstream steps.  
 * **Code-First Workflow Composition \[DECISION\]:** Because workflows are authored in standard TypeScript (`harness.config.ts`), reusable step sequences (such as triage flows or PR creation steps) are composed natively using standard TypeScript array helper functions and spread operators without requiring proprietary sub-workflow engines. Similarly, global workflow inputs (CLI arguments, environment variables, or external files) can be read directly via standard Node.js APIs inside the configuration callbacks.
@@ -174,21 +175,22 @@ Within each isolated run directory, the runner maintains:
 1. **`state.json` (Scoped Run Snapshot) \[DECISION\]:** Captures the exact state of that specific runner instance after every transition. This includes the `runId`, the active workflow `stepId`, the current `matrixIndex`, self-healing retry counters, and active agent `sessionIds`. To prevent corrupted state files on abrupt process termination (`SIGKILL`, OOM, or power loss), `state.json` is always mutated via an atomic write-and-rename operation (`state.json.tmp` \-\> `fs.renameSync('state.json')`).  
 2. **`ledger.jsonl` (Per-Run Append-Only Event Stream) \[DECISION\]:** Records high-level state transitions, guardrail verdicts, human gate prompts, and teardown events (`run.teardown`) as an immutable JSON Lines stream. Every entry follows a standardized envelope schema:  
    `{ schemaVersion, timestamp, runId, stepId, matrixIndex?, eventType, payload }`  
-3. **`streams/<sessionId>.jsonl` (Dedicated Agent Telemetry Streams) \[DECISION\]:** To prevent token-level agent telemetry from bloating `ledger.jsonl`, detailed agent activity (thoughts, live tool invocations, file reads/writes, and message chunks) is written to dedicated per-session stream files. The main `ledger.jsonl` emits a lightweight reference event pointing frontends to the active stream file for deep live inspection.  
+3. **`streams/<sessionId>.jsonl` (Dedicated Agent Session Streams) \[DECISION\]:** To prevent high-frequency agent stream updates from bloating `ledger.jsonl`, normalized ACP `session/update` notifications (`thought`, `tool_call`, `message_chunk`) are written to dedicated per-session stream files via `acp-stream.ts`. Token usage and cost telemetry are intentionally omitted (ADR-0012).  
 4. **`control.sock` & `runner.pid` (Bidirectional Headless IPC & Process Liveness) \[DECISION\]:** When a runner starts, it writes its OS process ID to a dedicated `.harness/runs/<runId>/runner.pid` file. When a workflow pauses at a Human-in-the-Loop gate or a max-retry escalation prompt, the headless Node.js runner process stays alive in the background (waiting on an unresolved `Promise` at 0% CPU) and listens on a local Unix Domain Socket (`.harness/runs/<runId>/control.sock`, or a Named Pipe on Windows). External frontends (TUI, GUI, CLI) connect to this socket via JSON-RPC 2.0 to resolve gates (`gate.resolve`), inject user feedback, or abort runs. If a runner crashes without unlinking `control.sock`, subsequent runs or frontends check `runner.pid` against active OS processes (e.g., via `process.kill(pid, 0)`): if the PID is no longer alive, stale `control.sock` and `runner.pid` files are safely removed so the run can be restarted/rehydrated without `EADDRINUSE` collisions.  
-5. **Crash Recovery & Rehydration \[DECISION\]:** If the runner process is interrupted (`SIGINT`, system reboot, or crash) while mid-step or waiting at a gate, resuming the run rehydrates the state machine directly from `state.json`. The orchestrator invokes any configured `setup(ctx)` hook (authored idempotently when reusing an existing worktree) and resolves the host `cwd` and `env`, then resumes at the exact `stepId` and `matrixIndex` and passes the existing agent `sessionId` back to the SDK without destructively resetting the workspace, allowing the agent to continue seamlessly where it left off.
+5. **Crash Recovery & Rehydration \[DECISION\]:** If the runner process is interrupted (`SIGINT`, system reboot, or crash) while mid-step or waiting at a gate, resuming the run rehydrates the state machine directly from `state.json`. The orchestrator invokes any configured `setup(ctx)` hook (authored idempotently when reusing an existing worktree) and resolves the host `cwd` and `env`, then resumes at the exact `stepId` and `matrixIndex` and passes the existing agent `sessionId` (`previousSessionId`) back to the ACP adapter without destructively resetting the workspace. When the ACP agent advertises `agentCapabilities?.loadSession === true`, `acpAgent` resumes via `session/load`; otherwise it starts a fresh `session/new` without synthetic fallback.
 
-#### 5.4.3 Internal HTTP/SSE MCP Server for Artifacts and Logs
+#### 5.4.3 Internal HTTP/SSE MCP Server and `ludd mcp-bridge` for Artifacts and Logs
 
-* **\[DECISION\]** Rather than relying on agents to write workflow artifacts (such as `spec.md` or `todos.json`) directly to the local filesystem—which would violate read-only sandbox constraints during discovery phases—the host orchestrator runs an embedded HTTP/SSE Model Context Protocol (MCP) Server bound to a free ephemeral host port.  
-* **S3-Like Scoped Artifact Store \[DECISION\]:** Agents interact with the MCP server via structured tool calls (e.g., `put_artifact`, `get_artifact`) to read and write step artifacts scoped to the current `runId`. Because the MCP server runs in the host orchestrator and listens via HTTP/SSE on an ephemeral port, steps and agents running in isolated host directories or worktrees reach it uniformly over localhost.  
+* **\[DECISION\]** Rather than relying on agents to write workflow artifacts (such as `spec.md` or `todos.json`) directly to the local filesystem—which would violate read-only permission boundaries during discovery phases—the host orchestrator runs an embedded HTTP/SSE Model Context Protocol (MCP) Server bound to a free ephemeral host port (`127.0.0.1`).  
+* **`stdio` MCP Bridge (`ludd mcp-bridge`, ADR-0012) \[DECISION\]:** Because ACP v1 mandates only the `stdio` transport for `mcpServers` and external ACP agents spawn MCP servers as child processes without access to the running worker's in-memory state (such as interactive `ask_user` gates), `@luddjs/cli` provides `ludd mcp-bridge` (`packages/cli/src/mcp-bridge/`). `acpAgent` attaches a `stdio` MCP server entry named `'ludd'` (`ludd mcp-bridge --endpoint <url>`) with `LUDD_MCP_TOKEN` passed in `env`, forwarding newline-delimited JSON-RPC between `stdin`/`stdout` and the embedded core HTTP MCP server.  
+* **S3-Like Scoped Artifact Store \[DECISION\]:** Agents interact with the MCP server via structured tool calls (e.g., `put_artifact`, `get_artifact`) to read and write step artifacts scoped to the current `runId`.  
 * **Deterministic Output & Artifact Validation \[DECISION\]:** Steps can declare expected output artifacts alongside validation rules (such as non-empty checks, custom validator functions, or strict Zod schemas for JSON artifacts like `todos.json`). In addition, steps can enforce a direct Zod `outputSchema` on the agent's final response. If any artifact is missing or fails schema validation, the harness rejects the completion and enters the self-healing loop.  
 * **Context-Friendly Log & Context Offloading \[DECISION\]:** Outputs from `beforeStep` guardrails and raw CLI logs from failing `afterStep` `execGuardrails` (which can easily exceed tens of thousands of lines) are automatically stored in the MCP server. Instead of flooding the agent's context window with raw stack traces, the harness sends a concise notification prompt containing the MCP URI/key so the agent can query and inspect the logs on demand.  
 * **Format-Aware MCP Log & Output Pagination \[DECISION\]:** To prevent large offloaded outputs (such as a 50,000-line test log or a massive JSON static analysis report) from flooding the agent's context window when queried via MCP, the embedded MCP server enforces format-aware pagination:  
   * **Multiline Plain-Text Logs (`text`):** Automatically paginated by line breaks (`\n`). Agents query bounded line ranges or pages (e.g., via `read_log_page` / `read_log_lines` and `search_log`) rather than pulling the entire raw text blob at once.  
   * **Structured JSON Outputs (`json`):** Guardrails can configure structured array pagination via a property key/path or a selector callback function (e.g., `pagination: { key: 'errors' }` or `pagination: (data) => data.files`). The MCP server extracts the target array from the JSON payload and serves paginated item slices alongside summary metadata (such as total item count).  
 * **Disk Persistence of MCP Artifacts & Offloaded Logs \[DECISION\]:** All MCP artifacts and offloaded guardrail logs are persisted on disk under `.harness/runs/<runId>/artifacts/<artifactKey>` and `.harness/runs/<runId>/logs/<stepId>[-m<matrixIndex>]-<attempt>-<phase>-<guardrailIndex>.log` (plus `.items.json` for JSON-paginated logs, indexed in `state.json`), ensuring they survive runner process restarts and crash rehydration.  
-* **Per-Run Bearer Token Authentication & Strict Interface Binding \[DECISION\]:** At the start of each workflow run, the host orchestrator generates a cryptographic per-run Bearer token (`MCP_AUTH_TOKEN`), injects it into step and guardrail execution contexts (`MCP_SERVER_URL`, `MCP_AUTH_TOKEN`), and requires `Authorization: Bearer <token>` on all HTTP/SSE MCP requests. Furthermore, the embedded MCP server binds strictly to `127.0.0.1` (never `0.0.0.0`), preventing unauthorized network clients from accessing or tampering with another run's artifacts or logs.
+* **Per-Run Bearer Token Authentication & Strict Interface Binding \[DECISION\]:** At the start of each workflow run, the host orchestrator generates a cryptographic per-run Bearer token (`authToken`), injects it into ACP `ludd mcp-bridge` subprocesses via `LUDD_MCP_TOKEN` (and into `execGuardrail` subprocesses via `MCP_SERVER_URL` / `MCP_AUTH_TOKEN`), and requires `Authorization: Bearer <token>` on all HTTP/SSE MCP requests. Furthermore, the embedded MCP server binds strictly to `127.0.0.1` (never `0.0.0.0`), preventing unauthorized network clients from accessing or tampering with another run's artifacts or logs.
 
 #### 5.4.4 Worker Lifecycle, Dynamic Properties (`StepContext`), and Session Reuse
 
@@ -205,8 +207,9 @@ Within each isolated run directory, the runner maintains:
 
 * **RunLifecycleContext Contract \[DECISION\]:** Run-level `cwd`, `env`, `setup`, and `teardown` callbacks receive `{ runId, workspaceRoot, signal }`, allowing authors to isolate workspaces and environment variables deterministically per `runId`.
 * **Session Capture & Declarative Reuse \[DECISION\]:** When an agent step finishes, the state machine captures its resulting `sessionId` as part of the step's output. Subsequent steps—or subsequent iterations within a sequential matrix—can declaratively pass a static configuration or a callback (`sessionId: (ctx) => ...`) to either spawn a fresh agent session or resume a prior conversation thread.  
-* **Initial Technology Focus (Pi SDK) \[DECISION\]:** The initial implementation standardizes strictly around the **Pi SDK** (`@luddjs/agents`). Additional agent runtimes can be plugged in later via clean adapter interfaces.
-* **`piAgent` Adapter \[DECISION\]:** `piAgent({ mode, prompt, sessionId?, model?, sessionFactory? })` wraps `@earendil-works/pi-coding-agent` behind the unchanged `AgentRunner` contract. Each turn receives `{ cwd, env, signal, mcpServerUrl, mcpAuthToken }` from `@luddjs/core` and creates a session with `createAgentSession({ cwd, sessionManager })`, persisted at `<runDir>/pi-sessions/<sessionId>.jsonl` (resumed when the file exists, so `sessionId: (ctx) => ctx.steps[...].output.sessionId` continues the thread). `message_update` maps to `thought`/`message_chunk` and `tool_execution_*` to `tool_call` events appended to `streams/<sessionId>.jsonl`; the turn resolves only after `agent_settled` (the harness then emits `turn.completed`). On run abort, `AgentTurnInput.signal` fires and the adapter calls `session.abort()`. Unit tests inject a `PiSessionFactory` and never reach a real LLM.
+* **ACP Standardization (`@luddjs/agents`, ADR-0012) \[DECISION\]:** `@luddjs/agents` standardizes exclusively on the open **Agent Client Protocol (ACP)** (JSON-RPC 2.0 over `stdio`, built on `@agentclientprotocol/sdk`) for production runs, exposing `acpAgent(config)` alongside thin presets `claudeAcp(options?)`, `codexAcp(options?)`, and `agyAcp(options?)` (`['--acp']` by default). Direct Pi SDK support has been removed.  
+* **Capability-Driven `loadSession` Without Fallback \[DECISION\]:** During the ACP `initialize` handshake, `acpAgent` inspects `agentCapabilities?.loadSession`. When `true` and a `previousSessionId` is provided (from retry, rehydration, or step `sessionId`), it invokes ACP `session/load`; when unsupported or absent, it starts a fresh `session/new` without implementing any synthetic rehydration fallback.  
+* **Uniform Cancellation (`AbortSignal` \-\> ACP `session/cancel`) \[DECISION\]:** Each turn receives `{ cwd, env, signal, mcp, outputSchema, previousSessionId }`. When `signal` aborts, `acpAgent` sends an ACP `session/cancel` notification for the active `sessionId`, awaits graceful exit up to `shutdownTimeoutMs` (default `5000` ms), and terminates the child process tree if the timeout expires. Unit and E2E tests inject a local fake ACP server or `mockAgent` and never call live LLMs.
 
 ---
 
@@ -233,18 +236,14 @@ Within each isolated run directory, the runner maintains:
 
 ---
 
-## 5.6 Sandbox Model, Permissions, and Secret Management
+## 5.6 Permission Model, Host Execution, and Secret Management
 
-### 5.6.1 Agent Access Modes and Host Path Guards
+### 5.6.1 Delegated ACP Permissions, `ludd mcp-bridge`, and Structured Output
 
-* **\[DECISION\]** With `@luddjs/environments` removed (**ADR-0013**), `@luddjs/*` no longer manages Docker containers or VM sandboxes; projects requiring container isolation run `ludd` inside an external container/VM or wrap commands in `harness.config.ts`. Within the host runtime, `piAgent` enforces SDK-level access modes:  
-  1. **SDK-Level Access Modes (`read-only` vs. `workspace-write`) \[DECISION\]:** Configured directly on the agent instance (`piAgent({ mode: 'read-only' | 'workspace-write' })`). In `read-only` mode (used for triage, specification, or code review), the SDK blocks file modifications while still permitting the agent to write structured artifacts to the host's MCP server. In `workspace-write` mode, the agent can modify code within its assigned `cwd`. Protected paths (such as `.harness/runs/` and `.git/hooks/`) remain blacklisted at all times.
-
-* **`read-only` SDK Enforcement \[DECISION\]:** `piAgent` read-only sessions are created with `excludeTools: ['write', 'edit', 'bash']` and a `tool_call` extension hook that rejects those tools and routes every `path` argument through `assertSafeWorkspacePath` (`@luddjs/agents`). The guard resolves symlinks via `realpath` (nearest existing parent for nonexistent targets), always forbids `.harness/runs` and `.git/hooks`, and rejects workspace escapes unless `dangerMode` is set. Violations throw `SandboxViolationError` (`@luddjs/agents`). MCP tools remain available.
-
-* **`workspace-write` SDK Enforcement \[DECISION\]:** `piAgent` workspace-write sessions install a `tool_call` extension (`workspaceWriteExtension`) intercepting `read`, `write` and `edit` (their `path` goes through `assertSafeWorkspacePath`; violations throw `SandboxViolationError`) and `bash` (commands referencing `.harness/runs/` or `.git/hooks/` are rejected). The `bash` string matching is **best-effort only**; users requiring hard OS-level isolation run `ludd` inside an external container or VM.
-* **Authenticated MCP Tool Bridge \[DECISION\]:** When `AgentTurnInput.mcpServerUrl` is set, `piAgent` registers Pi `customTools` generated from the embedded server's own `MCP_TOOLS_LIST` (`put_artifact`, `get_artifact`, `list_artifacts`, `read_log_page`, `read_log_lines`, `search_log`), so names and schemas cannot drift. Each call is a JSON-RPC `tools/call` POST to `mcpServerUrl` with `Authorization: Bearer <mcpAuthToken>`; server-side `isError` results, JSON-RPC errors and non-2xx responses are thrown so Pi reports a failed tool call. The tools are registered in both access modes (they are the only write channel of `read-only` steps), and the read-only path guard exempts bridge tools because their arguments are not filesystem paths (a schema field named `path` must not be path-checked).
-* **`submit_step_output` \[DECISION\]:** `AgentTurnInput.outputSchema` (the step's Zod `outputSchema`, set by `agent-executor.ts` only when declared) makes `piAgent` expose `submit_step_output`. Its parameters are `z.toJSONSchema(schema, { io: 'input' })` (without `$schema`; non-object schemas are wrapped under a `value` key because tool parameters must be objects). Each call is `safeParse`d: invalid payloads throw the Zod issues (`path: message` lines) as a tool error so the model corrects itself in the same turn; valid payloads are captured and the last valid one is returned as the turn output (the raw submitted value, not the parsed one, so the host-side `validateStepOutput` remains the single transforming parse). If the turn reaches `agent_settled` without a valid submission, `piAgent` throws `StepOutputValidationError`, which `runHarness()` self-healing handles as an `output_schema_validation_failed` retry (`attempt++`). **Raw JSON in the last assistant text is deliberately not accepted as a fallback:** it would make the output channel ambiguous and let partially-valid prose leak into typed outputs; the explicit tool call is the single contract. Steps without an `outputSchema` keep returning the last assistant text.
+* **\[DECISION\]** With `@luddjs/environments` removed (**ADR-0013**) and in-process agent security extensions removed (**ADR-0012**), `@luddjs/*` delegates workspace sandboxing to the external ACP agent runtime and host OS isolation; projects requiring hard container isolation run `ludd` inside an external container/VM or wrap commands in `harness.config.ts`. Within `@luddjs/agents`, `acpAgent` enforces declarative `AcpPermissionMode` rules:
+  1. **ACP Permission Modes (`AcpPermissionMode`) \[DECISION\]:** Configured via `permissionMode?: 'readOnly' | 'acceptEdits' | 'bypassPermissions'` (defaulting to `'readOnly'`). `resolveAgentAccessMode` maps `'readOnly'` to `AgentAccessMode = 'read-only'` and `'acceptEdits'` / `'bypassPermissions'` to `'workspace-write'`. During ACP `session/request_permission`, `'readOnly'` allows only `read`, `search`, `fetch`, and `think` tool kinds; `'acceptEdits'` additionally allows `edit`, `move`, and `delete`; `'bypassPermissions'` allows all tool kinds. Disallowed requests are answered with a `reject_once`/`reject_always` option (or `cancelled` if no reject option exists).
+* **Authenticated `stdio` MCP Bridge (`ludd mcp-bridge`) \[DECISION\]:** When `AgentTurnInput.mcp` (`AgentMcpConnection`: `{ url, authToken }`) is set, `buildMcpBridgeServerConfig` attaches a `stdio` MCP server entry (`AcpStdioMcpServerConfig`) named `'ludd'` to `session/new` and `session/load`. It resolves explicit `mcpBridge`, then `process.env.LUDD_CLI_BIN`, then `'ludd'`, passing `['mcp-bridge', '--endpoint', mcp.url]` and `{ name: 'LUDD_MCP_TOKEN', value: mcp.authToken }` in `env` (never passing the token in CLI args). `ludd mcp-bridge` proxies newline-delimited JSON-RPC over `stdin`/`stdout` to the embedded core HTTP MCP server (`put_artifact`, `get_artifact`, `list_artifacts`, `read_log_page`, `read_log_lines`, `search_log`, and `ask_user` when `interactive: true`).
+* **Structured Output Validation (`outputSchema`) \[DECISION\]:** When `AgentTurnInput.outputSchema` is declared, `buildPromptWithSchema` appends the JSON Schema contract (`z.toJSONSchema`) to the prompt. After `session/prompt` completes, `resolveStructuredOutput` extracts JSON (from raw text or fenced code blocks) from the accumulated assistant message text and parses it with `outputSchema.safeParse`. Missing or invalid JSON throws `StepOutputValidationError`, which `agent-executor.ts` handles via the self-healing retry loop (`output_schema_validation_failed`, `attempt++`). Steps without an `outputSchema` return the accumulated assistant text directly.
 
 ### 5.6.2 Host Execution & Opt-In Secret Sanitization (Amendment to ADR-0007)
 
@@ -268,7 +267,7 @@ Within each isolated run directory, the runner maintains:
 ### 5.7.2 Lifecycle Execution (`beforeStep` vs. `afterStep`) and Self-Healing Loops
 
 1. **`beforeStep` Guardrails (Context Collection & Setup) \[DECISION\]:** Executed sequentially before the step's main `run` action. Rather than halting the pipeline on non-zero states, `beforeStep` guardrails store their outputs/verdicts in the MCP server and pass an MCP reference prompt to the agent so it can inspect the collected context (such as user feature descriptions or `git status` outputs). If a workflow author genuinely wants a `beforeStep` check to hard-abort the entire run, they throw an `Error` inside the guardrail callback.  
-   * **Typed Step Factories:** `beforeStep` may be a factory (`beforeStep: (ctx) => [...]`) and `run` may be a factory that returns an agent runner (`run: (ctx) => piAgent({ prompt: ... })`). Both receive the typed prior-step and matrix context, so values can be interpolated at the step boundary without nested dynamic-property callbacks. Ordinary `run: (ctx) => output` callbacks remain supported.
+   * **Typed Step Factories:** `beforeStep` may be a factory (`beforeStep: (ctx) => [...]`) and `run` may be a factory that returns an agent runner (`run: (ctx) => claudeAcp({ permissionMode: 'acceptEdits', prompt: ... })`). Both receive the typed prior-step and matrix context, so values can be interpolated at the step boundary without nested dynamic-property callbacks. Ordinary `run: (ctx) => output` callbacks remain supported.
    * **Before-Step Results:** `beforeStep` may return an array or a named object of guardrails. The runner collects each verdict body's value in `ctx.beforeStep` (by index for arrays, by key for objects), with the body type inferred from each guardrail. These values are checkpointed so a resumed step can use them without rerunning completed guardrails.
 2. **`afterStep` Guardrails & Full-Chain Re-Execution \[DECISION\]:** Executed sequentially after the step's main `run` action completes.  
    * **Typed Guardrail Factories:** When a guardrail prompt needs the current step's output, define `afterStep` as a factory (`afterStep: (ctx) => [...]`). Its `ctx.step.output` is inferred from that step's `outputSchema`; this keeps the schema as the single source of truth. A callback nested inside a generic guardrail factory cannot receive contextual typing from the sibling `outputSchema` property.
@@ -276,7 +275,7 @@ Within each isolated run directory, the runner maintains:
    * If any guardrail returns `fail`, the harness enters a **self-healing feedback loop**: raw logs or review feedback are written to the MCP server, and the active agent session is resumed with a prompt referencing the MCP resource.  
    * **Strict Restart from Guardrail \#1 \[DECISION\]:** Once the agent completes its fix turn, the **entire `afterStep` guardrail chain restarts from the very first guardrail** (index 0). This guarantees that fixing Guardrail \#2 (e.g., `phpunit`) never silently introduces a regression in Guardrail \#1 (e.g., `phpstan`).  
    * **Author Responsibility for Side-Effecting Guardrails (Documentation-Only) \[DECISION\]:** Because any failure restarts the `afterStep` chain from index 0, placing non-idempotent or side-effecting guardrails (such as `git commit` or `git push`) before verification guardrails could cause subsequent retries to fail (e.g., attempting to commit a clean working tree). Following the principle of *Declarative Rather Than Imposed*, `ludd` does not enforce framework-level linting rules or hidden wrappers around shell commands; workflow authors own their pipeline ordering, and official documentation explicitly recommends placing side-effecting guardrails at the end of the `afterStep` chain.  
-3. **Retry Policies, Step-Level Circuit Breaker (`maxTotalTurns`), and Escalation (`onMaxRetriesExceeded`) \[DECISION\]:** Each `afterStep` guardrail supports `maxRetries` (tracked cumulatively per guardrail within the current step or matrix slice), and each step supports an overarching `maxTotalTurns` circuit breaker (`DEFAULT_MAX_TOTAL_TURNS = Number.POSITIVE_INFINITY` unless bounded on the step) to prevent ping-pong oscillation between guardrails when the chain restarts at index 0\. When either a guardrail's `maxRetries` or the step's `maxTotalTurns` limit is reached and `onMaxRetriesExceeded: 'prompt_user'` is configured, the runner pauses on `control.sock` and opens an interactive escalation gate. Through the JSON-RPC socket, the user can choose any of three resolution actions:  
+3. **Cumulative Guardrail Retries, Escalation (`onMaxRetriesExceeded`), and Cancellation (Amendment to ADR-0006 via ADR-0012) \[DECISION\]:** Each `afterStep` guardrail supports `maxRetries` (tracked cumulatively per guardrail within the current step or matrix slice) to prevent ping-pong oscillation when the chain restarts at index 0. The legacy step-level turn circuit breaker (`maxTotalTurns`) was removed in ADR-0012 because each ACP `session/prompt` encapsulates an entire internal agent loop; hanging or cancelled runs are aborted uniformly via `AbortSignal` \-\> ACP `session/cancel`. When a guardrail's `maxRetries` limit is reached and `onMaxRetriesExceeded: 'prompt_user'` is configured, the runner pauses on `control.sock` and opens an interactive escalation gate. Through the JSON-RPC socket, the user can choose any of three resolution actions:  
    * **Retry with Feedback:** Reset or add to the retry counter (`addRetries: N`) and optionally provide a text hint to guide the agent's next attempt.  
    * **Force Pass / Skip:** Override the failing guardrail (`pass` or `skip`) so the step can advance.  
    * **Abort:** Terminate the workflow run cleanly.
@@ -285,7 +284,7 @@ Within each isolated run directory, the runner maintains:
 
 * **`execGuardrail` \[DECISION\]:** Spawns commands on the host via `host-exec.ts` (`spawn`) in the resolved `cwd` and `env`. To prevent shell-injection or unintended POSIX subshell evaluation (e.g., `$()` or backticks inside double-quoted agent outputs like `commitMessage`), `command` accepts either a direct argv array (`string[]`, executed without shell interpolation), a shell string (`string`), or a callback returning either (`(ctx) => string | string[]`), alongside a safe `sh` template tag helper for escaping interpolated values (e.g., `command: (ctx) => ['git', 'commit', '-m', ctx.step.output.commitMessage]`). By default, exit code 0 maps to `pass` and non-zero maps to `fail`, with raw `stdout`/`stderr` automatically offloaded to the MCP server on failure. An optional custom formatter callback `(result) => { status, body }` can parse CLI output and override the verdict (`pass`, `fail`, `skip`). For large outputs offloaded to MCP, `execGuardrail` supports automatic line-break pagination for plain text as well as configurable JSON array pagination via a key or selector function (`pagination: 'errors' | ((json) => unknown[])`). To protect against hanging processes, `execGuardrail` also supports a configurable timeout in seconds (`timeout?: number`) and a configurable timeout resolution (`onTimeout?: 'fail' | 'skip' | 'pass'`, defaulting to `'fail'`). When the timeout expires, the runner terminates the process tree (`SIGTERM` \-\> `SIGKILL`), offloads partial logs to the MCP server, and returns the configured `onTimeout` verdict.  
 * **`fnGuardrail` (Inline / Custom Function) \[DECISION\]:** Executes arbitrary async TypeScript validation logic directly within the orchestrator context.  
-* **`agentGuardrail` \[DECISION\]:** Spawns an AI verification agent (defaulting to a fresh `sessionId` and inheriting the parent step's `cwd` and `env` with SDK `mode: 'read-only'`, while supporting explicit `cwd`/`env` overrides when configured). It enforces the standard `{ status: 'pass' | 'fail' | 'skip', body: ... }` output structure, allowing the workflow author to supply a custom prompt and custom Zod schema for the `body` payload. The `agent` option is optional: when omitted, it defaults to `piAgent({ mode, prompt, sessionId: <fresh> })` from `@luddjs/agents` (so `@luddjs/guardrails` depends on `@luddjs/agents`, which depends only on `@luddjs/core`; no cycle), and the verdict schema is passed as `outputSchema` so the structured `submit_step_output` path is used. An explicit `agent` overrides the default.  
+* **`agentGuardrail` \[DECISION\]:** Spawns an AI verification agent using an **explicit, mandatory `agent` runner** (`agentGuardrail({ name, agent, prompt, ... })`, e.g. `codexAcp({ permissionMode: 'readOnly' })`), defaulting `mode` to `'read-only'` and inheriting the parent step's `cwd` and `env` while supporting explicit `cwd`/`env` overrides. It enforces the standard `{ status: 'pass' | 'fail' | 'skip', body?: ... }` output structure, allowing the workflow author to supply a custom prompt and custom Zod schema for the `body` payload; the verdict schema is passed as `outputSchema` to the configured `AgentRunner`.  
 * **`humanReviewGuardrail` \[DECISION\]:** Pauses execution and emits a `gate.waiting` event to `ledger.jsonl`, waiting for a JSON-RPC resolution on `control.sock`. The user explicitly marks the gate as **Green (`pass`)** to advance or **Red (`fail`) with text feedback**, which feeds the user's answers or revision notes back into the agent session via the standard self-healing loop.
 
 ---
@@ -296,12 +295,12 @@ Within each isolated run directory, the runner maintains:
 
 | Failure Scenario / Pre-Mortem Vector | Impact if Unhandled | Architectural Mitigation & Decision |
 | :---- | :---- | :---- |
-| **1\. Ping-Pong Self-Healing Oscillation (Guardrail \#1 vs. Guardrail \#2)** | Guardrail \#1 (`phpstan`) passes; Guardrail \#2 (`phpunit`) fails (retry 1/3). Agent fixes `phpunit` but breaks `phpstan`. Chain restarts at index 0: `phpstan` fails (retry 1/3), agent fixes `phpstan`, resetting or alternating indefinitely if retry counters are scoped only to consecutive failures. | **\[DECISION\]:** Guardrail `maxRetries` counts cumulative failures of that guardrail within the active step/slice, and every step supports an optional step-level `maxTotalTurns` circuit breaker (`DEFAULT_MAX_TOTAL_TURNS = Number.POSITIVE_INFINITY` when omitted) to bound total self-healing turns per step/slice when restarting the guardrail chain from index 0\. |
+| **1\. Ping-Pong Self-Healing Oscillation (Guardrail \#1 vs. Guardrail \#2)** | Guardrail \#1 (`phpstan`) passes; Guardrail \#2 (`phpunit`) fails (retry 1/3). Agent fixes `phpunit` but breaks `phpstan`. Chain restarts at index 0: `phpstan` fails (retry 1/3), agent fixes `phpstan`, resetting or alternating indefinitely if retry counters are scoped only to consecutive failures. | **\[DECISION\]:** Guardrail `maxRetries` counts cumulative failures of that guardrail within the active step/slice when restarting the guardrail chain from index 0, bounded by `onMaxRetriesExceeded` (`'abort'` or `'prompt_user'`). Stuck or cancelled agent turns are terminated via `AbortSignal` \-\> ACP `session/cancel` (ADR-0012). |
 | **2\. Process Death (`SIGKILL` / OOM / Power Loss) Mid-Step** | `state.json` might be partially written (corrupted JSON), or the runner process exits while a long `phpunit` suite or agent turn is active. | **\[DECISION\]:** Write `state.json` via atomic write-and-rename (`state.json.tmp` \-\> `fs.renameSync('state.json')`). On rehydration, re-run any configured `setup(ctx)` hook (idempotently when reusing a DIY worktree) and re-resolve host `cwd`/`env` before resuming the step. |
 | **3\. Stale `control.sock` Socket File After Crash** | On Unix systems, if a process crashes without unlinking `control.sock`, restarting the runner for the same `<runId>` throws `EADDRINUSE`. Frontends scanning `.harness/runs/*/control.sock` cannot tell a live waiting runner from a dead crashed runner. | **\[DECISION\]:** Persist the active runner process ID in a dedicated `.harness/runs/<runId>/runner.pid` file. Before binding `control.sock` or resuming a run (and when frontends scan run directories), verify whether the PID in `runner.pid` is still running (`process.kill(pid, 0)`). If the process is dead, unlink stale `control.sock` and `runner.pid` files and safely restart/rehydrate; if the process is still alive, abort duplicate startup to prevent split-brain execution. |
 | **4\. Non-Idempotent Guardrail Re-Execution** | In Section 7 (`implement-slices`), the final `afterStep` guardrail runs `git add -A && git commit -m ...`. If a subsequent guardrail were placed *after* the commit and failed, restarting the chain from index 0 would attempt `git commit` again on a clean tree and fail with exit code 1\. | **\[DECISION\]:** Handled purely via documentation without framework-imposed linting or magic wrappers. Workflow authors retain full ownership of their pipeline configuration; documentation explicitly notes that side-effecting guardrails (such as `git commit` or `git push`) should be placed at the end of the `afterStep` chain so full-chain restarts from index 0 do not re-trigger them prematurely. |
 | **5\. Runaway Command in `execGuardrail` (Hanging Test)** | A test suite waits on stdin or deadlocks; the headless runner hangs forever without emitting a `gate.waiting` event. | **\[DECISION\]:** `execGuardrail` supports an explicit timeout property in seconds (`timeout?: number`) alongside a configurable timeout verdict (`onTimeout?: 'fail' \| 'skip' \| 'pass'`, defaulting to `'fail'`). When the timeout expires, the runner terminates the process tree (`SIGTERM` \-\> `SIGKILL`), offloads partial logs to the MCP server, and returns the configured `onTimeout` verdict. |
-| **6\. Host Disk Exhaustion from Run Artifacts, Worktrees & Telemetry** | Across dozens of runs, `.harness/runs/<runId>/` snapshots, `streams/<sessionId>.jsonl` files, offloaded logs, and temporary DIY worktrees accumulate on disk. | **\[DECISION\]:** Use `teardown(ctx)` hooks (guaranteed on completion/failure/abort, or invoked explicitly via `teardownRun` / `ludd teardown`) for external worktree cleanup, and expose a programmatic headless garbage collection API (`gc({ olderThan, status, runId, dryRun })`) in `@luddjs/core` that checks process inactivity via `runner.pid` and prunes old `.harness/runs/<runId>/` directories from disk without touching external directories. |
+| **6\. Host Disk Exhaustion from Run Artifacts, Worktrees & Session Streams** | Across dozens of runs, `.harness/runs/<runId>/` snapshots, `streams/<sessionId>.jsonl` files, offloaded logs, and temporary DIY worktrees accumulate on disk. | **\[DECISION\]:** Use `teardown(ctx)` hooks (guaranteed on completion/failure/abort, or invoked explicitly via `teardownRun` / `ludd teardown`) for external worktree cleanup, and expose a programmatic headless garbage collection API (`gc({ olderThan, status, runId, dryRun })`) in `@luddjs/core` that checks process inactivity via `runner.pid` and prunes old `.harness/runs/<runId>/` directories from disk without touching external directories. |
 
 ---
 
@@ -329,8 +328,8 @@ Even though `ludd` runs locally, a decoupled architecture with long-running back
 
 | STRIDE Category | Specific Threat Vector in `ludd` | Architectural Mitigation & Decision |
 | :---- | :---- | :---- |
-| **Spoofing & Tampering** | **Unauthenticated Local MCP Server:** The embedded MCP server binds to an ephemeral host port. Another local process could scan ephemeral ports and call `put_artifact` or read offloaded logs from another `<runId>`. | **\[DECISION\]:** Generate a cryptographic per-run Bearer token (`MCP_AUTH_TOKEN`) at run start, inject it into the step's execution context, and require `Authorization: Bearer <token>` on all HTTP/SSE MCP requests. Bind the MCP server strictly to `127.0.0.1` (never `0.0.0.0`). |
-| **Elevation of Privilege** | **Workspace Escape / Symlink Attack on `.harness/runs/`:** An agent in `workspace-write` (or `dangerMode`) creates a symlink inside the workspace pointing to `.harness/runs/<runId>/state.json` or `.git/hooks/` on the host. | **\[DECISION\]:** `.harness/runs/` and `.git/hooks/` are blacklisted at the SDK level (`assertSafeWorkspacePath`). Projects requiring hard OS/filesystem isolation execute `ludd` inside an external container or VM. |
+| **Spoofing & Tampering** | **Unauthenticated Local MCP Server:** The embedded MCP server binds to an ephemeral host port. Another local process could scan ephemeral ports and call `put_artifact` or read offloaded logs from another `<runId>`. | **\[DECISION\]:** Generate a cryptographic per-run Bearer token (`authToken`, passed via `LUDD_MCP_TOKEN` to `ludd mcp-bridge` and `MCP_AUTH_TOKEN` to `execGuardrail`) at run start and require `Authorization: Bearer <token>` on all HTTP/SSE MCP requests. Bind the MCP server strictly to `127.0.0.1` (never `0.0.0.0`). |
+| **Elevation of Privilege** | **Unintended Workspace Mutation by Agent:** An agent attempts file edits or shell execution outside the intended phase permissions (e.g., during read-only triage/review). | **\[DECISION\]:** `acpAgent` enforces `AcpPermissionMode` (`'readOnly'` \| `'acceptEdits'` \| `'bypassPermissions'`) in ACP `session/request_permission` handling and delegates underlying filesystem/shell sandboxing to the external ACP CLI (ADR-0012). Projects requiring hard OS/filesystem isolation execute `ludd` inside an external container or VM. |
 | **Information Disclosure** | **Accidental Secret Leakage via Offloaded CLI Logs:** A failing `execGuardrail` dumps environment variables or connection strings into `stderr`, which is stored in MCP and read by the cloud LLM. | **\[DECISION\]:** Callers requiring stricter subprocess environment isolation can opt into `sanitizeEnv: true` (`allowedEnvKeys`) or `inheritEnv: false` in `host-exec.ts` (Section 5.6.2). Automated secret-redaction filters inside the MCP log offloader are out of scope; documentation advises workflow authors to mask or filter any sensitive tokens within `execGuardrail` commands or custom formatter callbacks. |
 
 ### 8.2 Testing Strategy for `@luddjs/*`
@@ -354,7 +353,7 @@ Even though `ludd` runs locally, a decoupled architecture with long-running back
    * **`run` (Agent \- Read-Only, Reused Session):** Resumes the `sessionId` from Step 1 and writes two validated artifacts (`spec.md` and `todos.json`) to the internal MCP server.  
    * **`afterStep` (Human Sign-Off):** The developer inspects the generated specification and slice breakdown via a `humanReviewGuardrail`, requesting tweaks (`fail` \+ feedback) or approving (`pass`).  
 3. **Step 3: Sequential Matrix Slice Implementation (`implement-slices`)**  
-   * **`matrix`:** Reads `todos.json` from the MCP artifact store and iterates over each slice **sequentially** in the isolated DIY Git worktree (`workspace-write` mode).  
+   * **`matrix`:** Reads `todos.json` from the MCP artifact store and iterates over each slice **sequentially** in the isolated DIY Git worktree (`permissionMode: 'acceptEdits'`).  
    * **`run` (Agent per Slice):** Implements the current slice and outputs a structured `commitMessage`.  
    * **`afterStep` (Automated Verification \+ Declarative Commit):** Runs `phpstan` and `phpunit` via `execGuardrail` (restarting from `phpstan` on any self-healing retry). Once all checks pass, a final `execGuardrail` commits the slice using the agent's generated commit message.  
 4. **Step 4: Final Review and Pull Request Generation (`final-review-and-pr`)**  
@@ -368,12 +367,13 @@ Even though `ludd` runs locally, a decoupled architecture with long-running back
 ```ts
 import fs from 'node:fs'
 import path from 'node:path'
-import { piAgent } from '@luddjs/agents'
+import { claudeAcp, codexAcp } from '@luddjs/agents'
 import { defineHarness, spawn } from '@luddjs/core'
 import {
   agentGuardrail,
   execGuardrail,
-  humanReviewGuardrail
+  humanReviewGuardrail,
+  sh,
 } from '@luddjs/guardrails'
 import { z } from 'zod'
 
@@ -381,7 +381,7 @@ const TodoSliceSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string(),
-  acceptanceCriteria: z.array(z.string())
+  acceptanceCriteria: z.array(z.string()),
 })
 
 const TodosArtifactSchema = z.array(TodoSliceSchema).min(1)
@@ -462,28 +462,28 @@ export default defineHarness({
       outputSchema: z.object({
         status: z.enum(['needs_clarification', 'ready']),
         questions: z.array(z.string()).describe('Offene Rückfragen an den Entwickler.'),
-        summary: z.string().describe('Zusammenfassung des verstandenen Feature-Umfangs.')
+        summary: z.string().describe('Zusammenfassung des verstandenen Feature-Umfangs.'),
       }),
 
       beforeStep: [
         humanReviewGuardrail({
-          prompt: 'Bitte beschreibe das neue Feature oder den Change-Request:'
-        })
+          prompt: 'Bitte beschreibe das neue Feature oder den Change-Request:',
+        }),
       ],
 
-      run: piAgent({
-        mode: 'read-only',
-        prompt: 'Lies den initialen Feature-Wunsch aus dem MCP-Kontext und analysiere die Codebase. Wenn Details unklar sind, setze status auf "needs_clarification" und formuliere präzise Fragen. Wenn alles klar ist, setze status auf "ready".'
+      run: claudeAcp({
+        permissionMode: 'readOnly',
+        prompt: 'Lies den initialen Feature-Wunsch aus dem MCP-Kontext und analysiere die Codebase. Wenn Details unklar sind, setze status auf "needs_clarification" und formuliere präzise Fragen. Wenn alles klar ist, setze status auf "ready".',
       }),
 
-      afterStep: (ctx) => [
+      afterStep: ctx => [
         humanReviewGuardrail({
           prompt:
             ctx.step.output.status === 'needs_clarification'
-              ? `Der Agent hat noch offene Fragen:\n${ctx.step.output.questions.map((q) => `- ${q}`).join('\n')}\n\nBitte antworte (Fail + Feedback) oder gib den Step frei (Pass):`
-              : `Zusammenfassung:\n${ctx.step.output.summary}\n\nPasst der Scope so? (Pass zum Fortfahren, Fail + Feedback für Anpassungen)`
-        })
-      ]
+              ? `Der Agent hat noch offene Fragen:\n${ctx.step.output.questions.map(q => `- ${q}`).join('\n')}\n\nBitte antworte (Fail + Feedback) oder gib den Step frei (Pass):`
+              : `Zusammenfassung:\n${ctx.step.output.summary}\n\nPasst der Scope so? (Pass zum Fortfahren, Fail + Feedback für Anpassungen)`,
+        }),
+      ],
     },
 
     {
@@ -492,20 +492,20 @@ export default defineHarness({
 
       artifacts: {
         'spec.md': { nonEmpty: true },
-        'todos.json': { schema: TodosArtifactSchema }
+        'todos.json': { schema: TodosArtifactSchema },
       },
 
-      run: piAgent({
-        mode: 'read-only',
-        sessionId: (ctx) => ctx.steps['triage-and-grilling']?.output?.sessionId,
-        prompt: 'Erstelle basierend auf unserem geklärten Gespräch über den MCP-Server das Artefakt "spec.md" sowie das Artefakt "todos.json" mit isolierten vertikalen Slices.'
+      run: ctx => claudeAcp({
+        permissionMode: 'readOnly',
+        sessionId: ctx.steps['triage-and-grilling']?.output?.sessionId,
+        prompt: 'Erstelle basierend auf unserem geklärten Gespräch über den MCP-Server das Artefakt "spec.md" sowie das Artefakt "todos.json" mit isolierten vertikalen Slices.',
       }),
 
       afterStep: [
         humanReviewGuardrail({
-          prompt: 'Bitte überprüfe die im MCP abgelegten Artefakte "spec.md" und "todos.json". (Pass für Freigabe, Fail + Feedback für Korrekturen)'
-        })
-      ]
+          prompt: 'Bitte überprüfe die im MCP abgelegten Artefakte "spec.md" und "todos.json". (Pass für Freigabe, Fail + Feedback für Korrekturen)',
+        }),
+      ],
     },
 
     {
@@ -513,79 +513,80 @@ export default defineHarness({
       name: 'Sequential Matrix Implementation per Todo Slice',
 
       matrix: {
-        itemsFromArtifact: 'todos.json'
+        itemsFromArtifact: 'todos.json',
       },
 
       outputSchema: z.object({
-        commitMessage: z.string().min(5).describe('Conventional Commit Message für dieses abgeschlossene Slice.')
+        commitMessage: z.string().min(5).describe('Conventional Commit Message für dieses abgeschlossene Slice.'),
       }),
 
-      run: piAgent({
-        mode: 'workspace-write',
-        prompt: (ctx) =>
-          `Implementiere exakt das folgende To-Do-Slice (${ctx.matrix.index + 1}/${ctx.matrix.total}):\n` +
-          `Titel: ${ctx.matrix.item.title}\n` +
-          `Beschreibung: ${ctx.matrix.item.description}\n` +
-          `Kriterien:\n${ctx.matrix.item.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}`
+      run: ctx => claudeAcp({
+        permissionMode: 'acceptEdits',
+        prompt:
+          `Implementiere exakt das folgende To-Do-Slice (${ctx.matrix.index + 1}/${ctx.matrix.total}):\n`
+          + `Titel: ${ctx.matrix.item.title}\n`
+          + `Beschreibung: ${ctx.matrix.item.description}\n`
+          + `Kriterien:\n${ctx.matrix.item.acceptanceCriteria.map(c => `- ${c}`).join('\n')}`,
       }),
 
-      afterStep: (ctx) => [
+      afterStep: ctx => [
         execGuardrail({
           command: 'vendor/bin/phpstan analyse src',
-          maxRetries: 3
+          maxRetries: 3,
         }),
         execGuardrail({
           command: 'vendor/bin/phpunit',
           maxRetries: 3,
-          onMaxRetriesExceeded: 'prompt_user'
+          onMaxRetriesExceeded: 'prompt_user',
         }),
         agentGuardrail({
-          mode: 'read-only',
+          name: 'code-review',
+          agent: codexAcp({ permissionMode: 'readOnly' }),
           maxRetries: 2,
           bodySchema: z.object({
-            findings: z.array(z.string())
+            findings: z.array(z.string()),
           }),
-          prompt: 'Prüfe den aktuellen Git-Diff dieses Slices auf Architektur-Verstöße oder Sicherheitslücken.'
+          prompt: 'Prüfe den aktuellen Git-Diff dieses Slices auf Architektur-Verstöße oder Sicherheitslücken.',
         }),
         execGuardrail({
           command: ['git', 'add', '-A'],
-          maxRetries: 1
+          maxRetries: 1,
         }),
         execGuardrail({
-          command: ['git', 'commit', '-m', ctx.step.output.commitMessage],
-          maxRetries: 1
-        })
-      ]
+          command: sh`git commit -m ${ctx.step.output.commitMessage}`,
+          maxRetries: 1,
+        }),
+      ],
     },
 
     {
       id: 'final-review-and-pr',
       name: 'Final Integration and PR Creation',
-      if: (ctx) => ctx.steps['implement-slices'].status === 'passed',
+      if: ctx => ctx.steps['implement-slices'].status === 'passed',
 
       artifacts: {
-        'pr-description.md': { nonEmpty: true }
+        'pr-description.md': { nonEmpty: true },
       },
 
       beforeStep: [
         execGuardrail({ command: ['git', 'status', '--porcelain'] }),
-        execGuardrail({ command: ['git', 'log', '--oneline', '-n', '10'] })
+        execGuardrail({ command: ['git', 'log', '--oneline', '-n', '10'] }),
       ],
 
-      run: piAgent({
-        mode: 'read-only',
-        prompt: 'Prüfe die Commit-Historie aus dem MCP-Kontext und erstelle über den MCP-Server das Artefakt "pr-description.md" mit einer präzisen Pull-Request-Beschreibung.'
+      run: claudeAcp({
+        permissionMode: 'readOnly',
+        prompt: 'Prüfe die Commit-Historie aus dem MCP-Kontext und erstelle über den MCP-Server das Artefakt "pr-description.md" mit einer präzisen Pull-Request-Beschreibung.',
       }),
 
       afterStep: [
         humanReviewGuardrail({
-          prompt: 'Bitte prüfe die generierte PR-Beschreibung ("pr-description.md"). Bei Freigabe (Pass) wird der Branch gepusht.'
+          prompt: 'Bitte prüfe die generierte PR-Beschreibung ("pr-description.md"). Bei Freigabe (Pass) wird der Branch gepusht.',
         }),
         execGuardrail({
-          command: ['git', 'push', '-u', 'origin', 'HEAD']
-        })
-      ]
-    }
-  ]
+          command: ['git', 'push', '-u', 'origin', 'HEAD'],
+        }),
+      ],
+    },
+  ],
 })
 ```

@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0010` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | **Superseded by [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md)** (previously `Accepted`) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
 | **Target Packages** | `@luddjs/agents`, `@luddjs/core` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 2.2, 5.4.4, 8.2, 10.1) |
+
+> **Superseded by ADR-0012:** Direct Pi SDK integration (`piAgent`, `pi-mcp-tools.ts`, and in-process security extensions) has been completely removed in favor of the open **Agent Client Protocol (ACP)** (`acpAgent`, `claudeAcp`, `codexAcp`, `agyAcp`) and `ludd mcp-bridge`. `mockAgent` remains in `@luddjs/agents` for deterministic unit and core test suites. See [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md).
 
 ## **1\. Context and Problem Statement**
 

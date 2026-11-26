@@ -10,6 +10,8 @@
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 3.1, 4.1, 5.5.1, 5.6.1, 5.7.3) |
 
 > **Superseded by ADR-0013:** `@luddjs/environments`, environment adapter rehydration (`hostEnv`, `gitWorktreeEnv`, `dockerWorktreeEnv`), `cleanupPolicy`, and `ctx.environments` have been removed in favor of explicit host execution (`cwd`/`env`) and optional run-level `setup`/`teardown` hooks. See [ADR-0013](./adr-0013_removal-of-ludd-environments-and-simplification-to-explicit-host-execution.md).
+>
+> **Amended by ADR-0012 (Agent Sandboxing):** In-process SDK-level sandboxing (`piAgent({ mode })` and `packages/agents/src/security/`) has also been removed; permission boundaries (`AcpPermissionMode`: `'readOnly' | 'acceptEdits' | 'bypassPermissions'`) are delegated to ACP `session/request_permission` handling. See [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md).
 
 ## **1\. Context and Problem Statement**
 
@@ -54,3 +56,4 @@ We adopt **Option B: Decoupled Two-Layer Sandbox Model with Cross-Step Environme
 ## **5\. Revisit Triggers**
 
 This decision will be revisited if parallel `agentGuardrail` execution is introduced in the future where one guardrail mutates temporary build files while another reads the workspace.
+

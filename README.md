@@ -5,9 +5,48 @@ A deterministic code harness that orchestrates AI-driven agents.
 ## Packages
 
 - `@luddjs/core`: Headless workflow state machine, IPC server, embedded MCP server, explicit host execution (`cwd`/`env`, `setup`/`teardown`, `spawn`), `teardownRun`, and filesystem-only `gc`
-- `@luddjs/agents`: Agent runner adapters (`piAgent`, `mockAgent`)
+- `@luddjs/agents`: ACP-standardized agent runner adapters (`acpAgent`, presets `claudeAcp`, `codexAcp`, `agyAcp`) and deterministic `mockAgent` for tests
 - `@luddjs/guardrails`: Deterministic and AI verification guardrails (`execGuardrail`, `fnGuardrail`, `agentGuardrail`, `humanReviewGuardrail`)
-- `@luddjs/cli`: Terminal runner, interactive gate controls, `abort`, `teardown`, and `gc` commands
+- `@luddjs/cli`: Terminal runner, interactive gate controls, `abort`, `teardown`, `gc`, and `mcp-bridge` commands
+
+## ACP Agents & Guardrails
+
+`@luddjs/agents` standardizes on the open **Agent Client Protocol (ACP)** over `stdio` via `acpAgent` and thin CLI presets (`claudeAcp`, `codexAcp`, `agyAcp`):
+
+- **Permission modes (`AcpPermissionMode`):** `'readOnly' | 'acceptEdits' | 'bypassPermissions'` evaluated during ACP `session/request_permission` handling.
+- **Session resumption without fallback:** During `initialize`, `acpAgent` checks `agentCapabilities.loadSession`. When supported and a previous `sessionId` is provided, it resumes via `session/load`; otherwise it starts a fresh `session/new` without synthetic fallback.
+- **Clean cancellation:** Aborting a run (`AbortSignal` / `ludd abort`) sends ACP `session/cancel` for the active session before terminating the subprocess on timeout.
+- **MCP via `ludd mcp-bridge`:** When the embedded core MCP server is active, `acpAgent` attaches a `stdio` MCP server entry (`ludd mcp-bridge --endpoint <url>`) authenticated via `LUDD_MCP_TOKEN`, giving external ACP agents access to artifacts, paginated logs, and interactive `ask_user` gates.
+- **Explicit `agent` in `agentGuardrail`:** `agentGuardrail({ name, agent, prompt })` requires an explicit `AgentRunner` (such as `codexAcp({ permissionMode: 'readOnly' })`).
+
+<!-- eslint-skip -->
+```ts
+import { claudeAcp, codexAcp } from '@luddjs/agents'
+import { createHarness } from '@luddjs/core'
+import { agentGuardrail, execGuardrail } from '@luddjs/guardrails'
+import { z } from 'zod'
+
+export default createHarness('acp-example')
+  .step({
+    id: 'implement',
+    run: claudeAcp({
+      permissionMode: 'acceptEdits',
+      prompt: 'Implement the requested feature and summarize the changes.',
+    }),
+    outputSchema: z.object({
+      summary: z.string(),
+    }),
+    afterStep: ctx => [
+      execGuardrail({ name: 'Tests', command: 'pnpm test' }),
+      agentGuardrail({
+        name: 'code-review',
+        agent: codexAcp({ permissionMode: 'readOnly' }),
+        prompt: `Review the changes for: ${ctx.step.output.summary}`,
+      }),
+    ],
+  })
+  .build()
+```
 
 ## Host Execution & DIY Git Worktree Isolation
 

@@ -3,11 +3,13 @@
 | Metadata Field | Value |
 | :---- | :---- |
 | **ADR ID** | `ADR-0004` |
-| **Status** | `Accepted` (Immutable once accepted; supersede via new ADR if changed) |
+| **Status** | `Accepted` (Partially amended by [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md)) |
 | **Date** | 2026-11-08 |
 | **Decision Owner** | Johannes Berthel |
 | **Target Packages** | `@luddjs/core`, `@luddjs/guardrails` |
 | **Related Design Doc** | `ludd — Technical Design Document` (Sections 2.3, 5.2, 5.4.3, 5.7.3, 8.1) |
+
+> **Amended by ADR-0012 (MCP Transport):** The host-embedded HTTP/SSE MCP server in `@luddjs/core` remains the single source of truth for artifacts, paginated logs, and interactive `ask_user` gates, while external ACP agents connect to it via the `stdio` MCP bridge (`ludd mcp-bridge` in `packages/cli/src/mcp-bridge/`). See [ADR-0012](./adr-0012_acp-protocol-standardization-and-pi-sdk-removal.md).
 
 ## **1\. Context and Problem Statement**
 
