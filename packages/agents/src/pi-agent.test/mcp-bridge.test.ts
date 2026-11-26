@@ -46,7 +46,10 @@ describe('piAgent MCP bridge and submit_step_output', () => {
   it('exposes MCP tools in read-only mode when a server url is set', async () => {
     const { seen, factory } = capture()
     await piAgent({ prompt: 'p', sessionFactory: factory })
-      .executeTurn(turnInput(dir, { mode: 'read-only', mcpServerUrl: 'http://x/mcp', mcpAuthToken: 't' }))
+      .executeTurn(turnInput(dir, {
+        mode: 'read-only',
+        mcp: { url: 'http://x/mcp', authToken: 't' },
+      }))
     const names = seen[0]?.customTools?.map(t => t.name)
     expect(names).toContain('put_artifact')
     expect(names).toContain('read_log_page')

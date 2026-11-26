@@ -154,16 +154,14 @@ describe('agentGuardrail execution: cwd, env, and signal handling', () => {
 })
 
 describe('agentGuardrail execution: MCP context', () => {
-  it('passes mcpServerUrl and mcpAuthToken to agent.executeTurn', async () => {
-    let capturedUrl = ''
-    let capturedToken = ''
+  it('passes mcp connection info to agent.executeTurn when configured and omits when empty', async () => {
+    const capturedMcp: Array<AgentTurnInput['mcp']> = []
     const agent: AgentRunner<any, any> = {
       __kind: 'agent',
       mode: 'read-only',
       prompt: 'p',
       executeTurn: async (turnInput: AgentTurnInput) => {
-        capturedUrl = turnInput.mcpServerUrl
-        capturedToken = turnInput.mcpAuthToken
+        capturedMcp.push(turnInput.mcp)
         return {
           output: { status: 'pass' },
           sessionId: turnInput.sessionId,
@@ -176,9 +174,15 @@ describe('agentGuardrail execution: MCP context', () => {
       mcpServerUrl: 'http://test-server:3000',
       mcpAuthToken: 'secret-xyz',
     }))
+    await rail.execute(createExecutionInput({
+      mcpServerUrl: '',
+      mcpAuthToken: '',
+    }))
 
-    expect(capturedUrl).toBe('http://test-server:3000')
-    expect(capturedToken).toBe('secret-xyz')
+    expect(capturedMcp).toEqual([
+      { url: 'http://test-server:3000', authToken: 'secret-xyz' },
+      undefined,
+    ])
   })
 })
 

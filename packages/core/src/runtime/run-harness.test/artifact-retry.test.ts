@@ -30,7 +30,7 @@ describe('runHarness artifact self-healing for whitespace (AC 4.2.2)', () => {
         const content = input.attempt === 1
           ? '   \n '
           : '# Non-empty doc'
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'doc.md', content)
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'doc.md', content)
         return { output: 'done', sessionId: input.sessionId }
       },
     }
@@ -78,7 +78,7 @@ describe('runHarness artifact self-healing for invalid JSON (AC 4.2.2)', () => {
         const content = input.attempt === 1
           ? '{not json}'
           : JSON.stringify({ active: true })
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'config.json', content)
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'config.json', content)
         return { output: 'done', sessionId: input.sessionId }
       },
     }
@@ -126,7 +126,7 @@ describe('runHarness artifact self-healing for schema mismatch (AC 4.2.2)', () =
         const content = input.attempt === 1
           ? JSON.stringify({ score: 2 })
           : JSON.stringify({ score: 15 })
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'score.json', content)
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'score.json', content)
         return { output: 'done', sessionId: input.sessionId }
       },
     }
@@ -176,7 +176,7 @@ describe('runHarness artifact self-healing for custom validate (AC 4.2.2)', () =
         const content = input.attempt === 1
           ? 'initial draft'
           : 'v1.0.0 released'
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'CHANGELOG.md', content)
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'CHANGELOG.md', content)
         return { output: 'done', sessionId: input.sessionId }
       },
     }

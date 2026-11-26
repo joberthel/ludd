@@ -6,8 +6,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { GuardrailMaxRetriesExceededError } from '../../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
-import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { writeRunStateAtomic } from '../../persistence/state-store.js'
 import { createGateWaiter } from '../gate-waiter.js'
 import { GuardrailRetrySignal, runAfterStepGuardrails } from '../guardrail-executor.js'
@@ -82,7 +80,6 @@ describe('runAfterStepGuardrails unbounded retries initial failure', () => {
         runDir,
         attempt: 1,
         sessionId: 'sess-hr',
-        maxTotalTurns: 2,
         initialPrompt: 'Initial prompt',
         gateWaiter: waiter,
       })
@@ -90,42 +87,6 @@ describe('runAfterStepGuardrails unbounded retries initial failure', () => {
       waiter.resolve({ stepId: 's-hr', action: 'fail', feedback: 'Fix issue' })
       await expect(p).rejects.toThrow(GuardrailRetrySignal)
       expect(snapshot.activeGuardrailRetries?.['0']).toBe(1)
-    }
-    finally {
-      fs.rmSync(runDir, { recursive: true, force: true })
-    }
-  })
-})
-
-describe('runAfterStepGuardrails unbounded retries turn limit', () => {
-  it('exhausts bounded turns when attempt reaches maxTotalTurns', async () => {
-    const runDir = makeTempDir()
-    try {
-      const snapshot = makeInitialSnapshot(runDir)
-      const waiter = createGateWaiter()
-      const rails = [defaultRail]
-      const step: StepConfig = {
-        id: 's-hr',
-        afterStep: rails,
-        run: fakeAgent,
-      }
-      const ctx = makeReviewContext()
-
-      const p = runAfterStepGuardrails({
-        step,
-        ctx,
-        snapshot,
-        runDir,
-        attempt: 2,
-        sessionId: 'sess-hr',
-        maxTotalTurns: 2,
-        initialPrompt: 'Initial prompt',
-        gateWaiter: waiter,
-      })
-      await new Promise(r => setTimeout(r, 10))
-      waiter.resolve({ stepId: 's-hr', action: 'fail', feedback: 'Still bad' })
-      await expect(p).rejects.toThrow(MaxTotalTurnsExceededError)
-      expect(readLedgerEvents(runDir).filter(e => e.eventType === 'step.retry')).toHaveLength(0)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })
@@ -154,7 +115,6 @@ describe('runAfterStepGuardrails humanReviewGuardrail explicit maxRetries', () =
         runDir,
         attempt: 1,
         sessionId: 'sess-hr',
-        maxTotalTurns: 10,
         initialPrompt: 'Initial prompt',
         gateWaiter: waiter,
       })
@@ -171,7 +131,6 @@ describe('runAfterStepGuardrails humanReviewGuardrail explicit maxRetries', () =
         runDir,
         attempt: 2,
         sessionId: 'sess-hr',
-        maxTotalTurns: 10,
         initialPrompt: 'Initial prompt',
         gateWaiter: waiter,
       })
@@ -205,7 +164,6 @@ describe('runAfterStepGuardrails non-agent failure', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
         gateWaiter: waiter,
       })

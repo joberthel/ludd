@@ -7,7 +7,6 @@ import {
   loadHarnessConfig,
   readLedgerEvents,
   readRunState,
-  readStreamEvents,
   releaseRunPidLock,
   resolveRunDir,
   runHarness,
@@ -28,7 +27,6 @@ function generateImplementStep(escapedDir: string): string {
     `    {`,
     `      id: 'implement',`,
     `      outputSchema: z.object({ commitMessage: z.string().min(5) }),`,
-    `      maxTotalTurns: 5,`,
     `      run: mockAgent({`,
     `        mode: 'workspace-write',`,
     `        prompt: 'Implement bugfix and generate commit message',`,
@@ -66,9 +64,6 @@ function generateHarnessConfigContent(escapedDir: string): string {
     `      run: mockAgent({`,
     `        mode: 'read-only',`,
     `        prompt: 'Triage incoming bug report',`,
-    `        events: [`,
-    `          { eventType: 'thought', payload: { reasoning: 'inspect stack trace' } },`,
-    `        ],`,
     `        responses: [`,
     `          { issueType: 'bug', priority: 1 },`,
     `        ],`,
@@ -99,7 +94,7 @@ async function writeEpic3Config(dir: string): Promise<string> {
   return filePath
 }
 
-function verifyRunPersistence(runDir: string, triageSessionId: string): void {
+function verifyRunPersistence(runDir: string): void {
   const finalState = readRunState(runDir)
   expect(finalState.status).toBe('passed')
   expect(finalState.activeStepId).toBeNull()
@@ -109,13 +104,8 @@ function verifyRunPersistence(runDir: string, triageSessionId: string): void {
   expect(finalState.steps.implement.status).toBe('passed')
   expect(finalState.steps.verify.status).toBe('passed')
 
-  const streamEvents = readStreamEvents(runDir, triageSessionId)
-  expect(streamEvents.length).toBeGreaterThanOrEqual(5)
-  expect(streamEvents.some(e => e.eventType === 'thought')).toBe(true)
-
   const ledgerEvents = readLedgerEvents(runDir)
   expect(ledgerEvents.some(e => e.eventType === 'step.retry')).toBe(true)
-  expect(ledgerEvents.some(e => e.eventType === 'agent.stream.linked')).toBe(true)
 }
 
 describe('epic 3 self-healing agents and crash rehydration E2E (AC 3.5.4)', () => {
@@ -149,6 +139,6 @@ describe('epic 3 self-healing agents and crash rehydration E2E (AC 3.5.4)', () =
     expect(implOutput.commitMessage).toBe('feat(core): implement self-healing agents')
     expect(implOutput.sessionId).toBe(triageSessionId)
 
-    verifyRunPersistence(runDir, triageSessionId)
+    verifyRunPersistence(runDir)
   })
 })

@@ -9,7 +9,6 @@ import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
 import process from 'node:process'
-import { DEFAULT_MAX_TOTAL_TURNS, MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { StepArtifactValidationError } from '../errors/step-artifact-validation-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
@@ -20,7 +19,6 @@ import {
   resolveSessionId,
   validateStepOutput,
 } from './agent-step-output.js'
-import { emitPreTurnEvents, emitTurnCompleted } from './agent-telemetry.js'
 import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
 import {
   emitStepRetry,
@@ -35,7 +33,6 @@ export { createAgentStepOutput, formatRetryPrompt, resolveInitialPrompt, validat
 
 interface TurnRetryParams {
   stepId: string
-  maxTotalTurns: number
   attempt: number
   runDir: string
   ctx: StepContext
@@ -56,9 +53,6 @@ function handleTurnRetry(err: unknown, params: TurnRetryParams): string {
     && !(err instanceof StepArtifactValidationError)
   ) {
     throw err
-  }
-  if (params.attempt >= params.maxTotalTurns) {
-    throw new MaxTotalTurnsExceededError(params.stepId, params.maxTotalTurns, err)
   }
 
   const nextAttempt = params.attempt + 1
@@ -106,7 +100,6 @@ interface AgentTurnExecutionScope {
   runDir: string
   sessionId: string
   initialPrompt: string
-  maxTotalTurns: number
   cwd: string
   env: Record<string, string>
   signal?: AbortSignal
@@ -161,7 +154,6 @@ async function runTurnLoopAttempt(
   }
 
   persistActiveTurn(scope.runDir, scope.snapshot, scope.sessionId, attempt)
-  emitPreTurnEvents(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, currentPrompt, scope.agent.mode, attempt)
 
   const turnResult = await scope.agent.executeTurn({
     ctx: scope.ctx,
@@ -173,8 +165,14 @@ async function runTurnLoopAttempt(
     runDir: scope.runDir,
     cwd: scope.cwd,
     env: scope.env,
-    mcpServerUrl: scope.mcpServer?.url ?? '',
-    mcpAuthToken: scope.mcpServer?.authToken ?? '',
+    ...(scope.mcpServer === undefined
+      ? {}
+      : {
+          mcp: {
+            url: scope.mcpServer.url,
+            authToken: scope.mcpServer.authToken,
+          },
+        }),
     ...(scope.step.outputSchema === undefined
       ? {}
       : { outputSchema: scope.step.outputSchema }),
@@ -186,7 +184,6 @@ async function runTurnLoopAttempt(
   if (scope.signal?.aborted) {
     throw extractAbortError(scope.signal)
   }
-  emitTurnCompleted(scope.runDir, scope.ctx, scope.step.id, scope.sessionId, turnResult.output, attempt)
 
   try {
     const result = await finalizeAgentTurn(scope.step, turnResult, {
@@ -224,7 +221,6 @@ export async function executeAgentStep(
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
   const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
-  const maxTotalTurns = step.maxTotalTurns ?? DEFAULT_MAX_TOTAL_TURNS
   const cwd = executionContext?.cwd ?? process.cwd()
   const env = executionContext?.env ?? {}
   const signal = executionContext?.signal ?? gateWaiter?.signal
@@ -241,7 +237,6 @@ export async function executeAgentStep(
     runDir,
     sessionId,
     initialPrompt,
-    maxTotalTurns,
     cwd,
     env,
     signal,

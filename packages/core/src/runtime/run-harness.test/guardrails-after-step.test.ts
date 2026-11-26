@@ -6,7 +6,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { GuardrailMaxRetriesExceededError } from '../../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { readRunState, resolveRunDir } from '../../persistence/state-store.js'
 import { runHarness } from '../run-harness.js'
 
@@ -211,32 +210,5 @@ describe('afterStep guardrails failure and circuit breakers', () => {
 
     expect(result.status).toBe('failed')
     expect(result.error).toBeInstanceOf(GuardrailMaxRetriesExceededError)
-  })
-
-  it('enforces step-level maxTotalTurns circuit breaker during guardrail retries', async () => {
-    const alwaysFailRail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'fn',
-      maxRetries: 10,
-      execute: async () => ({ status: 'fail', body: 'never passes' }),
-    }
-
-    const agent = makeTestAgent([
-      { code: 'a' },
-    ])
-    const result = await runHarness({
-      name: 'max-total-turns-guardrail-test',
-      steps: [
-        {
-          id: 'circuit-breaker-step',
-          maxTotalTurns: 3,
-          run: agent,
-          afterStep: [alwaysFailRail],
-        },
-      ],
-    }, { workspaceDir: tempDir })
-
-    expect(result.status).toBe('failed')
-    expect(result.error).toBeInstanceOf(MaxTotalTurnsExceededError)
   })
 })

@@ -113,7 +113,6 @@ describe('guardrail executor host execution context forwarding', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
         cwd: '/custom/step/dir',
         env: { STEP_VAR: '1' },
@@ -127,7 +126,6 @@ describe('guardrail executor host execution context forwarding', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
         gateWaiter: createGateWaiter(waiterController.signal),
       })

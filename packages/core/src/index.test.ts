@@ -1,4 +1,5 @@
 import type {
+  AgentMcpConnection,
   AgentStreamEvent,
   AgentStreamEventType,
   CreateHarnessOptions,
@@ -46,8 +47,6 @@ describe('@luddjs/core harness and configuration exports', () => {
     expect(typeof core.StepMatrixResolutionError).toBe('function')
     expect(typeof core.GuardrailMaxRetriesExceededError).toBe('function')
     expect(typeof core.isGuardrail).toBe('function')
-    expect(core.DEFAULT_MAX_TOTAL_TURNS).toBe(Number.POSITIVE_INFINITY)
-    expect(typeof core.MaxTotalTurnsExceededError).toBe('function')
     expect(typeof core.formatRetryPrompt).toBe('function')
     expect(typeof core.formatArtifactRetryPrompt).toBe('function')
     expect(typeof core.validateStepArtifacts).toBe('function')
@@ -160,6 +159,7 @@ describe('@luddjs/core IPC exports', () => {
 
 describe('@luddjs/core typed structures and matrix exports', () => {
   it('exports typed stream structures', () => {
+    const mcp: AgentMcpConnection = { url: 'http://127.0.0.1:4000/mcp', authToken: 'tok' }
     const eventType: AgentStreamEventType = 'turn.started'
     const event: AgentStreamEvent<{ prompt: string }> = {
       schemaVersion: 1,
@@ -171,6 +171,7 @@ describe('@luddjs/core typed structures and matrix exports', () => {
       eventType,
       payload: { prompt: 'hello' },
     }
+    expect(mcp.url).toBe('http://127.0.0.1:4000/mcp')
     expect(event.schemaVersion).toBe(1)
     expect(event.eventType).toBe('turn.started')
     expect(event.payload.prompt).toBe('hello')

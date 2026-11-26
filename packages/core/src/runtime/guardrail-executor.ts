@@ -14,7 +14,6 @@ import { isAgentRunner } from '../types/harness.js'
 import { executeHumanReviewAfterStepGuardrail } from './after-step-human-review.js'
 import {
   getEffectiveMaxRetries,
-  getEffectiveMaxTotalTurns,
   handleGuardrailEscalation,
 } from './escalation-manager.js'
 import { checkGuardrailRetries, clearActiveGuardrailRetries } from './guardrail-retries.js'
@@ -35,7 +34,6 @@ export interface RunAfterStepGuardrailsParams {
   runDir: string
   attempt: number
   sessionId?: string
-  maxTotalTurns: number
   initialPrompt: string
   mcpServer?: Pick<EmbeddedMcpServer, 'url' | 'authToken'>
   cwd?: string
@@ -134,18 +132,13 @@ async function handleGuardrailFailure(
   verdict: GuardrailVerdict,
   params: RunAfterStepGuardrailsParams,
 ): Promise<GuardrailVerdict> {
-  const { step, snapshot, runDir, attempt, maxTotalTurns } = params
+  const { step, snapshot, runDir } = params
   const count = checkGuardrailRetries(snapshot, k, runDir)
   const isAgent = params.isAgent ?? isAgentRunner(step.run)
   const maxRetries = getEffectiveMaxRetries(guardrail, step.id, k, snapshot)
-  const effectiveMaxTotalTurns = getEffectiveMaxTotalTurns(maxTotalTurns, step.id, snapshot)
 
-  const isGuardrailRetriesExceeded = !isAgent || count > maxRetries
-  const isMaxTotalTurnsExceeded = attempt >= effectiveMaxTotalTurns
-
-  if (isGuardrailRetriesExceeded || isMaxTotalTurnsExceeded) {
-    const reason = isGuardrailRetriesExceeded ? 'guardrail_max_retries' : 'max_total_turns'
-    return handleGuardrailEscalation(params, k, guardrail, verdict, reason)
+  if (!isAgent || count > maxRetries) {
+    return handleGuardrailEscalation(params, k, guardrail, verdict)
   }
 
   const feedback = guardrail.type === 'human_review' && typeof verdict.body === 'string'
@@ -180,7 +173,7 @@ async function processGuardrailResult(
         ? { logKey: params.rehydratedGate.logKey }
         : {}),
     }
-    await handleGuardrailEscalation(params, k, guardrail, verdict, 'guardrail_max_retries')
+    await handleGuardrailEscalation(params, k, guardrail, verdict)
     return
   }
   const verdict = guardrail.type === 'human_review'

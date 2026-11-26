@@ -1,5 +1,6 @@
 import type {
   AgentAccessMode,
+  AgentMcpConnection,
   AgentRunner,
   AgentStepOutput,
   AgentStreamEvent,
@@ -8,12 +9,9 @@ import type {
   AgentTurnResult,
 } from '@luddjs/core'
 import type {
-  AgentMidTurnEventType,
   MockAgentConfig,
   MockAgentResponse,
   MockAgentRunner,
-  MockAgentTelemetryEvent,
-  MockAgentTurnResultWithEvents,
 } from './mock-agent.js'
 import type { PiAgentConfig } from './pi-agent.js'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
@@ -28,7 +26,7 @@ export {
 
 export type {
   AgentAccessMode,
-  AgentMidTurnEventType,
+  AgentMcpConnection,
   AgentRunner,
   AgentStepOutput,
   AgentStreamEvent,
@@ -38,8 +36,6 @@ export type {
   MockAgentConfig,
   MockAgentResponse,
   MockAgentRunner,
-  MockAgentTelemetryEvent,
-  MockAgentTurnResultWithEvents,
   PiAgentConfig,
   PiSession,
   PiSessionEvent,

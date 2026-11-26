@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type {
   AgentAccessMode,
+  AgentMcpConnection,
   AgentRunner,
   AgentStepOutput,
   AgentTurnInput,
@@ -16,6 +17,7 @@ export type { OnMaxRetriesExceededAction } from './guardrail.js'
 
 export type {
   AgentAccessMode,
+  AgentMcpConnection,
   AgentRunner,
   AgentStepOutput,
   AgentTurnInput,
@@ -141,7 +143,6 @@ export interface StepConfig<
   env?: DynamicProperty<Record<string, string>, TContext>
   matrix?: MatrixConfig<TMatrixItem, TMatrixContext, TArtifactKey>
   outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: BeforeStepGuardrails<TMatrixContext>

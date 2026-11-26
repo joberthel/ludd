@@ -88,7 +88,6 @@ function assertRetryState(runDir: string, prompts: string[], attempts: number[])
 
   const snapshot = readRunState(runDir)
   expect(snapshot.grantedExtraRetries?.['clock-step:0']).toBe(2)
-  expect(snapshot.grantedExtraTurns?.['clock-step']).toBe(2)
 
   const ledger = readLedgerEvents(runDir)
   const retryEvents = ledger.filter(e => e.eventType === 'step.retry')
@@ -107,7 +106,7 @@ afterEach(async () => {
 })
 
 describe('escalation gate action: retry budget extension and hint (AC 6.5.1, AC 6.5.2)', () => {
-  it('extends retry and turn budget by 2, passes hint, restarts chain and passes', async () => {
+  it('extends retry budget by 2, passes hint, restarts chain and passes', async () => {
     const runId = 'esc-retry-success'
     const runDir = path.join(tempDir, '.harness', 'runs', runId)
     const prompts: string[] = []

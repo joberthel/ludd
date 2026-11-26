@@ -184,17 +184,6 @@ export function validateStepGuardrailsConfig(
 
 export function validateStepRetriesConfig(id: string, step: Record<string, unknown>): void {
   if (
-    step.maxTotalTurns !== undefined
-    && (typeof step.maxTotalTurns !== 'number'
-      || !Number.isInteger(step.maxTotalTurns)
-      || step.maxTotalTurns < 1)
-  ) {
-    throw new HarnessConfigError(
-      `Step "${id}" maxTotalTurns must be a positive integer, received ${String(step.maxTotalTurns)}.`,
-    )
-  }
-
-  if (
     step.onMaxRetriesExceeded !== undefined
     && step.onMaxRetriesExceeded !== 'abort'
     && step.onMaxRetriesExceeded !== 'prompt_user'

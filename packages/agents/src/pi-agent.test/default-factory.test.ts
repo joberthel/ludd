@@ -108,8 +108,6 @@ describe('defaultPiSessionFactory', () => {
       mode: 'workspace-write',
       dangerMode: true,
       prompt: 'p',
-      mcpServerUrl: '',
-      mcpAuthToken: '',
       cwd: '/w',
       env: { TEST_ENV: '1' },
       signal: controller.signal,

@@ -241,11 +241,11 @@ async function executePiTurn<TOutput>(
     ? undefined
     : createSubmitStepOutputTool(input.outputSchema)
   const customTools = [
-    ...(input.mcpServerUrl === ''
+    ...(input.mcp === undefined
       ? []
       : createMcpBridgeTools({
-          url: input.mcpServerUrl,
-          authToken: input.mcpAuthToken,
+          url: input.mcp.url,
+          authToken: input.mcp.authToken,
           interactive: input.interactive,
         })),
     ...(submit === undefined

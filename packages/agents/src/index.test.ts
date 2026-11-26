@@ -1,9 +1,7 @@
 import type {
-  AgentMidTurnEventType,
+  AgentMcpConnection,
   AgentStreamEvent,
   AgentStreamEventType,
-  MockAgentTelemetryEvent,
-  MockAgentTurnResultWithEvents,
 } from './index.js'
 import { describe, expect, it } from 'vitest'
 import * as agents from './index.js'
@@ -16,17 +14,12 @@ describe('@luddjs/agents public exports', () => {
     expect(typeof agents.resolveStreamPath).toBe('function')
   })
 
-  it('exposes telemetry type contracts', () => {
-    const midTurnType: AgentMidTurnEventType = 'thought'
+  it('exposes stream and MCP connection type contracts', () => {
+    const mcp: AgentMcpConnection = {
+      url: 'http://127.0.0.1:4000/mcp',
+      authToken: 'secret',
+    }
     const streamType: AgentStreamEventType = 'thought'
-    const midTurnEvent: MockAgentTelemetryEvent = {
-      eventType: midTurnType,
-      payload: { note: 'planning' },
-    }
-    const turnResultWithEvents: MockAgentTurnResultWithEvents<string> = {
-      output: 'done',
-      events: [midTurnEvent],
-    }
     const streamEvent: AgentStreamEvent = {
       schemaVersion: 1,
       timestamp: new Date().toISOString(),
@@ -35,11 +28,11 @@ describe('@luddjs/agents public exports', () => {
       sessionId: 'sess-1',
       attempt: 1,
       eventType: streamType,
-      payload: midTurnEvent.payload,
+      payload: { note: 'planning' },
     }
 
-    expect(midTurnEvent.eventType).toBe('thought')
-    expect(turnResultWithEvents.output).toBe('done')
+    expect(mcp.url).toBe('http://127.0.0.1:4000/mcp')
+    expect(streamEvent.eventType).toBe('thought')
     expect(streamEvent.schemaVersion).toBe(1)
   })
 })

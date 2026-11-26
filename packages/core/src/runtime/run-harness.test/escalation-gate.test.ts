@@ -217,33 +217,3 @@ describe('escalation gate policy inheritance', () => {
     expect(result.status).toBe('passed')
   })
 })
-
-describe('escalation gate turns circuit breaker', () => {
-  it('escalates when maxTotalTurns circuit breaker triggers with prompt_user', async () => {
-    const runId = 'esc-run-turns'
-    const runDir = path.join(tempDir, '.harness', 'runs', runId)
-    const attempts: number[] = []
-
-    const harnessPromise = runHarness({
-      name: 'escalation-turns-pipeline',
-      steps: [
-        {
-          id: 'turns-step',
-          maxTotalTurns: 1,
-          onMaxRetriesExceeded: 'prompt_user',
-          run: createCounterAgent(attempts),
-          afterStep: [
-            execGuardrail({
-              command: ['node', '-e', 'process.exit(1)'],
-              maxRetries: 5,
-            }),
-          ],
-        },
-      ],
-    }, { runId, workspaceDir: tempDir })
-
-    await resolveWaitingGate(runDir, 'turns-step', 'pass')
-    const result = await harnessPromise
-    expect(result.status).toBe('passed')
-  })
-})

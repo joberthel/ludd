@@ -37,7 +37,6 @@ export interface PlainStepDef<
   env?: DynamicProperty<Record<string, string>, StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
   matrix?: never
   outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, unknown, false>>
@@ -84,7 +83,6 @@ export interface ItemsMatrixStepDef<
     itemsFromArtifact?: never
   }
   outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: TBeforeStep & BeforeStepGuardrails<StepContext<unknown, AccumulatePriorSteps<TPriorSteps>, TItem, true>>
@@ -147,7 +145,6 @@ export interface ArtifactMatrixStepDef<
     items?: never
   }
   outputSchema?: z.ZodType<TOutput>
-  maxTotalTurns?: number
   onMaxRetriesExceeded?: OnMaxRetriesExceededAction
   artifacts?: TArtifacts
   beforeStep?: TBeforeStep & BeforeStepGuardrails<

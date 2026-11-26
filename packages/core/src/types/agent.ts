@@ -3,6 +3,12 @@ import type { DynamicProperty, StepContext } from './context.js'
 
 export type AgentAccessMode = 'read-only' | 'workspace-write'
 
+/** Connection metadata for the embedded core MCP server passed to agent turns. */
+export interface AgentMcpConnection {
+  url: string
+  authToken: string
+}
+
 export interface AgentTurnInput<TContext extends StepContext<any, any, any, any> = StepContext> {
   ctx: TContext
   stepId: string
@@ -16,8 +22,8 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   cwd: string
   /** Resolved environment variables for this step/turn. */
   env: Record<string, string>
-  mcpServerUrl: string
-  mcpAuthToken: string
+  /** Embedded MCP server connection metadata when an MCP server is available for this turn. */
+  mcp?: AgentMcpConnection
   /**
    * The step's `outputSchema`, when declared. Adapters use it to collect structured output
    * in-turn (e.g. `piAgent`'s `submit_step_output` tool).

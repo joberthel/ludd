@@ -55,7 +55,6 @@ async function runWithResolution(tempDir: string, action: GateAction, feedback?:
       snapshot,
       runDir: tempDir,
       attempt: 1,
-      maxTotalTurns: 3,
       initialPrompt: 'Initial prompt',
       gateWaiter: waiter,
     },

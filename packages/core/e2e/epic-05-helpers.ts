@@ -50,12 +50,12 @@ async function executeTurn2(
   dir: string,
   captured: CapturedMcpData,
 ): Promise<{ commitMessage: string }> {
-  const pageRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
+  const pageRes = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'read_log_page', {
     logKey: 'implement-slices-m0-1-afterStep-1',
     page: 1,
     pageSize: 5,
   })
-  const searchRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'search_log', {
+  const searchRes = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'search_log', {
     logKey: 'implement-slices-m0-1-afterStep-1',
     query: 'FAILURES',
   })
@@ -72,7 +72,7 @@ async function executeTurn3(
   dir: string,
   captured: CapturedMcpData,
 ): Promise<{ commitMessage: string }> {
-  const jsonRes = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
+  const jsonRes = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'read_log_page', {
     logKey: 'implement-slices-m0-2-afterStep-0',
     page: 1,
     pageSize: 5,
@@ -170,7 +170,6 @@ export function buildImplementStep(dir: string, captured: CapturedMcpData): Step
     outputSchema: z.object({
       commitMessage: z.string().min(5),
     }),
-    maxTotalTurns: 10,
     run: createSliceAgent(dir, captured),
     afterStep: buildImplementGuardrails(dir),
   }
@@ -202,7 +201,7 @@ export function buildReviewStep(dir: string): StepConfig {
       prompt: 'Generate PR description',
       responses: [
         async (input) => {
-          await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'put_artifact', {
+          await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'put_artifact', {
             key: 'pr-description.md',
             content: '# Pull Request\n\nAuth slice implemented and verified.',
           })

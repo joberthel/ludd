@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { MaxTotalTurnsExceededError, runHarness } from '@luddjs/core'
+import { runHarness } from '@luddjs/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mockAgent } from '../mock-agent.js'
 
@@ -78,57 +78,5 @@ describe('mockAgent self-healing retry loop (AC 3.4.1, AC 3.4.2)', () => {
       commitMessage: 'feat: add agent retry',
       sessionId: expect.stringMatching(/^session-[0-9a-f-]+$/),
     })
-  })
-})
-
-describe('mockAgent maxTotalTurns circuit breaker (AC 3.4.3)', () => {
-  let tempDir: string
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-mock-breaker-'))
-  })
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true })
-  })
-
-  it('halts after maxTotalTurns without calling 4th turn', async () => {
-    let callCount = 0
-    const agent = mockAgent<{ commitMessage: string }>({
-      prompt: 'Write git commit message',
-      responses: [
-        () => {
-          callCount += 1
-          return { commitMessage: 'a' }
-        },
-        () => {
-          callCount += 1
-          return { commitMessage: 'b' }
-        },
-        () => {
-          callCount += 1
-          return { commitMessage: 'c' }
-        },
-        () => {
-          callCount += 1
-          return { commitMessage: 'never-called' }
-        },
-      ],
-    })
-
-    const result = await runHarness({
-      name: 'mock-agent-breaker',
-      steps: [
-        {
-          id: 'step-fail',
-          outputSchema: createMinLengthSchema(5) as any,
-          maxTotalTurns: 3,
-          run: agent,
-        },
-      ],
-    }, { workspaceDir: tempDir })
-
-    expect(result.status).toBe('failed')
-    expect(callCount).toBe(3)
-    expect(result.error).toBeInstanceOf(MaxTotalTurnsExceededError)
   })
 })

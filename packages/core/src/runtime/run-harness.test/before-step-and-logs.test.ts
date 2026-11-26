@@ -50,17 +50,17 @@ function make10kLines(): string {
 }
 
 async function queryMcpLogs(input: AgentTurnInput): Promise<{ page: any, lines: any, search: any }> {
-  const page = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
+  const page = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'read_log_page', {
     logKey: 's1-1-afterStep-0',
     page: 1,
     pageSize: 50,
   })
-  const lines = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_lines', {
+  const lines = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'read_log_lines', {
     logKey: 's1-1-afterStep-0',
     startLine: 5430,
     endLine: 5435,
   })
-  const search = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'search_log', {
+  const search = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'search_log', {
     logKey: 's1-1-afterStep-0',
     query: 'assertion failed',
   })
@@ -177,7 +177,7 @@ describe('structured JSON pagination over MCP (AC 5.3.3)', () => {
       prompt: 'Fix json errors',
       executeTurn: async (input: AgentTurnInput) => {
         if (input.attempt === 2) {
-          capturedPageResult = await callMcpTool(input.mcpServerUrl, input.mcpAuthToken, 'read_log_page', {
+          capturedPageResult = await callMcpTool(input.mcp!.url, input.mcp!.authToken, 'read_log_page', {
             logKey: 'json-step-1-afterStep-0',
             page: 2,
             pageSize: 5,

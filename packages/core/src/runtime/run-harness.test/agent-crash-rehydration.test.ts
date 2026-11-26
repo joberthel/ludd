@@ -4,12 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { releaseRunPidLock } from '../../persistence/pid-lock.js'
 import { readRunState, resolveRunDir, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { runHarness } from '../run-harness.js'
 
-function createBreakerAgent(turns: AgentTurnInput[]): AgentRunner<{ value: string }> {
+function createCrashRetryAgent(turns: AgentTurnInput[]): AgentRunner<{ value: string }> {
   let hasSimulatedCrash = false
   return {
     __kind: 'agent',
@@ -27,8 +26,14 @@ function createBreakerAgent(turns: AgentTurnInput[]): AgentRunner<{ value: strin
         hasSimulatedCrash = true
         throw new Error('simulated crash on attempt 2')
       }
+      if (input.attempt === 2) {
+        return {
+          output: { value: 'invalid-turn-2' },
+          sessionId: input.sessionId,
+        }
+      }
       return {
-        output: { value: 'invalid-still' },
+        output: { value: 'valid' },
         sessionId: input.sessionId,
       }
     },
@@ -145,7 +150,7 @@ describe('runHarness cumulative attempt counter preservation across crashes (AC 
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it('preserves attempt counter across restarts enforcing maxTotalTurns circuit breaker', async () => {
+  it('preserves attempt counter across restarts and resumes retry progression', async () => {
     const turns: AgentTurnInput[] = []
     const schema = z.object({
       value: z.literal('valid'),
@@ -155,10 +160,9 @@ describe('runHarness cumulative attempt counter preservation across crashes (AC 
       name: 'attempt-preservation-pipeline',
       steps: [
         {
-          id: 'step-breaker',
-          run: createBreakerAgent(turns),
+          id: 'step-retry-resume',
+          run: createCrashRetryAgent(turns),
           outputSchema: schema,
-          maxTotalTurns: 3,
         },
       ],
     }
@@ -170,11 +174,7 @@ describe('runHarness cumulative attempt counter preservation across crashes (AC 
     releaseRunPidLock(runDir)
 
     const run2 = await runHarness(harness, { workspaceDir: tempDir, runId })
-    expect(run2.status).toBe('failed')
-    expect(run2.error).toBeInstanceOf(MaxTotalTurnsExceededError)
-
-    const maxError = run2.error as MaxTotalTurnsExceededError
-    expect(maxError.maxTotalTurns).toBe(3)
+    expect(run2.status).toBe('passed')
     expect(turns.map(t => t.attempt)).toEqual([1, 2, 2, 3])
   })
 })

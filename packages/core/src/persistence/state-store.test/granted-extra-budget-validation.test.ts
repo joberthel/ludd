@@ -25,7 +25,7 @@ function writeRawState(content: unknown): string {
 }
 
 describe('readRunState valid granted extra budget', () => {
-  it('accepts valid grantedExtraRetries and grantedExtraTurns', () => {
+  it('accepts valid grantedExtraRetries', () => {
     const runDir = writeRawState({
       schemaVersion: 1,
       runId: 'run-budget',
@@ -37,10 +37,6 @@ describe('readRunState valid granted extra budget', () => {
         'step-1:0': 2,
         'step-2:1': 0,
       },
-      grantedExtraTurns: {
-        'step-1': 2,
-        'step-2': 0,
-      },
       steps: {},
       updatedAt: '2026-11-09T20:00:00.000Z',
     })
@@ -49,10 +45,6 @@ describe('readRunState valid granted extra budget', () => {
     expect(parsed.grantedExtraRetries).toEqual({
       'step-1:0': 2,
       'step-2:1': 0,
-    })
-    expect(parsed.grantedExtraTurns).toEqual({
-      'step-1': 2,
-      'step-2': 0,
     })
   })
 })
@@ -78,29 +70,6 @@ describe('readRunState invalid granted extra budget', () => {
     expect(() => readRunState(writeRawState({
       ...base,
       grantedExtraRetries: { 'step-1:0': 1.5 },
-    }))).toThrow(ZodError)
-  })
-
-  it('rejects negative or non-integer numbers in grantedExtraTurns', () => {
-    const base = {
-      schemaVersion: 1,
-      runId: 'run-invalid-turns',
-      harnessName: 'test',
-      workflowName: 'test',
-      status: 'running',
-      activeStepId: null,
-      steps: {},
-      updatedAt: '2026-11-09T20:00:00.000Z',
-    }
-
-    expect(() => readRunState(writeRawState({
-      ...base,
-      grantedExtraTurns: { 'step-1': -2 },
-    }))).toThrow(ZodError)
-
-    expect(() => readRunState(writeRawState({
-      ...base,
-      grantedExtraTurns: { 'step-1': 3.14 },
     }))).toThrow(ZodError)
   })
 })

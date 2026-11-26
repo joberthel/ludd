@@ -7,7 +7,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { GuardrailMaxRetriesExceededError } from '../../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { readRunState, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { handleGuardrailEscalation } from '../escalation-manager.js'
@@ -70,7 +69,6 @@ async function callEscalation(
   step: StepConfig,
   ctx: any,
   guardrail: Guardrail,
-  reason: 'guardrail_max_retries' | 'max_total_turns',
   waiter?: any,
 ) {
   const verdict: GuardrailVerdict = { status: 'fail', body: 'fail-abort' }
@@ -81,14 +79,12 @@ async function callEscalation(
       snapshot,
       runDir: tempDir,
       attempt: 2,
-      maxTotalTurns: 3,
       initialPrompt: 'Initial prompt',
       gateWaiter: waiter,
     },
     0,
     guardrail,
     verdict,
-    reason,
   )
 }
 
@@ -104,7 +100,7 @@ describe('handleGuardrailEscalation preconditions', () => {
     }
 
     await expect(
-      callEscalation(tempDir, snapshot, step, ctx, guardrail, 'guardrail_max_retries', undefined),
+      callEscalation(tempDir, snapshot, step, ctx, guardrail, undefined),
     ).rejects.toThrow('GateWaiter is required for onMaxRetriesExceeded: prompt_user')
   })
 })
@@ -129,29 +125,12 @@ describe('handleGuardrailEscalation abort policy', () => {
     }
 
     await expect(
-      callEscalation(tempDir, snapshot, step, ctx, railWithoutMax, 'guardrail_max_retries', waiter),
+      callEscalation(tempDir, snapshot, step, ctx, railWithoutMax, waiter),
     ).rejects.toThrow(GuardrailMaxRetriesExceededError)
 
     await expect(
-      callEscalation(tempDir, snapshot, step, ctx, railWithMax, 'guardrail_max_retries', waiter),
+      callEscalation(tempDir, snapshot, step, ctx, railWithMax, waiter),
     ).rejects.toThrow(GuardrailMaxRetriesExceededError)
-  })
-
-  it('throws immediately when policy is abort for max_total_turns', async () => {
-    const snapshot = makeSnapshot()
-    writeRunStateAtomic(tempDir, snapshot)
-    const { step, ctx } = makeContext(snapshot)
-    step.onMaxRetriesExceeded = 'abort'
-    const guardrail: Guardrail = {
-      __kind: 'guardrail',
-      type: 'exec',
-      execute: async () => ({ status: 'fail' }),
-    }
-    const waiter = createGateWaiter()
-
-    await expect(
-      callEscalation(tempDir, snapshot, step, ctx, guardrail, 'max_total_turns', waiter),
-    ).rejects.toThrow(MaxTotalTurnsExceededError)
   })
 })
 
@@ -200,14 +179,12 @@ describe('handleGuardrailEscalation state and ledger emissions', () => {
         snapshot,
         runDir: tempDir,
         attempt: 2,
-        maxTotalTurns: 3,
         initialPrompt: 'Initial prompt',
         gateWaiter: waiter,
       },
       1,
       guardrail,
       verdict,
-      'guardrail_max_retries',
     )
 
     await waitForWaiter(waiter)

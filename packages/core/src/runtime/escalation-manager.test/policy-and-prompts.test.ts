@@ -57,20 +57,20 @@ describe('formatEscalationPrompt', () => {
       body: 'Tests failed with 3 errors',
       logKey: 'logs/step-1/guardrail-0.txt',
     }
-    const prompt = formatEscalationPrompt('step-1', 0, verdict, 'guardrail_max_retries')
+    const prompt = formatEscalationPrompt('step-1', 0, verdict)
     expect(prompt).toContain('Guardrail #0 in step "step-1" exceeded maxRetries.')
     expect(prompt).toContain('Summary: Tests failed with 3 errors')
     expect(prompt).toContain('MCP logKey: "logs/step-1/guardrail-0.txt"')
     expect(prompt).toContain('Choose pass, skip, or abort.')
   })
 
-  it('formats prompt for max_total_turns with object body', () => {
+  it('formats prompt with object body', () => {
     const verdict: GuardrailVerdict = {
       status: 'fail',
       body: { code: 1, signal: 'SIGTERM' },
     }
-    const prompt = formatEscalationPrompt('step-2', 1, verdict, 'max_total_turns')
-    expect(prompt).toContain('Step "step-2" exceeded maxTotalTurns at guardrail #1.')
+    const prompt = formatEscalationPrompt('step-2', 1, verdict)
+    expect(prompt).toContain('Guardrail #1 in step "step-2" exceeded maxRetries.')
     expect(prompt).toContain('Summary: {"code":1,"signal":"SIGTERM"}')
     expect(prompt).not.toContain('MCP logKey')
     expect(prompt).toContain('Choose pass, skip, or abort.')
@@ -78,7 +78,7 @@ describe('formatEscalationPrompt', () => {
 
   it('formats prompt when body is omitted', () => {
     const verdict: GuardrailVerdict = { status: 'fail' }
-    const prompt = formatEscalationPrompt('step-3', 2, verdict, 'guardrail_max_retries')
+    const prompt = formatEscalationPrompt('step-3', 2, verdict)
     expect(prompt).toContain('Guardrail #2 in step "step-3" exceeded maxRetries.')
     expect(prompt).not.toContain('Summary:')
     expect(prompt).toContain('Choose pass, skip, or abort.')

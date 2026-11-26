@@ -77,7 +77,7 @@ describe('runHarness agent MCP server tool invocation', () => {
     await fs.promises.rm(tempDir, { recursive: true, force: true })
   })
 
-  it('injects mcpServerUrl and mcpAuthToken into AgentTurnInput for tool calls', async () => {
+  it('injects mcp connection info into AgentTurnInput for tool calls', async () => {
     let capturedMcpUrl = ''
     let capturedAuthToken = ''
 
@@ -86,11 +86,11 @@ describe('runHarness agent MCP server tool invocation', () => {
       mode: 'workspace-write',
       prompt: 'store an artifact',
       executeTurn: async (input: AgentTurnInput) => {
-        capturedMcpUrl = input.mcpServerUrl
-        capturedAuthToken = input.mcpAuthToken
-        expect(input.mcpServerUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/)
-        expect(input.mcpAuthToken).toHaveLength(64)
-        await callPutArtifact(input.mcpServerUrl, input.mcpAuthToken, 'agent-output.md', '# Summary by agent')
+        capturedMcpUrl = input.mcp!.url
+        capturedAuthToken = input.mcp!.authToken
+        expect(input.mcp?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/)
+        expect(input.mcp?.authToken).toHaveLength(64)
+        await callPutArtifact(input.mcp!.url, input.mcp!.authToken, 'agent-output.md', '# Summary by agent')
         return { output: 'artifact-stored', sessionId: input.sessionId }
       },
     }
@@ -139,8 +139,8 @@ describe('runHarness agent MCP server lifecycle on failure', () => {
       mode: 'read-only',
       prompt: 'failing turn',
       executeTurn: async (input: AgentTurnInput) => {
-        serverUrl = input.mcpServerUrl
-        serverToken = input.mcpAuthToken
+        serverUrl = input.mcp!.url
+        serverToken = input.mcp!.authToken
         throw new Error('agent crashed during turn')
       },
     }

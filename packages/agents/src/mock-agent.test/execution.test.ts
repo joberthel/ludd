@@ -21,8 +21,10 @@ const dummyInput: AgentTurnInput = {
   cwd: '/tmp/worktree',
   env: { WORKTREE: '1' },
   signal: abortController.signal,
-  mcpServerUrl: 'http://127.0.0.1:0/mcp',
-  mcpAuthToken: 'dummy-token',
+  mcp: {
+    url: 'http://127.0.0.1:0/mcp',
+    authToken: 'dummy-token',
+  },
 }
 
 describe('mockAgent turn execution and response exhaustion', () => {

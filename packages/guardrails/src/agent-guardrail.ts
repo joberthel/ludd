@@ -14,8 +14,6 @@ import type {
 import { randomUUID } from 'node:crypto'
 import { piAgent } from '@luddjs/agents'
 import {
-  appendLedgerEvent,
-  appendStreamEvent,
   extractAbortError,
   isAgentRunner,
   resolveDynamicProperty,
@@ -110,66 +108,6 @@ function validateAgentGuardrailConfig<TBody, TContext extends StepContext<any, a
   validatePagination(config.pagination)
 }
 
-function emitPreExecutionTelemetry(
-  input: GuardrailExecutionInput<StepContext>,
-  sessionId: string,
-  prompt: string,
-  mode: AgentAccessMode,
-  guardrailName?: string,
-): void {
-  if (!input.runDir) {
-    return
-  }
-  appendLedgerEvent(input.runDir, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: input.ctx.runId,
-    stepId: input.stepId,
-    matrixIndex: input.ctx.matrix?.index,
-    eventType: 'agent.stream.linked',
-    payload: {
-      sessionId,
-      streamPath: `streams/${sessionId}.jsonl`,
-      attempt: input.attempt,
-      phase: input.phase,
-      guardrailIndex: input.guardrailIndex,
-      ...(guardrailName !== undefined
-        ? { guardrailName }
-        : {}),
-    },
-  })
-  appendStreamEvent(input.runDir, sessionId, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: input.ctx.runId,
-    stepId: input.stepId,
-    sessionId,
-    attempt: input.attempt,
-    eventType: 'turn.started',
-    payload: { prompt, mode },
-  })
-}
-
-function emitPostExecutionTelemetry(
-  input: GuardrailExecutionInput<StepContext>,
-  sessionId: string,
-  output: unknown,
-): void {
-  if (!input.runDir) {
-    return
-  }
-  appendStreamEvent(input.runDir, sessionId, {
-    schemaVersion: 1,
-    timestamp: new Date().toISOString(),
-    runId: input.ctx.runId,
-    stepId: input.stepId,
-    sessionId,
-    attempt: input.attempt,
-    eventType: 'turn.completed',
-    payload: { output },
-  })
-}
-
 function serializeFailBody(body: unknown): string | undefined {
   if (typeof body === 'string') {
     return body
@@ -221,8 +159,14 @@ async function runGuardrailAgentTurn<TContext extends StepContext<any, any, any,
       ...(input.signal === undefined
         ? {}
         : { signal: input.signal }),
-      mcpServerUrl: input.mcpServerUrl,
-      mcpAuthToken: input.mcpAuthToken,
+      ...(input.mcpServerUrl !== ''
+        ? {
+            mcp: {
+              url: input.mcpServerUrl,
+              authToken: input.mcpAuthToken,
+            },
+          }
+        : {}),
       outputSchema: verdictSchema,
     })
   }
@@ -256,13 +200,6 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     'agentGuardrail',
   )
 
-  emitPreExecutionTelemetry(
-    input as GuardrailExecutionInput<StepContext>,
-    sessionId,
-    prompt,
-    mode,
-    config.name,
-  )
   const verdictSchema = z.object({
     status: z.enum(['pass', 'fail', 'skip']),
     body: (config.bodySchema ?? z.unknown().optional()) as z.ZodType<TBody>,
@@ -278,7 +215,6 @@ async function executeAgentTurn<TBody, TContext extends StepContext<any, any, an
     env,
     verdictSchema,
   )
-  emitPostExecutionTelemetry(input as GuardrailExecutionInput<StepContext>, sessionId, turnResult.output)
 
   const parsed = await verdictSchema.safeParseAsync(turnResult.output)
   if (!parsed.success) {

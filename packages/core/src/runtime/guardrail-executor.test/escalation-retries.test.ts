@@ -92,7 +92,6 @@ describe('runAfterStepGuardrails escalation with force pass', () => {
         runDir,
         attempt: 1,
         sessionId: 's-1',
-        maxTotalTurns: 3,
         initialPrompt: 'Do task',
         gateWaiter: waiter,
       })
@@ -134,7 +133,6 @@ describe('runAfterStepGuardrails escalation with force skip', () => {
         runDir,
         attempt: 1,
         sessionId: 's-1',
-        maxTotalTurns: 3,
         initialPrompt: 'Do task',
         gateWaiter: waiter,
       })
@@ -172,7 +170,6 @@ describe('runAfterStepGuardrails escalation with force skip', () => {
         runDir,
         attempt: 1,
         sessionId: 's-1',
-        maxTotalTurns: 3,
         initialPrompt: 'Do task',
         gateWaiter: waiter,
         rehydratedGate: {
@@ -224,7 +221,6 @@ describe('runAfterStepGuardrails escalation with abort', () => {
         runDir,
         attempt: 1,
         sessionId: 's-1',
-        maxTotalTurns: 3,
         initialPrompt: 'Do task',
         gateWaiter: waiter,
       })
@@ -269,7 +265,6 @@ describe('runAfterStepGuardrails escalation chain advancement', () => {
         runDir,
         attempt: 1,
         sessionId: 's-1',
-        maxTotalTurns: 3,
         initialPrompt: 'Do task',
         gateWaiter: waiter,
       })

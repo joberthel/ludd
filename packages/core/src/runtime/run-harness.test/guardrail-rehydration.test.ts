@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { appendLedgerEvent } from '../../persistence/ledger-writer.js'
-import { resolveRunDir, writeRunStateAtomic } from '../../persistence/state-store.js'
+import { readRunState, resolveRunDir, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { runHarness } from '../run-harness.js'
 
 let tempDir: string
@@ -152,13 +152,12 @@ describe('runHarness crash rehydration: prompt rehydration', () => {
 })
 
 describe('runHarness crash rehydration: granted budgets', () => {
-  it('preserves grantedExtraRetries and grantedExtraTurns in snapshot on rehydration', async () => {
+  it('preserves grantedExtraRetries in snapshot on rehydration', async () => {
     const runId = 'rehydrate-granted-budgets'
     const runDir = resolveRunDir(tempDir, runId)
     const snapshot: RunStateSnapshot = {
       ...createRetrySnapshot(runId),
       grantedExtraRetries: { 'step-impl:0': 2 },
-      grantedExtraTurns: { 'step-impl': 3 },
     }
     writeRunStateAtomic(runDir, snapshot)
 
@@ -174,5 +173,6 @@ describe('runHarness crash rehydration: granted budgets', () => {
 
     const res = await runHarness(config, { runId, workspaceDir: tempDir })
     expect(res.status).toBe('passed')
+    expect(readRunState(runDir).grantedExtraRetries).toEqual({ 'step-impl:0': 2 })
   })
 })

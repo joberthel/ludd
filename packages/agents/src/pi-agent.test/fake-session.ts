@@ -40,8 +40,6 @@ export function turnInput(runDir: string, over: Partial<AgentTurnInput<any>> = {
     runDir,
     cwd: '/work',
     env: {},
-    mcpServerUrl: '',
-    mcpAuthToken: '',
     ...over,
   }
 }

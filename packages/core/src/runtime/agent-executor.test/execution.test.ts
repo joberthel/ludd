@@ -8,8 +8,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { StepOutputValidationError } from '../../errors/step-output-validation-error.js'
-import { readLedgerEvents } from '../../persistence/ledger-writer.js'
-import { readStreamEvents } from '../../persistence/stream-writer.js'
 import { executeAgentStep } from '../agent-executor.js'
 
 function createDummyContext(): StepContext {
@@ -69,28 +67,8 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
     expect(captured?.mode).toBe('read-only')
     expect(captured?.attempt).toBe(1)
     expect(captured?.runDir).toBe(tempDir)
+    expect(captured?.mcp).toBeUndefined()
     expect(output).toEqual({ value: 'done', sessionId: captured?.sessionId })
-
-    const ledgerEvents = readLedgerEvents(tempDir)
-    expect(ledgerEvents).toHaveLength(1)
-    expect(ledgerEvents[0].eventType).toBe('agent.stream.linked')
-    expect(ledgerEvents[0].payload).toEqual({
-      sessionId: captured?.sessionId,
-      streamPath: `streams/${captured?.sessionId}.jsonl`,
-      attempt: 1,
-    })
-
-    const streamEvents = readStreamEvents(tempDir, captured!.sessionId)
-    expect(streamEvents).toHaveLength(2)
-    expect(streamEvents[0].eventType).toBe('turn.started')
-    expect(streamEvents[0].payload).toEqual({
-      prompt: 'Prompt for r-exec-test',
-      mode: 'read-only',
-    })
-    expect(streamEvents[1].eventType).toBe('turn.completed')
-    expect(streamEvents[1].payload).toEqual({
-      output: 'done',
-    })
   })
 })
 
@@ -236,8 +214,10 @@ describe('executeAgentStep outputSchema handling and transformation', () => {
     expect(captured?.cwd).toBe('/repo/wt')
     expect(captured?.env).toEqual({ WT: '1' })
     expect(captured?.signal).toBe(controller.signal)
-    expect(captured?.mcpServerUrl).toBe('http://127.0.0.1:9999/mcp')
-    expect(captured?.mcpAuthToken).toBe('tok')
+    expect(captured?.mcp).toEqual({
+      url: 'http://127.0.0.1:9999/mcp',
+      authToken: 'tok',
+    })
     expect(captured).not.toHaveProperty('environment')
   })
 
@@ -309,7 +289,6 @@ describe('executeAgentStep outputSchema handling and transformation', () => {
     const abortingRailStep: StepConfig = {
       id: 's-abort-rail',
       run: retryProtectedAgent,
-      maxTotalTurns: 3,
       afterStep: [
         {
           __kind: 'guardrail',

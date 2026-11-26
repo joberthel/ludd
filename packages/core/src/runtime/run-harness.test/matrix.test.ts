@@ -135,6 +135,13 @@ describe('runHarness matrix agent runner & ledger matrixIndex', () => {
             items: ['apple', 'banana'],
           },
           run: agent,
+          afterStep: [
+            {
+              __kind: 'guardrail',
+              type: 'fn',
+              execute: async () => ({ status: 'pass' }),
+            },
+          ],
         },
       ],
     }
@@ -146,10 +153,10 @@ describe('runHarness matrix agent runner & ledger matrixIndex', () => {
 
     const runDir = path.join(workspaceDir, '.harness', 'runs', 'r-agent-matrix')
     const events = readLedgerEvents(runDir)
-    const streamEvents = events.filter(e => e.eventType === 'agent.stream.linked')
-    expect(streamEvents).toHaveLength(2)
-    expect(streamEvents[0].matrixIndex).toBe(0)
-    expect(streamEvents[1].matrixIndex).toBe(1)
+    const guardrailEvents = events.filter(e => e.eventType === 'guardrail.started')
+    expect(guardrailEvents).toHaveLength(2)
+    expect(guardrailEvents[0].matrixIndex).toBe(0)
+    expect(guardrailEvents[1].matrixIndex).toBe(1)
   })
 })
 

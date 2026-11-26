@@ -3,13 +3,11 @@ import type { RunStateSnapshot } from '../../types/state.js'
 import { describe, expect, it } from 'vitest'
 import {
   getEffectiveMaxRetries,
-  getEffectiveMaxTotalTurns,
   resolveAddRetries,
 } from '../escalation-manager.js'
 
 function makeSnapshot(
   extraRetries?: Record<string, number>,
-  extraTurns?: Record<string, number>,
 ): RunStateSnapshot {
   return {
     schemaVersion: 1,
@@ -19,7 +17,6 @@ function makeSnapshot(
     status: 'running',
     activeStepId: 'step-1',
     grantedExtraRetries: extraRetries,
-    grantedExtraTurns: extraTurns,
     steps: {},
     updatedAt: new Date().toISOString(),
   }
@@ -64,19 +61,6 @@ describe('getEffectiveMaxRetries', () => {
     }
     const snapshot = makeSnapshot()
     expect(getEffectiveMaxRetries(rail, 'step-1', 0, snapshot)).toBe(1)
-  })
-})
-
-describe('getEffectiveMaxTotalTurns', () => {
-  it('calculates base turns plus granted extra turns', () => {
-    const snapshot = makeSnapshot(undefined, { 'step-1': 4 })
-    expect(getEffectiveMaxTotalTurns(10, 'step-1', snapshot)).toBe(14)
-    expect(getEffectiveMaxTotalTurns(10, 'other-step', snapshot)).toBe(10)
-  })
-
-  it('handles undefined grantedExtraTurns gracefully', () => {
-    const snapshot = makeSnapshot()
-    expect(getEffectiveMaxTotalTurns(15, 'step-1', snapshot)).toBe(15)
   })
 })
 

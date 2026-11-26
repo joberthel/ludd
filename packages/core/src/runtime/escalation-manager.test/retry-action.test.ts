@@ -7,7 +7,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { GuardrailMaxRetriesExceededError } from '../../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { readRunState, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { handleGuardrailEscalation } from '../escalation-manager.js'
@@ -61,7 +60,6 @@ async function startEscalation(
   const snapshot = makeSnapshot()
   if (options?.initialExtra) {
     snapshot.grantedExtraRetries = { 'step-esc:0': 1 }
-    snapshot.grantedExtraTurns = { 'step-esc': 1 }
   }
   writeRunStateAtomic(tempDir, snapshot)
   const { step, ctx } = makeContext(snapshot)
@@ -80,14 +78,12 @@ async function startEscalation(
       runDir: tempDir,
       attempt: 2,
       sessionId: options?.sessionId,
-      maxTotalTurns: 5,
       initialPrompt: 'Initial prompt',
       gateWaiter: waiter,
     },
     0,
     guardrail,
     verdict,
-    'guardrail_max_retries',
   )
   return { promise, ctx }
 }
@@ -129,7 +125,6 @@ describe('handleGuardrailEscalation action: retry budget extension', () => {
 
     const diskState = readRunState(tempDir)
     expect(diskState.grantedExtraRetries?.['step-esc:0']).toBe(2)
-    expect(diskState.grantedExtraTurns?.['step-esc']).toBe(2)
 
     const events = readLedgerEvents(tempDir)
     const retryEvent = events.find(e => e.eventType === 'step.retry')
@@ -150,7 +145,6 @@ describe('handleGuardrailEscalation action: retry budget extension', () => {
     await expect(promise).rejects.toThrow(GuardrailRetrySignal)
     const diskState = readRunState(tempDir)
     expect(diskState.grantedExtraRetries?.['step-esc:0']).toBe(2)
-    expect(diskState.grantedExtraTurns?.['step-esc']).toBe(2)
   })
 })
 
@@ -164,10 +158,9 @@ describe('handleGuardrailEscalation action: retry validation and error cases', (
     await expect(promise).rejects.toThrow('Invalid addRetries: expected integer >= 1, received 0')
   })
 
-  it('throws with effective maxRetries and turns when policy is abort', async () => {
+  it('throws with effective maxRetries when policy is abort', async () => {
     const snapshot = makeSnapshot()
     snapshot.grantedExtraRetries = { 'step-abort:0': 3 }
-    snapshot.grantedExtraTurns = { 'step-abort': 4 }
     writeRunStateAtomic(tempDir, snapshot)
     const step: StepConfig = {
       id: 'step-abort',
@@ -188,18 +181,15 @@ describe('handleGuardrailEscalation action: retry validation and error cases', (
       execute: async () => ({ status: 'fail' }),
     }
 
-    const callEsc = async (reason: 'guardrail_max_retries' | 'max_total_turns') =>
+    await expect(
       handleGuardrailEscalation({
         step,
         ctx,
         snapshot,
         runDir: tempDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
-      }, 0, guardrail, { status: 'fail' }, reason)
-
-    await expect(callEsc('guardrail_max_retries')).rejects.toThrow(GuardrailMaxRetriesExceededError)
-    await expect(callEsc('max_total_turns')).rejects.toThrow(MaxTotalTurnsExceededError)
+      }, 0, guardrail, { status: 'fail' }),
+    ).rejects.toThrow(GuardrailMaxRetriesExceededError)
   })
 })

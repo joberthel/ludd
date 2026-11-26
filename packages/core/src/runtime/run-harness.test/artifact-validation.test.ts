@@ -4,7 +4,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { StepArtifactValidationError } from '../../errors/step-artifact-validation-error.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { releaseRunPidLock } from '../../persistence/pid-lock.js'
@@ -32,8 +31,8 @@ describe('runHarness artifact validation AC 4.2.1: valid artifacts pass', () => 
       mode: 'read-only',
       prompt: 'produce spec and todos',
       executeTurn: async (input) => {
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'spec.md', '# Feature Spec\nDetails.')
-        await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'todos.json', JSON.stringify([
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'spec.md', '# Feature Spec\nDetails.')
+        await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'todos.json', JSON.stringify([
           { id: '1', title: 'Write tests' },
         ]))
         return { output: 'complete', sessionId: input.sessionId }
@@ -83,7 +82,7 @@ describe('runHarness artifact validation AC 4.2.2: agent self-healing retry', ()
       executeTurn: async (input) => {
         turns.push(input)
         if (input.attempt > 1) {
-          await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'spec.md', '# Spec content')
+          await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'spec.md', '# Spec content')
         }
         return { output: 'done', sessionId: input.sessionId }
       },
@@ -116,58 +115,6 @@ describe('runHarness artifact validation AC 4.2.2: agent self-healing retry', ()
       sessionId: turns[0].sessionId,
       reason: 'artifact_validation_failed',
     })
-  })
-})
-
-describe('runHarness artifact validation AC 4.2.3: maxTotalTurns circuit breaker', () => {
-  let tempDir: string
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-art-val-breaker-'))
-  })
-  afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true })
-  })
-
-  it('halts when attempts reach maxTotalTurns and records failure in ledger', async () => {
-    let callCount = 0
-    const agent: AgentRunner<string> = {
-      __kind: 'agent',
-      mode: 'read-only',
-      prompt: 'never produces artifact',
-      executeTurn: async (input) => {
-        callCount += 1
-        return { output: 'ignored', sessionId: input.sessionId }
-      },
-    }
-
-    const result = await runHarness({
-      name: 'breaker-harness',
-      steps: [
-        {
-          id: 'step-breaker',
-          run: agent,
-          maxTotalTurns: 3,
-          artifacts: {
-            'output.txt': { nonEmpty: true },
-          },
-        },
-      ],
-    }, { workspaceDir: tempDir })
-
-    expect(result.status).toBe('failed')
-    expect(callCount).toBe(3)
-    expect(result.failedStepId).toBe('step-breaker')
-    expect(result.error).toBeInstanceOf(MaxTotalTurnsExceededError)
-
-    const maxError = result.error as MaxTotalTurnsExceededError
-    expect(maxError.stepId).toBe('step-breaker')
-    expect(maxError.maxTotalTurns).toBe(3)
-    expect(maxError.lastError).toBeInstanceOf(StepArtifactValidationError)
-
-    const runDir = resolveRunDir(tempDir, result.runId)
-    const ledger = readLedgerEvents(runDir)
-    expect(ledger.filter(e => e.eventType === 'step.retry')).toHaveLength(2)
   })
 })
 
@@ -224,7 +171,7 @@ function createRehydrationAgent(state: { crashed: boolean, prompt: string }): Ag
         state.crashed = true
         throw new Error('mid-turn process crash on attempt 2')
       }
-      await putMcpArtifact(input.mcpServerUrl, input.mcpAuthToken, 'spec.md', '# Recovered Spec')
+      await putMcpArtifact(input.mcp!.url, input.mcp!.authToken, 'spec.md', '# Recovered Spec')
       return { output: 'recovered', sessionId: input.sessionId }
     },
   }

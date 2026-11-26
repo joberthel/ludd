@@ -4,8 +4,6 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   GuardrailMaxRetriesExceededError,
-  readLedgerEvents,
-  readStreamEvents,
   resolveRunDir,
   runHarness,
 } from '@luddjs/core'
@@ -71,26 +69,6 @@ async function verifyOffloadedLogs(runDir: string): Promise<void> {
   })
 }
 
-function verifyTelemetry(runDir: string, sessionIds: string[]): void {
-  const ledgerEvents = readLedgerEvents(runDir)
-  const linked = ledgerEvents.filter(e => e.eventType === 'agent.stream.linked')
-  const reviewLinked = linked.filter(e =>
-    (e.payload as { sessionId: string }).sessionId.startsWith('guardrail-session-'),
-  )
-  expect(reviewLinked.length).toBe(2)
-  expect((reviewLinked[0].payload as { sessionId: string }).sessionId).toBe(sessionIds[0])
-  expect((reviewLinked[1].payload as { sessionId: string }).sessionId).toBe(sessionIds[1])
-
-  const stream1 = readStreamEvents(runDir, sessionIds[0])
-  expect(stream1.map(e => e.eventType)).toEqual(['turn.started', 'turn.completed'])
-  expect(stream1[0].payload).toEqual({
-    prompt: 'Prüfe den aktuellen Git-Diff dieses Slices auf Sicherheitslücken.',
-    mode: 'read-only',
-  })
-  const stream2 = readStreamEvents(runDir, sessionIds[1])
-  expect(stream2.map(e => e.eventType)).toEqual(['turn.started', 'turn.completed'])
-}
-
 describe('agentGuardrail integration: self-healing workflow (AC 5.4.1 - 5.4.3)', () => {
   let tempDir: string
 
@@ -139,7 +117,6 @@ describe('agentGuardrail integration: self-healing workflow (AC 5.4.1 - 5.4.3)',
 
     const runDir = resolveRunDir(tempDir, result.runId)
     await verifyOffloadedLogs(runDir)
-    verifyTelemetry(runDir, tracking.sessionIds)
   })
 })
 

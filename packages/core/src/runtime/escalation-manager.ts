@@ -4,13 +4,10 @@ import type { GateResolveParams } from '../types/ipc.js'
 import type { ActiveGateState, RunStateSnapshot } from '../types/state.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
 import { GuardrailMaxRetriesExceededError } from '../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../errors/max-total-turns-exceeded-error.js'
 import { writeRunStateAtomic } from '../persistence/state-store.js'
 import { emitGuardrailEvent, emitStepRetry } from './guardrail-executor.js'
 import { formatGuardrailRetryPrompt } from './guardrail-retry-prompt.js'
 import { GuardrailRetrySignal } from './guardrail-retry-signal.js'
-
-export type EscalationReason = 'guardrail_max_retries' | 'max_total_turns'
 
 export function determineEscalationPolicy(
   guardrail: Guardrail<any, any>,
@@ -23,11 +20,8 @@ export function formatEscalationPrompt(
   stepId: string,
   guardrailIndex: number,
   verdict: GuardrailVerdict,
-  reason: EscalationReason,
 ): string {
-  const reasonText = reason === 'guardrail_max_retries'
-    ? `Guardrail #${guardrailIndex} in step "${stepId}" exceeded maxRetries.`
-    : `Step "${stepId}" exceeded maxTotalTurns at guardrail #${guardrailIndex}.`
+  const reasonText = `Guardrail #${guardrailIndex} in step "${stepId}" exceeded maxRetries.`
   const summaryText = typeof verdict.body === 'string'
     ? verdict.body.trim()
     : verdict.body !== undefined
@@ -53,15 +47,6 @@ export function getEffectiveMaxRetries(
   }
   const extra = snapshot.grantedExtraRetries?.[`${stepId}:${guardrailIndex}`] ?? 0
   return guardrail.maxRetries + extra
-}
-
-export function getEffectiveMaxTotalTurns(
-  baseMaxTotalTurns: number,
-  stepId: string,
-  snapshot: RunStateSnapshot,
-): number {
-  const extra = snapshot.grantedExtraTurns?.[stepId] ?? 0
-  return baseMaxTotalTurns + extra
 }
 
 export function resolveAddRetries(rawAddRetries: number | undefined): number {
@@ -143,9 +128,6 @@ function handleRetryResolution(
   const retryKey = `${step.id}:${k}`
   snapshot.grantedExtraRetries[retryKey] = (snapshot.grantedExtraRetries[retryKey] ?? 0) + addRetries
 
-  snapshot.grantedExtraTurns = snapshot.grantedExtraTurns ?? {}
-  snapshot.grantedExtraTurns[step.id] = (snapshot.grantedExtraTurns[step.id] ?? 0) + addRetries
-
   snapshot.status = 'running'
   snapshot.activeGate = null
   snapshot.activeStepOutput = undefined
@@ -178,12 +160,21 @@ function handleRetryResolution(
   throw new GuardrailRetrySignal(retryPrompt)
 }
 
+function throwMaxRetriesExceeded(
+  params: RunAfterStepGuardrailsParams,
+  k: number,
+  guardrail: Guardrail<any, any>,
+  verdict: GuardrailVerdict,
+): never {
+  const maxRetries = getEffectiveMaxRetries(guardrail, params.step.id, k, params.snapshot)
+  throw new GuardrailMaxRetriesExceededError(params.step.id, k, maxRetries, verdict)
+}
+
 async function handleEscalationResolution(
   params: RunAfterStepGuardrailsParams,
   k: number,
   guardrail: Guardrail<any, any>,
   verdict: GuardrailVerdict,
-  reason: EscalationReason,
   activeGate: ActiveGateState,
 ): Promise<GuardrailVerdict> {
   const { gateWaiter, runDir, ctx, step, attempt } = params
@@ -210,12 +201,7 @@ async function handleEscalationResolution(
     handleRetryResolution(params, k, resolution, verdict)
   }
 
-  if (reason === 'guardrail_max_retries') {
-    const maxRetries = getEffectiveMaxRetries(guardrail, step.id, k, params.snapshot)
-    throw new GuardrailMaxRetriesExceededError(step.id, k, maxRetries, verdict)
-  }
-  const maxTurns = getEffectiveMaxTotalTurns(params.maxTotalTurns, step.id, params.snapshot)
-  throw new MaxTotalTurnsExceededError(step.id, maxTurns)
+  throwMaxRetriesExceeded(params, k, guardrail, verdict)
 }
 
 export async function handleGuardrailEscalation(
@@ -223,18 +209,12 @@ export async function handleGuardrailEscalation(
   k: number,
   guardrail: Guardrail<any, any>,
   verdict: GuardrailVerdict,
-  reason: EscalationReason,
 ): Promise<GuardrailVerdict> {
   const { gateWaiter, step } = params
   const policy = determineEscalationPolicy(guardrail, step)
 
   if (policy !== 'prompt_user') {
-    if (reason === 'guardrail_max_retries') {
-      const maxRetries = getEffectiveMaxRetries(guardrail, step.id, k, params.snapshot)
-      throw new GuardrailMaxRetriesExceededError(step.id, k, maxRetries, verdict)
-    }
-    const maxTurns = getEffectiveMaxTotalTurns(params.maxTotalTurns, step.id, params.snapshot)
-    throw new MaxTotalTurnsExceededError(step.id, maxTurns)
+    throwMaxRetriesExceeded(params, k, guardrail, verdict)
   }
 
   if (!gateWaiter) {
@@ -245,7 +225,7 @@ export async function handleGuardrailEscalation(
     && params.rehydratedGate.gateType === 'max_retries_exceeded'
   const prompt = isRehydratedEscalation
     ? params.rehydratedGate!.prompt
-    : formatEscalationPrompt(step.id, k, verdict, reason)
+    : formatEscalationPrompt(step.id, k, verdict)
   const activeGate = recordEscalationActiveGate(params, k, prompt, verdict.logKey)
-  return handleEscalationResolution(params, k, guardrail, verdict, reason, activeGate)
+  return handleEscalationResolution(params, k, guardrail, verdict, activeGate)
 }

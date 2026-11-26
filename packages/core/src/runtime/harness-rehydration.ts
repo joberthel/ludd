@@ -60,9 +60,6 @@ function preservedSnapshotFields(
     grantedExtraRetries: previous?.grantedExtraRetries
       ? { ...previous.grantedExtraRetries }
       : undefined,
-    grantedExtraTurns: previous?.grantedExtraTurns
-      ? { ...previous.grantedExtraTurns }
-      : undefined,
     artifacts: previous?.artifacts
       ? [...previous.artifacts]
       : undefined,

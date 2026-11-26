@@ -6,7 +6,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { GuardrailMaxRetriesExceededError } from '../../errors/guardrail-max-retries-exceeded-error.js'
-import { MaxTotalTurnsExceededError } from '../../errors/max-total-turns-exceeded-error.js'
 import { readLedgerEvents } from '../../persistence/ledger-writer.js'
 import { readRunState, writeRunStateAtomic } from '../../persistence/state-store.js'
 import { GuardrailRetrySignal, runAfterStepGuardrails } from '../guardrail-executor.js'
@@ -47,7 +46,7 @@ const fakeAgent = {
 }
 
 describe('runAfterStepGuardrails agent retry signal', () => {
-  it('signals retry for agent step within maxRetries and below maxTotalTurns', async () => {
+  it('signals retry for agent step within maxRetries', async () => {
     const runDir = makeTempDir()
     try {
       const snapshot = makeInitialSnapshot(runDir)
@@ -73,7 +72,6 @@ describe('runAfterStepGuardrails agent retry signal', () => {
         runDir,
         attempt: 1,
         sessionId: 'sess-1',
-        maxTotalTurns: 5,
         initialPrompt: 'do coding',
       })).rejects.toThrow(GuardrailRetrySignal)
 
@@ -114,7 +112,6 @@ describe('runAfterStepGuardrails anonymous session retry', () => {
         runDir,
         attempt: 1,
         sessionId: undefined,
-        maxTotalTurns: 5,
         initialPrompt: 'do coding',
       })).rejects.toThrow(GuardrailRetrySignal)
 
@@ -155,7 +152,6 @@ describe('runAfterStepGuardrails default maxRetries', () => {
         runDir,
         attempt: 1,
         sessionId: 'sess-1',
-        maxTotalTurns: 5,
         initialPrompt: 'do coding',
       })).rejects.toThrow(GuardrailRetrySignal)
     }
@@ -193,46 +189,8 @@ describe('runAfterStepGuardrails maxRetries exhaustion', () => {
         runDir,
         attempt: 2,
         sessionId: 'sess-1',
-        maxTotalTurns: 5,
         initialPrompt: 'do coding',
       })).rejects.toThrow(GuardrailMaxRetriesExceededError)
-    }
-    finally {
-      fs.rmSync(runDir, { recursive: true, force: true })
-    }
-  })
-})
-
-describe('runAfterStepGuardrails maxTotalTurns exhaustion', () => {
-  it('throws MaxTotalTurnsExceededError when attempt reaches maxTotalTurns', async () => {
-    const runDir = makeTempDir()
-    try {
-      const snapshot = makeInitialSnapshot(runDir)
-      const step: StepConfig = {
-        id: 's-1',
-        afterStep: [
-          makeGuardrail({ status: 'fail' }, { maxRetries: 10 }),
-        ],
-        run: fakeAgent,
-      }
-      const ctx = {
-        runId: 'r-1',
-        steps: {},
-        step: { id: 's-1', output: {}, attempt: 5 },
-        matrix: undefined,
-        artifacts: {} as any,
-      }
-
-      await expect(runAfterStepGuardrails({
-        step,
-        ctx,
-        snapshot,
-        runDir,
-        attempt: 5,
-        sessionId: 'sess-1',
-        maxTotalTurns: 5,
-        initialPrompt: 'do coding',
-      })).rejects.toThrow(MaxTotalTurnsExceededError)
     }
     finally {
       fs.rmSync(runDir, { recursive: true, force: true })
@@ -267,7 +225,6 @@ describe('runAfterStepGuardrails StepRunFactory retry', () => {
         runDir,
         attempt: 1,
         sessionId: 'sess-1',
-        maxTotalTurns: 5,
         initialPrompt: 'do coding',
         isAgent: true,
       })).rejects.toThrow(GuardrailRetrySignal)
@@ -306,7 +263,6 @@ describe('runAfterStepGuardrails StepRunFactory retry', () => {
         runDir,
         attempt: 1,
         sessionId: undefined,
-        maxTotalTurns: 1,
         initialPrompt: '',
         isAgent: false,
       })).rejects.toThrow(GuardrailMaxRetriesExceededError)

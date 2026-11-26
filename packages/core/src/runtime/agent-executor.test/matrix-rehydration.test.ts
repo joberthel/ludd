@@ -68,7 +68,7 @@ function seedRetryEvent(runDir: string, matrixIndex: number, message: string): v
 }
 
 describe('executeAgentStep matrixIndex in ledger events', () => {
-  it('includes matrixIndex on agent.stream.linked and step.retry ledger events', async () => {
+  it('includes matrixIndex on step.retry ledger events', async () => {
     let callCount = 0
     const agent: AgentRunner<unknown> = {
       __kind: 'agent',
@@ -98,13 +98,8 @@ describe('executeAgentStep matrixIndex in ledger events', () => {
     await executeAgentStep(step, agent, ctx, createSnapshot(), tempDir)
 
     const events = readLedgerEvents(tempDir)
-    const streamLinked = events.filter(e => e.eventType === 'agent.stream.linked')
     const retries = events.filter(e => e.eventType === 'step.retry')
 
-    expect(streamLinked.length).toBeGreaterThan(0)
-    for (const event of streamLinked) {
-      expect(event.matrixIndex).toBe(1)
-    }
     expect(retries).toHaveLength(1)
     expect(retries[0].matrixIndex).toBe(1)
   })

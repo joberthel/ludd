@@ -101,12 +101,10 @@ function assertPersistence(runDir: string, result: HarnessRunResult): void {
     'gate.waiting',
     'gate.resolved',
     'guardrail.passed',
-    'agent.stream.linked',
     'run.passed',
   ]))
   const sessionId = (result.steps['triage-and-grilling']?.output as { sessionId: string }).sessionId
   const stream = fs.readFileSync(path.join(runDir, 'streams', `${sessionId}.jsonl`), 'utf-8')
-  expect(stream).toContain('turn.started')
   expect(stream).toContain('message_chunk')
   expect(fs.readdirSync(path.join(runDir, 'streams')).length).toBeGreaterThanOrEqual(4)
   const artifactFiles = fs.readdirSync(runDir, { recursive: true }).map(String)

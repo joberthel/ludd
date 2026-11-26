@@ -3,10 +3,6 @@ export { GuardrailMaxRetriesExceededError } from './errors/guardrail-max-retries
 export { HarnessConfigError } from './errors/harness-config-error.js'
 export { HarnessConfigLoadError, type HarnessConfigLoadErrorOptions } from './errors/harness-config-load-error.js'
 export { JsonRpcResponseError } from './errors/json-rpc-response-error.js'
-export {
-  DEFAULT_MAX_TOTAL_TURNS,
-  MaxTotalTurnsExceededError,
-} from './errors/max-total-turns-exceeded-error.js'
 export { RunAlreadyActiveError } from './errors/run-already-active-error.js'
 export { RunAlreadyExistsError } from './errors/run-already-exists-error.js'
 export { RunNotFoundError } from './errors/run-not-found-error.js'
@@ -77,7 +73,6 @@ export {
 } from './runtime/before-step-executor.js'
 export {
   determineEscalationPolicy,
-  type EscalationReason,
   formatEscalationPrompt,
   handleGuardrailEscalation,
 } from './runtime/escalation-manager.js'
@@ -133,6 +128,7 @@ export {
 } from './runtime/teardown-run.js'
 export type {
   AgentAccessMode,
+  AgentMcpConnection,
   AgentRunner,
   AgentStepOutput,
   AgentTurnInput,

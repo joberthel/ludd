@@ -65,7 +65,6 @@ describe('runAfterStepGuardrails empty afterStep', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })
 
@@ -102,7 +101,6 @@ describe('runAfterStepGuardrails factory validation', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })).rejects.toThrow('afterStep factory returned an invalid Guardrail at index 0.')
     }
@@ -136,7 +134,6 @@ describe('runAfterStepGuardrails factory shape validation', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })).rejects.toThrow('afterStep factory must return an array.')
     }
@@ -169,7 +166,6 @@ describe('runAfterStepGuardrails factory shape validation', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })
       const events = readLedgerEvents(runDir)
@@ -211,7 +207,6 @@ describe('runAfterStepGuardrails passing and skipped runs', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })
 
@@ -255,7 +250,6 @@ describe('runAfterStepGuardrails passing and skipped runs', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })
 
@@ -299,7 +293,6 @@ describe('runAfterStepGuardrails deterministic TS callback failures', () => {
         snapshot,
         runDir,
         attempt: 1,
-        maxTotalTurns: 5,
         initialPrompt: '',
       })).rejects.toThrow(GuardrailMaxRetriesExceededError)
 

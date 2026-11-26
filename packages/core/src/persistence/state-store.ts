@@ -109,7 +109,6 @@ export const runStateSnapshotSchema = z.object({
   activeMatrixOutputs: z.array(z.unknown()).optional(),
   activeGuardrailRetries: z.record(z.string(), z.number()).optional(),
   grantedExtraRetries: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  grantedExtraTurns: z.record(z.string(), z.number().int().nonnegative()).optional(),
   steps: z.record(z.string(), stepResultSchema),
   artifacts: z.array(z.string()).optional(),
   logs: z.record(z.string(), logMetadataSchema).optional(),
