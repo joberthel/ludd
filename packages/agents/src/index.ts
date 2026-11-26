@@ -20,13 +20,10 @@ import type {
   MockAgentResponse,
   MockAgentRunner,
 } from './mock-agent.js'
-import type { PiAgentConfig } from './pi-agent.js'
-import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 
 export { acpAgent } from './acp-agent.js'
 export { agyAcp, claudeAcp, codexAcp } from './acp-presets.js'
 export { mockAgent } from './mock-agent.js'
-export { piAgent } from './pi-agent.js'
 export {
   appendStreamEvent,
   readStreamEvents,
@@ -50,9 +47,4 @@ export type {
   MockAgentConfig,
   MockAgentResponse,
   MockAgentRunner,
-  PiAgentConfig,
-  PiSession,
-  PiSessionEvent,
-  PiSessionFactory,
-  PiSessionFactoryOptions,
 }

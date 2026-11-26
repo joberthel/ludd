@@ -18,7 +18,6 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   previousSessionId?: string
   attempt: number
   mode: AgentAccessMode
-  dangerMode?: boolean
   runDir: string
   /** Resolved working directory on the host for this step/turn. */
   cwd: string
@@ -27,8 +26,8 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   /** Embedded MCP server connection metadata when an MCP server is available for this turn. */
   mcp?: AgentMcpConnection
   /**
-   * The step's `outputSchema`, when declared. Adapters use it to collect structured output
-   * in-turn (e.g. `piAgent`'s `submit_step_output` tool).
+   * The step's `outputSchema`, when declared. Adapters use it to collect and validate
+   * structured output for the turn.
    */
   outputSchema?: z.ZodType
   /** True when the step has `interactive` mode enabled and `ask_user` MCP tool should be exposed. */

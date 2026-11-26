@@ -1,5 +1,5 @@
 import type { HarnessRunResult } from '../src/index.js'
-import type { FakePi } from './epic-08-fake-pi.js'
+import type { FakeAcpFixture } from './epic-08-fake-acp.js'
 import cp from 'node:child_process'
 import fs from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -8,7 +8,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readLedgerEvents, readRunState, resolveRunDir, runHarness } from '../src/index.js'
 import { waitForGateAndResolve } from './epic-06-client.js'
-import { createFakePi } from './epic-08-fake-pi.js'
+import { createFakeAcp } from './epic-08-fake-acp.js'
 import { createReferenceHarness } from './fixtures/reference-harness.config.js'
 
 let tempDir: string
@@ -51,27 +51,59 @@ async function driveHumanGates(runDir: string): Promise<void> {
   await waitForGateAndResolve(runDir, { stepId: 'final-review-and-pr', phase: 'afterStep', action: 'pass' })
 }
 
-function assertAgentTurns(fake: FakePi): void {
-  // Session continuity: the clarification retry reuses the triage Pi session file.
-  const triage = fake.records.filter(r => r.prompt.includes('Feature-Wunsch'))
-  expect(triage).toHaveLength(2)
-  expect(triage[1]?.sessionFile).toBe(triage[0]?.sessionFile)
-  expect(triage[1]?.prompt).toContain('English please')
-  const spec = fake.records.find(r => r.prompt.includes('spec.md'))
-  expect(spec?.sessionFile).toBe(triage[0]?.sessionFile)
-  expect(fs.existsSync(triage[0]?.sessionFile ?? '')).toBe(true)
+function assertAgentTurns(fake: FakeAcpFixture): void {
+  const records = fake.readRecords()
 
-  // Modes and per-step tooling.
-  expect(triage[0]?.mode).toBe('read-only')
-  expect(triage[0]?.toolNames).toContain('submit_step_output')
-  expect(spec?.toolNames).toContain('put_artifact')
-  const slices = fake.records.filter(r => r.prompt.includes('To-Do-Slice'))
-  expect(slices.map(r => r.mode)).toEqual(['workspace-write', 'workspace-write'])
+  // Session continuity: clarification retry and spec step reuse the triage ACP session via session/load.
+  const triage = records.filter(r => r.prompt.includes('Feature-Wunsch'))
+  expect(triage).toHaveLength(2)
+  expect(triage[0]?.sessionMethod).toBe('session/new')
+  expect(triage[1]?.sessionMethod).toBe('session/load')
+  expect(triage[1]?.sessionId).toBe(triage[0]?.sessionId)
+  expect(triage[1]?.prompt).toContain('English please')
+  expect(triage[0]?.permissionChecks).toEqual([
+    { kind: 'read', optionId: 'allow-once' },
+    { kind: 'edit', optionId: 'reject-once' },
+  ])
+
+  const spec = records.find(r => r.prompt.includes('spec.md'))
+  expect(spec?.sessionMethod).toBe('session/load')
+  expect(spec?.sessionId).toBe(triage[0]?.sessionId)
+  expect(spec?.mcpServerNames).toContain('ludd')
+  expect(spec?.mcpToolCalls.map(c => ({ name: c.name, isError: c.isError }))).toEqual([
+    { name: 'put_artifact', isError: false },
+    { name: 'put_artifact', isError: false },
+    { name: 'get_artifact', isError: false },
+  ])
+  expect(spec?.mcpToolCalls[2]?.text).toContain('Greeting and farewell.')
+  expect(spec?.mcpToolCalls[0]?.listedTools).toEqual(expect.arrayContaining([
+    'put_artifact',
+    'get_artifact',
+    'list_artifacts',
+    'read_log_page',
+    'read_log_lines',
+    'search_log',
+  ]))
+
+  const slices = records.filter(r => r.prompt.includes('To-Do-Slice'))
+  expect(slices).toHaveLength(2)
+  expect(slices.every(r => r.sessionMethod === 'session/new')).toBe(true)
+  expect(slices.every(r => r.permissionChecks.some(c => c.kind === 'edit' && c.optionId === 'allow-once'))).toBe(true)
   expect(slices[0]?.prompt).toContain('(1/2)')
   expect(slices[1]?.prompt).toContain('(2/2)')
-  const reviews = fake.records.filter(r => r.prompt.includes('Git-Diff'))
+
+  const reviews = records.filter(r => r.prompt.includes('Git-Diff'))
   expect(reviews).toHaveLength(2)
-  expect(reviews.every(r => r.mode === 'read-only')).toBe(true)
+  expect(reviews.every(r => r.permissionChecks.some(c => c.kind === 'read' && c.optionId === 'allow-once'))).toBe(true)
+
+  const finalPr = records.find(r => r.prompt.includes('pr-description.md'))
+  expect(finalPr?.mcpServerNames).toContain('ludd')
+  expect(finalPr?.mcpToolCalls.map(c => ({ name: c.name, isError: c.isError }))).toEqual([
+    { name: 'read_log_page', isError: false },
+    { name: 'get_artifact', isError: false },
+    { name: 'put_artifact', isError: false },
+  ])
+  expect(finalPr?.mcpToolCalls[0]?.text).toContain('feat: implement slice 2')
 }
 
 function assertGitHistory(workspaceDir: string, runId: string, remoteDir: string): void {
@@ -113,7 +145,7 @@ function assertPersistence(runDir: string, result: HarnessRunResult): void {
   }
 }
 
-describe('epic 8 E2E reference workflow (TDD 9.2) with scripted Pi session', () => {
+describe('epic 8 E2E reference workflow (TDD 9.2) with scripted ACP server', () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'ludd-e2e-epic8-'))
     workspaceDir = path.join(tempDir, 'workspace')
@@ -127,10 +159,10 @@ describe('epic 8 E2E reference workflow (TDD 9.2) with scripted Pi session', () 
   })
 
   it('runs triage, spec, per-slice implement/verify/commit and pushes to the bare remote', async () => {
-    const fake = createFakePi()
+    const fake = createFakeAcp(tempDir)
     const runId = 'e2e-epic-08-reference'
     const runDir = resolveRunDir(workspaceDir, runId)
-    const harness = createReferenceHarness({ sessionFactory: fake.factory })
+    const harness = createReferenceHarness({ acp: fake.agentConfig })
 
     const runPromise = runHarness(harness, { runId, workspaceDir })
     await driveHumanGates(runDir)
@@ -149,5 +181,5 @@ describe('epic 8 E2E reference workflow (TDD 9.2) with scripted Pi session', () 
     assertAgentTurns(fake)
     assertGitHistory(workspaceDir, runId, remoteDir)
     assertPersistence(runDir, result)
-  })
+  }, 30_000)
 })

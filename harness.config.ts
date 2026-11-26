@@ -2,7 +2,7 @@ import type { HostSpawnResult } from '@luddjs/core'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { piAgent } from '@luddjs/agents'
+import { claudeAcp, codexAcp } from '@luddjs/agents'
 import { createHarness, spawn } from '@luddjs/core'
 import { agentGuardrail, execGuardrail, fnGuardrail, humanReviewGuardrail, sh } from '@luddjs/guardrails'
 import { z } from 'zod'
@@ -260,9 +260,8 @@ export default createHarness('ludd-dev', {
         },
       },
     },
-    run: ctx => piAgent({
-      mode: 'read-only',
-      model: 'gemini-4-neon',
+    run: ctx => claudeAcp({
+      permissionMode: 'readOnly',
       prompt: [
         `Task: ${ctx.interactive.task}`,
         '',
@@ -297,9 +296,8 @@ export default createHarness('ludd-dev', {
         command: 'pnpm install --frozen-lockfile',
       }),
     ],
-    run: ctx => piAgent({
-      mode: 'workspace-write',
-      model: 'gemini-4-hydrogen',
+    run: ctx => claudeAcp({
+      permissionMode: 'acceptEdits',
       prompt: [
         `Implement the approved plan for: ${ctx.steps.plan.output?.summary ?? ''}`,
         'First read the `plan.md` artifact via `get_artifact`.',
@@ -321,7 +319,7 @@ export default createHarness('ludd-dev', {
       agentGuardrail({
         name: 'Code Review',
         mode: 'read-only',
-        agent: piAgent({ mode: 'read-only', model: 'gemini-4-neon', prompt: '' }),
+        agent: codexAcp({ permissionMode: 'readOnly' }),
         prompt: [
           'Perform a thorough code review of the changes in the current worktree (`git diff`).',
           `Implementation summary: ${ctx.step.output.summary}`,
@@ -356,9 +354,8 @@ export default createHarness('ludd-dev', {
     id: 'resolve-merge-conflicts',
     name: 'Resolve Merge Conflicts',
     if: ctx => ctx.steps.merge.output?.hasConflicts === true,
-    run: ctx => piAgent({
-      mode: 'workspace-write',
-      model: 'gemini-4-hydrogen',
+    run: ctx => claudeAcp({
+      permissionMode: 'acceptEdits',
       prompt: [
         `Merging branch \`${ctx.steps.merge.output?.mergedBranch ?? ''}\` into the main worktree resulted in merge conflicts.`,
         `Implementation summary: ${ctx.steps.implement.output?.summary ?? ''}`,

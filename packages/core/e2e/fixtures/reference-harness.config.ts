@@ -1,8 +1,8 @@
-import type { PiSessionFactory } from '@luddjs/agents'
 import type { HostSpawnResult, StepContext } from '../../src/index.js'
+import type { FakeAcpServerConfig } from '../epic-08-fake-acp.js'
 import fs from 'node:fs'
 import path from 'node:path'
-import { piAgent } from '@luddjs/agents'
+import { acpAgent } from '@luddjs/agents'
 import { agentGuardrail, execGuardrail, humanReviewGuardrail } from '@luddjs/guardrails'
 import { z } from 'zod'
 import { defineHarness, spawn } from '../../src/index.js'
@@ -25,8 +25,8 @@ const TriageOutputSchema = z.object({
 })
 
 export interface ReferenceHarnessOptions {
-  /** Scripted fake Pi session factory keeping the e2e hermetic (no live LLM). */
-  sessionFactory: PiSessionFactory
+  /** Scripted fake ACP server config keeping the e2e hermetic (no live LLM). */
+  acp: FakeAcpServerConfig
 }
 
 function validateRunId(runId: string): string {
@@ -157,9 +157,9 @@ async function teardownFeatureWorktree(
 /**
  * TDD 9.2 reference configuration. Deviations, all documented:
  * - `phpstan` / `phpunit` are stubbed with `node --check` / `node test.js` from the fixture repo.
- * - `sessionFactory` is injected into every `piAgent` (and the agent guardrail).
+ * - `acp` subprocess config is injected into every `acpAgent` (and the agent guardrail).
  */
-function triageStep(sessionFactory: PiSessionFactory) {
+function triageStep(acp: FakeAcpServerConfig) {
   return {
     id: 'triage-and-grilling',
     name: 'Interactive Feature Clarification',
@@ -172,9 +172,9 @@ function triageStep(sessionFactory: PiSessionFactory) {
       }),
     ],
 
-    run: piAgent({
-      mode: 'read-only',
-      sessionFactory,
+    run: acpAgent({
+      ...acp,
+      permissionMode: 'readOnly',
       prompt: 'Lies den initialen Feature-Wunsch aus dem MCP-Kontext und analysiere die Codebase. Wenn Details unklar sind, setze status auf "needs_clarification" und formuliere präzise Fragen. Wenn alles klar ist, setze status auf "ready".',
     }),
 
@@ -189,7 +189,7 @@ function triageStep(sessionFactory: PiSessionFactory) {
   }
 }
 
-function specStep(sessionFactory: PiSessionFactory) {
+function specStep(acp: FakeAcpServerConfig) {
   return {
     id: 'generate-spec-and-todos',
     name: 'Specification and Todo Decomposition',
@@ -199,10 +199,10 @@ function specStep(sessionFactory: PiSessionFactory) {
       'todos.json': { schema: TodosArtifactSchema },
     },
 
-    run: piAgent({
-      mode: 'read-only',
-      sessionFactory,
-      sessionId: ctx => (ctx.steps['triage-and-grilling']?.output as { sessionId: string } | undefined)?.sessionId,
+    run: acpAgent({
+      ...acp,
+      permissionMode: 'readOnly',
+      sessionId: (ctx: StepContext) => (ctx.steps['triage-and-grilling']?.output as { sessionId: string } | undefined)?.sessionId,
       prompt: 'Erstelle basierend auf unserem geklärten Gespräch über den MCP-Server das Artefakt "spec.md" sowie das Artefakt "todos.json" mit isolierten vertikalen Slices.',
     }),
 
@@ -214,7 +214,7 @@ function specStep(sessionFactory: PiSessionFactory) {
   }
 }
 
-function implementGuardrails(sessionFactory: PiSessionFactory) {
+function implementGuardrails(acp: FakeAcpServerConfig) {
   return [
     // Stub for `vendor/bin/phpstan analyse src`.
     execGuardrail({
@@ -234,7 +234,10 @@ function implementGuardrails(sessionFactory: PiSessionFactory) {
         findings: z.array(z.string()),
       }),
       prompt: 'Prüfe den aktuellen Git-Diff dieses Slices auf Architektur-Verstöße oder Sicherheitslücken.',
-      agent: piAgent({ mode: 'read-only', prompt: 'review', sessionFactory }),
+      agent: acpAgent({
+        ...acp,
+        permissionMode: 'readOnly',
+      }),
     }),
     execGuardrail({
       command: () => ['git', 'add', '-A'],
@@ -252,7 +255,7 @@ function implementGuardrails(sessionFactory: PiSessionFactory) {
   ]
 }
 
-function implementStep(sessionFactory: PiSessionFactory) {
+function implementStep(acp: FakeAcpServerConfig) {
   return {
     id: 'implement-slices',
     name: 'Sequential Matrix Implementation per Todo Slice',
@@ -265,9 +268,9 @@ function implementStep(sessionFactory: PiSessionFactory) {
       commitMessage: z.string().min(5),
     }),
 
-    run: piAgent({
-      mode: 'workspace-write',
-      sessionFactory,
+    run: acpAgent({
+      ...acp,
+      permissionMode: 'acceptEdits',
       prompt: (ctx: StepContext) => {
         const item = TodoSliceSchema.parse(ctx.matrix?.item)
         return `Implementiere exakt das folgende To-Do-Slice (${(ctx.matrix?.index ?? 0) + 1}/${ctx.matrix?.total}):\n`
@@ -277,11 +280,11 @@ function implementStep(sessionFactory: PiSessionFactory) {
       },
     }),
 
-    afterStep: implementGuardrails(sessionFactory),
+    afterStep: implementGuardrails(acp),
   }
 }
 
-function finalStep(sessionFactory: PiSessionFactory) {
+function finalStep(acp: FakeAcpServerConfig) {
   return {
     id: 'final-review-and-pr',
     name: 'Final Integration and PR Creation',
@@ -300,9 +303,9 @@ function finalStep(sessionFactory: PiSessionFactory) {
       }),
     ],
 
-    run: piAgent({
-      mode: 'read-only',
-      sessionFactory,
+    run: acpAgent({
+      ...acp,
+      permissionMode: 'readOnly',
       prompt: 'Prüfe die Commit-Historie aus dem MCP-Kontext und erstelle über den MCP-Server das Artefakt "pr-description.md" mit einer präzisen Pull-Request-Beschreibung.',
     }),
 
@@ -319,16 +322,16 @@ function finalStep(sessionFactory: PiSessionFactory) {
 }
 
 export function createReferenceHarness(options: ReferenceHarnessOptions) {
-  const { sessionFactory } = options
+  const { acp } = options
   return defineHarness({
     name: 'interactive-feature-workflow',
     setup: async ({ runId, workspaceRoot, signal }) => setupFeatureWorktree(workspaceRoot, runId, signal),
     teardown: async ({ runId, workspaceRoot, signal }) => teardownFeatureWorktree(workspaceRoot, runId, signal),
     steps: [
-      triageStep(sessionFactory),
-      specStep(sessionFactory),
-      implementStep(sessionFactory),
-      finalStep(sessionFactory),
+      triageStep(acp),
+      specStep(acp),
+      implementStep(acp),
+      finalStep(acp),
     ],
   })
 }

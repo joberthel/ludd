@@ -32,7 +32,6 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^2.12.0",
-    "@earendil-works/pi-coding-agent": "1.5.1",
     "@luddjs/core": "workspace:*",
     "zod": "^4.6.7"
   },
