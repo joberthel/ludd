@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   pastelCtor: vi.fn(),
   run: vi.fn(async () => 0),
   resume: vi.fn(async () => 0),
+  mcpBridge: vi.fn(async (_args: string[]) => {}),
 }))
 
 vi.mock('pastel', () => ({
@@ -25,9 +26,11 @@ vi.mock('pastel', () => ({
 }))
 vi.mock('./actions/run-command.js', () => ({ runCommand: mocks.run }))
 vi.mock('./actions/resume-command.js', () => ({ resumeCommand: mocks.resume }))
+vi.mock('./mcp-bridge/mcp-bridge-command.js', () => ({ mcpBridgeCommand: mocks.mcpBridge }))
 
 const originalArgv = process.argv
 const originalExitCode = process.exitCode
+const originalCliBin = process.env.LUDD_CLI_BIN
 
 function args(...argv: string[]): void {
   process.argv = [
@@ -41,6 +44,12 @@ function args(...argv: string[]): void {
 afterEach(() => {
   process.argv = originalArgv
   process.exitCode = originalExitCode
+  if (originalCliBin === undefined) {
+    delete process.env.LUDD_CLI_BIN
+  }
+  else {
+    process.env.LUDD_CLI_BIN = originalCliBin
+  }
   vi.clearAllMocks()
 })
 
@@ -117,4 +126,23 @@ it('does not run and falls back cleanly for a non-existent entrypoint path', asy
   args('status')
   await bootstrapCli('/non-existent/path/to/ludd')
   expect(mocks.pastelRun).not.toHaveBeenCalled()
+})
+
+it('dispatches mcp-bridge directly without Pastel and propagates LUDD_CLI_BIN', async () => {
+  delete process.env.LUDD_CLI_BIN
+  args('mcp-bridge', '--endpoint', 'http://127.0.0.1:4321/mcp')
+  await main()
+  expect(mocks.mcpBridge).toHaveBeenCalledWith(['--endpoint', 'http://127.0.0.1:4321/mcp'])
+  expect(mocks.pastelRun).not.toHaveBeenCalled()
+  expect(process.env.LUDD_CLI_BIN).toBe(path.resolve('packages/cli/src/bin.ts'))
+
+  process.env.LUDD_CLI_BIN = ''
+  args('status')
+  await main()
+  expect(process.env.LUDD_CLI_BIN).toBe(path.resolve('packages/cli/src/bin.ts'))
+
+  process.env.LUDD_CLI_BIN = '/custom/ludd-bin'
+  args('status')
+  await main()
+  expect(process.env.LUDD_CLI_BIN).toBe('/custom/ludd-bin')
 })

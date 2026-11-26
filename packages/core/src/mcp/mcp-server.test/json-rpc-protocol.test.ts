@@ -140,6 +140,17 @@ describe('embedded MCP server initialize and tools/list discovery', () => {
       expect(initData.result.capabilities).toEqual({ tools: {} })
       expect(initData.result.serverInfo.name).toBe('ludd-harness-mcp')
 
+      const pingData = await postRaw(server.url, server.authToken, JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'ping-1',
+        method: 'ping',
+      }))
+      expect(pingData).toEqual({
+        jsonrpc: '2.0',
+        id: 'ping-1',
+        result: {},
+      })
+
       const listData = await postRaw(server.url, server.authToken, JSON.stringify({
         jsonrpc: '2.0',
         id: 11,

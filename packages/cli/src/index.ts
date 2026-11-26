@@ -6,6 +6,13 @@ export { runCommand, type RunCommandOptions } from './actions/run-command.js'
 export { statusCommand, type StatusCommandOptions } from './actions/status-command.js'
 export { teardownCommand, type TeardownCommandOptions } from './actions/teardown-command.js'
 export { spawnDetachedRunner, type SpawnDetachedRunnerOptions } from './daemon/spawn-detached-runner.js'
+export {
+  mcpBridgeCommand,
+  type McpBridgeConfig,
+  type McpBridgeOptions,
+  parseMcpBridgeArgs,
+  runMcpBridge,
+} from './mcp-bridge/mcp-bridge-command.js'
 export { promptForGate } from './prompts/inline-gate-prompter.js'
 export { LiveRunTailer } from './tailer/live-run-tailer.js'
 export { CommandRunner, type CommandRunnerProps } from './ui/command-runner.js'

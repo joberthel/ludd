@@ -4,11 +4,17 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import Pastel from 'pastel'
+import { mcpBridgeCommand } from './mcp-bridge/mcp-bridge-command.js'
 import { workerCommand } from './worker/worker-command.js'
 
 export async function main(argv = process.argv): Promise<void> {
+  process.env.LUDD_CLI_BIN ||= fileURLToPath(import.meta.url)
   if (argv[2] === '__worker') {
     await workerCommand(argv.slice(3))
+    return
+  }
+  if (argv[2] === 'mcp-bridge') {
+    await mcpBridgeCommand(argv.slice(3))
     return
   }
   const app = new Pastel({

@@ -99,6 +99,9 @@ async function dispatchJsonRpc(
   if (method === 'initialize') {
     return handleInitialize(id)
   }
+  if (method === 'ping') {
+    return { jsonrpc: '2.0', id, result: {} }
+  }
   if (method === 'tools/list') {
     return handleToolsList(id, askUserHandler !== undefined)
   }
