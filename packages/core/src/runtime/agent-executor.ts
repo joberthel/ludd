@@ -8,6 +8,7 @@ import type { RehydratedAgentPromptState } from './agent-prompt.js'
 import type { ResolvedExecutionContext } from './execution-context.js'
 import type { GateWaiter } from './gate-waiter.js'
 import type { RunAfterStepGuardrailsParams } from './guardrail-executor.js'
+import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { StepArtifactValidationError } from '../errors/step-artifact-validation-error.js'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
@@ -16,7 +17,7 @@ import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 import { formatRetryPrompt, resolveInitialPrompt } from './agent-prompt.js'
 import {
   createAgentStepOutput,
-  resolveSessionId,
+  resolveConfiguredSessionId,
   validateStepOutput,
 } from './agent-step-output.js'
 import { formatArtifactRetryPrompt, validateStepArtifacts } from './artifact-validator.js'
@@ -29,7 +30,13 @@ import { extractAbortError } from './host-exec.js'
 import { createInteractiveQuestionHandler } from './interactive-executor.js'
 
 export type RehydratedAgentState = RehydratedAgentPromptState
-export { createAgentStepOutput, formatRetryPrompt, resolveInitialPrompt, validateStepOutput }
+export {
+  createAgentStepOutput,
+  formatRetryPrompt,
+  resolveConfiguredSessionId,
+  resolveInitialPrompt,
+  validateStepOutput,
+}
 
 interface TurnRetryParams {
   stepId: string
@@ -74,6 +81,14 @@ function persistActiveTurn(runDir: string, snapshot: RunStateSnapshot, sessionId
   writeRunStateAtomic(runDir, snapshot)
 }
 
+function syncReturnedSessionId(scope: AgentTurnExecutionScope, returnedSessionId: string, attempt: number): void {
+  if (returnedSessionId !== scope.sessionId) {
+    persistActiveTurn(scope.runDir, scope.snapshot, returnedSessionId, attempt)
+  }
+  scope.sessionId = returnedSessionId
+  scope.previousSessionId = returnedSessionId
+}
+
 async function finalizeAgentTurn(
   step: StepConfig,
   turnResult: { output: unknown, sessionId: string },
@@ -99,6 +114,7 @@ interface AgentTurnExecutionScope {
   snapshot: RunStateSnapshot
   runDir: string
   sessionId: string
+  previousSessionId?: string
   initialPrompt: string
   cwd: string
   env: Record<string, string>
@@ -155,37 +171,42 @@ async function runTurnLoopAttempt(
 
   persistActiveTurn(scope.runDir, scope.snapshot, scope.sessionId, attempt)
 
-  const turnResult = await scope.agent.executeTurn({
-    ctx: scope.ctx,
-    stepId: scope.step.id,
-    prompt: currentPrompt,
-    sessionId: scope.sessionId,
-    attempt,
-    mode: scope.agent.mode,
-    runDir: scope.runDir,
-    cwd: scope.cwd,
-    env: scope.env,
-    ...(scope.mcpServer === undefined
-      ? {}
-      : {
-          mcp: {
-            url: scope.mcpServer.url,
-            authToken: scope.mcpServer.authToken,
-          },
-        }),
-    ...(scope.step.outputSchema === undefined
-      ? {}
-      : { outputSchema: scope.step.outputSchema }),
-    ...(scope.step.interactive !== undefined && scope.step.interactive !== false
-      ? { interactive: true }
-      : {}),
-    signal: scope.signal,
-  })
-  if (scope.signal?.aborted) {
-    throw extractAbortError(scope.signal)
-  }
-
   try {
+    const turnResult = await scope.agent.executeTurn({
+      ctx: scope.ctx,
+      stepId: scope.step.id,
+      prompt: currentPrompt,
+      sessionId: scope.sessionId,
+      ...(scope.previousSessionId === undefined
+        ? {}
+        : { previousSessionId: scope.previousSessionId }),
+      attempt,
+      mode: scope.agent.mode,
+      runDir: scope.runDir,
+      cwd: scope.cwd,
+      env: scope.env,
+      ...(scope.mcpServer === undefined
+        ? {}
+        : {
+            mcp: {
+              url: scope.mcpServer.url,
+              authToken: scope.mcpServer.authToken,
+            },
+          }),
+      ...(scope.step.outputSchema === undefined
+        ? {}
+        : { outputSchema: scope.step.outputSchema }),
+      ...(scope.step.interactive !== undefined && scope.step.interactive !== false
+        ? { interactive: true }
+        : {}),
+      signal: scope.signal,
+    })
+    if (scope.signal?.aborted) {
+      throw extractAbortError(scope.signal)
+    }
+
+    syncReturnedSessionId(scope, turnResult.sessionId, attempt)
+
     const result = await finalizeAgentTurn(scope.step, turnResult, {
       ...scope,
       attempt,
@@ -193,6 +214,9 @@ async function runTurnLoopAttempt(
     return { success: true, result }
   }
   catch (err: unknown) {
+    if (err instanceof StepOutputValidationError && err.sessionId !== undefined) {
+      syncReturnedSessionId(scope, err.sessionId, attempt)
+    }
     const nextPrompt = handleTurnRetry(err, {
       ...scope,
       stepId: scope.step.id,
@@ -220,7 +244,8 @@ export async function executeAgentStep(
   gateWaiter?: GateWaiter,
 ): Promise<unknown> {
   const initialPrompt = await resolveDynamicProperty(agent.prompt, ctx)
-  const sessionId = rehydration?.sessionId ?? await resolveSessionId(agent.sessionId, ctx)
+  const explicitSessionId = rehydration?.sessionId ?? await resolveConfiguredSessionId(agent.sessionId, ctx)
+  const sessionId = explicitSessionId ?? `session-${randomUUID()}`
   const cwd = executionContext?.cwd ?? process.cwd()
   const env = executionContext?.env ?? {}
   const signal = executionContext?.signal ?? gateWaiter?.signal
@@ -236,6 +261,7 @@ export async function executeAgentStep(
     snapshot,
     runDir,
     sessionId,
+    previousSessionId: explicitSessionId,
     initialPrompt,
     cwd,
     env,

@@ -64,11 +64,51 @@ describe('executeAgentStep dynamic prompt and default session resolution', () =>
     expect(captured?.stepId).toBe('s-1')
     expect(captured?.prompt).toBe('Prompt for r-exec-test')
     expect(captured?.sessionId).toMatch(/^session-[0-9a-f-]+$/)
+    expect(captured).not.toHaveProperty('previousSessionId')
     expect(captured?.mode).toBe('read-only')
     expect(captured?.attempt).toBe(1)
     expect(captured?.runDir).toBe(tempDir)
     expect(captured?.mcp).toBeUndefined()
     expect(output).toEqual({ value: 'done', sessionId: captured?.sessionId })
+  })
+
+  it('tracks agent-returned sessionId across retries and forwards previousSessionId', async () => {
+    const seen: AgentTurnInput[] = []
+    const schema = z.object({
+      ok: z.literal(true),
+    })
+    const agent: AgentRunner<{ ok: boolean }> = {
+      __kind: 'agent',
+      mode: 'read-only',
+      prompt: 'produce ok',
+      executeTurn: async (input) => {
+        seen.push(input)
+        if (input.attempt === 1) {
+          return {
+            output: { ok: false },
+            sessionId: 'agent-session-1',
+          }
+        }
+        return {
+          output: { ok: true },
+          sessionId: input.previousSessionId ?? input.sessionId,
+        }
+      },
+    }
+    const snapshot = createDummySnapshot('s-retry-sess')
+    const output = await executeAgentStep(
+      { id: 's-retry-sess', run: agent, outputSchema: schema },
+      agent,
+      createDummyContext(),
+      snapshot,
+      tempDir,
+    )
+
+    expect(seen[0]).not.toHaveProperty('previousSessionId')
+    expect(seen[1]?.sessionId).toBe('agent-session-1')
+    expect(seen[1]?.previousSessionId).toBe('agent-session-1')
+    expect(snapshot.activeSessionId).toBe('agent-session-1')
+    expect(output).toEqual({ ok: true, sessionId: 'agent-session-1' })
   })
 })
 

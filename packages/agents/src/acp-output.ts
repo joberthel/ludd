@@ -85,6 +85,7 @@ export function resolveStructuredOutput<TOutput>(
   stepId: string,
   rawText: string,
   outputSchema?: z.ZodType,
+  sessionId?: string,
 ): TOutput {
   if (outputSchema === undefined) {
     return rawText as TOutput
@@ -96,11 +97,11 @@ export function resolveStructuredOutput<TOutput>(
       path: [],
       message: 'Assistant response did not contain valid JSON.',
     }
-    throw new StepOutputValidationError(stepId, rawText, [issue])
+    throw new StepOutputValidationError(stepId, rawText, [issue], sessionId)
   }
   const parsed = outputSchema.safeParse(extracted.value)
   if (!parsed.success) {
-    throw new StepOutputValidationError(stepId, extracted.value, parsed.error.issues)
+    throw new StepOutputValidationError(stepId, extracted.value, parsed.error.issues, sessionId)
   }
   return parsed.data as TOutput
 }

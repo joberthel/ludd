@@ -23,15 +23,19 @@ export interface ExecuteAcpTurnParams {
   permissionMode: AcpPermissionMode
   shutdownTimeoutMs: number
   mcpBridge?: AcpMcpBridgeConfig
+  previousSessionId?: string
 }
+
+type SessionUpdateCollector = ReturnType<typeof createSessionUpdateCollector>
 
 async function runAcpSessionTurn(
   connection: ClientConnection,
   params: ExecuteAcpTurnParams,
   input: AgentTurnInput<any>,
+  collector: SessionUpdateCollector,
   onSessionCreated: (sessionId: string) => void,
 ): Promise<string> {
-  await connection.agent.request(methods.agent.initialize, {
+  const initResult = await connection.agent.request(methods.agent.initialize, {
     protocolVersion: PROTOCOL_VERSION,
     clientCapabilities: {},
     clientInfo: { name: 'ludd', version: '0.1.1' },
@@ -43,20 +47,34 @@ async function runAcpSessionTurn(
         buildMcpBridgeServerConfig(input.mcp, params.mcpBridge),
       ]
 
-  const session = await connection.agent.request(methods.agent.session.new, {
-    cwd: input.cwd,
-    mcpServers,
-  })
-  onSessionCreated(session.sessionId)
+  let sessionId: string
+  if (params.previousSessionId !== undefined && initResult.agentCapabilities?.loadSession === true) {
+    collector.setAcceptingUpdates(false)
+    await connection.agent.request(methods.agent.session.load, {
+      sessionId: params.previousSessionId,
+      cwd: input.cwd,
+      mcpServers,
+    })
+    collector.setAcceptingUpdates(true)
+    sessionId = params.previousSessionId
+  }
+  else {
+    const session = await connection.agent.request(methods.agent.session.new, {
+      cwd: input.cwd,
+      mcpServers,
+    })
+    sessionId = session.sessionId
+  }
+  onSessionCreated(sessionId)
 
   const promptText = buildPromptWithSchema(input.prompt, input.outputSchema)
   await connection.agent.request(methods.agent.session.prompt, {
-    sessionId: session.sessionId,
+    sessionId,
     prompt: [
       { type: 'text', text: promptText },
     ],
   })
-  return session.sessionId
+  return sessionId
 }
 
 function createAbortCoordinator(options: {
@@ -148,7 +166,7 @@ export async function executeAcpTurn<TOutput>(
   const { collector, connection } = connectAcpChild(child, params.permissionMode, input)
 
   let activeSessionId: string | undefined
-  const protocolPromise = runAcpSessionTurn(connection, params, input, (sessionId) => {
+  const protocolPromise = runAcpSessionTurn(connection, params, input, collector, (sessionId) => {
     activeSessionId = sessionId
   })
   protocolPromise.catch(noop)
@@ -192,7 +210,7 @@ export async function executeAcpTurn<TOutput>(
   }
 
   return {
-    output: resolveStructuredOutput<TOutput>(input.stepId, collector.getAssistantText(), input.outputSchema),
+    output: resolveStructuredOutput<TOutput>(input.stepId, collector.getAssistantText(), input.outputSchema, resolvedSessionId),
     sessionId: resolvedSessionId,
   }
 }

@@ -85,10 +85,15 @@ function mapSessionUpdate(update: SessionUpdate): MappedStreamEvent | undefined 
 export function createSessionUpdateCollector(input: AgentTurnInput<any>): {
   onNotification: (notification: SessionNotification) => void
   getAssistantText: () => string
+  setAcceptingUpdates: (accepting: boolean) => void
 } {
   let assistantText = ''
+  let acceptingUpdates = true
 
   const onNotification = (notification: SessionNotification): void => {
+    if (!acceptingUpdates) {
+      return
+    }
     const mapped = mapSessionUpdate(notification.update)
     if (mapped === undefined) {
       return
@@ -112,5 +117,8 @@ export function createSessionUpdateCollector(input: AgentTurnInput<any>): {
   return {
     onNotification,
     getAssistantText: () => assistantText,
+    setAcceptingUpdates: (accepting: boolean) => {
+      acceptingUpdates = accepting
+    },
   }
 }

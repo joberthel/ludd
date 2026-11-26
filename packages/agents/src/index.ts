@@ -14,6 +14,7 @@ import type {
   AcpPermissionMode,
   AcpStdioMcpServerConfig,
 } from './acp-agent.js'
+import type { AcpPresetOptions } from './acp-presets.js'
 import type {
   MockAgentConfig,
   MockAgentResponse,
@@ -23,6 +24,7 @@ import type { PiAgentConfig } from './pi-agent.js'
 import type { PiSession, PiSessionEvent, PiSessionFactory, PiSessionFactoryOptions } from './types/pi-sdk.js'
 
 export { acpAgent } from './acp-agent.js'
+export { agyAcp, claudeAcp, codexAcp } from './acp-presets.js'
 export { mockAgent } from './mock-agent.js'
 export { piAgent } from './pi-agent.js'
 export {
@@ -35,6 +37,7 @@ export type {
   AcpAgentConfig,
   AcpMcpBridgeConfig,
   AcpPermissionMode,
+  AcpPresetOptions,
   AcpStdioMcpServerConfig,
   AgentAccessMode,
   AgentMcpConnection,

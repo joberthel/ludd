@@ -9,6 +9,18 @@ if (pidFile) {
   fs.writeFileSync(pidFile, String(process.pid), 'utf8')
 }
 
+const argvFile = process.env.FAKE_ACP_ARGV_FILE
+if (argvFile) {
+  fs.writeFileSync(argvFile, JSON.stringify(process.argv.slice(2)), 'utf8')
+}
+
+const requestLogFile = process.env.FAKE_ACP_REQUEST_LOG_FILE
+function logRequest(method, params) {
+  if (requestLogFile) {
+    fs.appendFileSync(requestLogFile, `${JSON.stringify({ method, params })}\n`, 'utf8')
+  }
+}
+
 const scenario = process.env.FAKE_ACP_SCENARIO ?? 'plain'
 
 if (process.env.FAKE_ACP_IGNORE_SIGTERM === '1') {
@@ -104,29 +116,84 @@ function callStdioMcpTool(mcpServer) {
   })
 }
 
-const sessions = new Map()
+const stateFile = process.env.FAKE_ACP_STATE_FILE
+const initialState = stateFile && fs.existsSync(stateFile)
+  ? JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  : { sessionCounter: 0, promptCount: 0, sessionIds: [] }
+
+const sessions = new Map(initialState.sessionIds.map(id => [id, {}]))
+if (process.env.FAKE_ACP_SEED_SESSION_ID) {
+  sessions.set(process.env.FAKE_ACP_SEED_SESSION_ID, {})
+}
 const activeCancels = new Map()
-let sessionCounter = 0
+let sessionCounter = initialState.sessionCounter
+let promptCount = initialState.promptCount
+
+function saveState() {
+  if (stateFile) {
+    fs.writeFileSync(stateFile, JSON.stringify({
+      sessionCounter,
+      promptCount,
+      sessionIds: [
+        ...sessions.keys(),
+      ],
+    }), 'utf8')
+  }
+}
+
+function resolveInitializeCapabilities() {
+  const mode = process.env.FAKE_ACP_LOAD_SESSION
+  if (mode === 'omit-capabilities') {
+    return undefined
+  }
+  if (mode === 'omit') {
+    return {}
+  }
+  if (mode === 'false') {
+    return { loadSession: false }
+  }
+  return { loadSession: true }
+}
 
 const app = agent({ name: 'fake-acp-server' })
-  .onRequest(methods.agent.initialize, () => {
+  .onRequest(methods.agent.initialize, ({ params }) => {
+    logRequest(methods.agent.initialize, params)
     if (scenario === 'init-error') {
       throw RequestError.internalError(undefined, 'init boom')
     }
+    const agentCapabilities = resolveInitializeCapabilities()
     return {
       protocolVersion: PROTOCOL_VERSION,
-      agentCapabilities: { loadSession: true },
+      ...(agentCapabilities === undefined
+        ? {}
+        : { agentCapabilities }),
       agentInfo: { name: 'fake-acp-server', version: '1.0.0' },
     }
   })
   .onRequest(methods.agent.session.new, ({ params }) => {
+    logRequest(methods.agent.session.new, params)
     sessionCounter += 1
     const sessionId = `fake-session-${sessionCounter}`
     sessions.set(sessionId, { cwd: params.cwd, mcpServers: params.mcpServers })
+    saveState()
     return { sessionId }
   })
-  .onRequest(methods.agent.session.load, ({ params }) => {
+  .onRequest(methods.agent.session.load, async ({ params, client }) => {
+    logRequest(methods.agent.session.load, params)
+    if (process.env.FAKE_ACP_REQUIRE_KNOWN_SESSION === '1' && !sessions.has(params.sessionId)) {
+      throw RequestError.resourceNotFound(params.sessionId)
+    }
     sessions.set(params.sessionId, { cwd: params.cwd, mcpServers: params.mcpServers })
+    saveState()
+    if (process.env.FAKE_ACP_LOAD_REPLAY) {
+      await client.notify(methods.client.session.update, {
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: process.env.FAKE_ACP_LOAD_REPLAY },
+        },
+      })
+    }
     return {}
   })
   .onNotification(methods.agent.session.cancel, ({ params }) => {
@@ -140,6 +207,9 @@ const app = agent({ name: 'fake-acp-server' })
     cancelHandler?.()
   })
   .onRequest(methods.agent.session.prompt, async ({ params, client }) => {
+    logRequest(methods.agent.session.prompt, params)
+    promptCount += 1
+    saveState()
     const session = sessions.get(params.sessionId)
     if (!session) {
       throw RequestError.resourceNotFound(params.sessionId)
@@ -255,6 +325,17 @@ const app = agent({ name: 'fake-acp-server' })
       await sendUpdate({
         sessionUpdate: 'agent_message_chunk',
         content: { type: 'text', text: process.env.FAKE_ACP_RESPONSE ?? '' },
+      })
+      return { stopReason: 'end_turn' }
+    }
+
+    if (scenario === 'retry-json') {
+      const text = promptCount === 1
+        ? '{"ok":false}'
+        : '{"ok":true}'
+      await sendUpdate({
+        sessionUpdate: 'agent_message_chunk',
+        content: { type: 'text', text },
       })
       return { stopReason: 'end_turn' }
     }

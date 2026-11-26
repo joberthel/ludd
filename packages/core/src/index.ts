@@ -59,6 +59,7 @@ export {
   executeAgentStep,
   formatRetryPrompt,
   type RehydratedAgentState,
+  resolveConfiguredSessionId,
   validateStepOutput,
 } from './runtime/agent-executor.js'
 export {

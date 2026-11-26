@@ -4,6 +4,7 @@ import { StepOutputValidationError } from '../../errors/step-output-validation-e
 import {
   createAgentStepOutput,
   formatRetryPrompt,
+  resolveConfiguredSessionId,
   validateStepOutput,
 } from '../agent-executor.js'
 
@@ -55,5 +56,21 @@ describe('formatRetryPrompt helper', () => {
     expect(formatted).toContain('- [user.name]: Required')
     expect(formatted).toContain('- [(root)]: Root invalid')
     expect(formatted).toContain('original instruction')
+  })
+})
+
+describe('resolveConfiguredSessionId helper', () => {
+  it('trims static/dynamic sessionId values and returns undefined when absent or blank', async () => {
+    const dummyCtx = {
+      runId: 'r-1',
+      steps: {},
+      step: { id: 's-1', output: undefined, attempt: 1 },
+      matrix: undefined,
+      artifacts: {} as never,
+    }
+    expect(await resolveConfiguredSessionId(undefined, dummyCtx)).toBeUndefined()
+    expect(await resolveConfiguredSessionId('  ', dummyCtx)).toBeUndefined()
+    expect(await resolveConfiguredSessionId(() => undefined, dummyCtx)).toBeUndefined()
+    expect(await resolveConfiguredSessionId('  sess-42  ', dummyCtx)).toBe('sess-42')
   })
 })

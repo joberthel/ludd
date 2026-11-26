@@ -5,6 +5,7 @@ import type {
 } from '@luddjs/core'
 import type { AcpMcpBridgeConfig } from './acp-mcp.js'
 import type { AcpPermissionMode } from './acp-permissions.js'
+import { resolveConfiguredSessionId } from '@luddjs/core'
 import { resolveAgentAccessMode } from './acp-permissions.js'
 import { DEFAULT_SHUTDOWN_TIMEOUT_MS, executeAcpTurn } from './acp-process.js'
 
@@ -85,13 +86,19 @@ export function acpAgent<
     mode: resolveAgentAccessMode(permissionMode),
     prompt: config.prompt ?? '',
     sessionId: config.sessionId,
-    executeTurn: async input => executeAcpTurn<TOutput>({
-      command,
-      args,
-      env,
-      permissionMode,
-      shutdownTimeoutMs,
-      mcpBridge,
-    }, input),
+    executeTurn: async (input) => {
+      const ctx = input.ctx as TContext
+      const previousSessionId = await resolveConfiguredSessionId(input.previousSessionId, ctx)
+        ?? await resolveConfiguredSessionId(config.sessionId, ctx)
+      return executeAcpTurn<TOutput>({
+        command,
+        args,
+        env,
+        permissionMode,
+        shutdownTimeoutMs,
+        mcpBridge,
+        previousSessionId,
+      }, input)
+    },
   }
 }

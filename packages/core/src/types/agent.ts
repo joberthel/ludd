@@ -14,6 +14,8 @@ export interface AgentTurnInput<TContext extends StepContext<any, any, any, any>
   stepId: string
   prompt: string
   sessionId: string
+  /** Existing session ID to resume when continuing a previous turn, retrying, or rehydrating. */
+  previousSessionId?: string
   attempt: number
   mode: AgentAccessMode
   dangerMode?: boolean

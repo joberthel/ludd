@@ -2,6 +2,7 @@ import type {
   AcpAgentConfig,
   AcpMcpBridgeConfig,
   AcpPermissionMode,
+  AcpPresetOptions,
   AcpStdioMcpServerConfig,
   AgentMcpConnection,
   AgentStreamEvent,
@@ -11,8 +12,11 @@ import { describe, expect, it } from 'vitest'
 import * as agents from './index.js'
 
 describe('@luddjs/agents public exports', () => {
-  it('exports acpAgent, mockAgent factories and stream utilities', () => {
+  it('exports acpAgent, ACP presets, mockAgent factories and stream utilities', () => {
     expect(typeof agents.acpAgent).toBe('function')
+    expect(typeof agents.claudeAcp).toBe('function')
+    expect(typeof agents.codexAcp).toBe('function')
+    expect(typeof agents.agyAcp).toBe('function')
     expect(typeof agents.mockAgent).toBe('function')
     expect(typeof agents.appendStreamEvent).toBe('function')
     expect(typeof agents.readStreamEvents).toBe('function')
@@ -28,6 +32,16 @@ describe('@luddjs/agents public exports', () => {
     const acpConfig: AcpAgentConfig = {
       command: 'fake-acp',
       permissionMode,
+      mcpBridge,
+    }
+    const presetOptions: AcpPresetOptions = {
+      command: 'custom-claude',
+      args: ['--acp', '--verbose'],
+      env: { FOO: 'bar' },
+      permissionMode,
+      prompt: 'run',
+      sessionId: 'sess-preset',
+      shutdownTimeoutMs: 1000,
       mcpBridge,
     }
     const stdioMcp: AcpStdioMcpServerConfig = {
@@ -55,6 +69,7 @@ describe('@luddjs/agents public exports', () => {
     }
 
     expect(acpConfig.permissionMode).toBe('acceptEdits')
+    expect(presetOptions.command).toBe('custom-claude')
     expect(stdioMcp.name).toBe('ludd')
     expect(mcp.url).toBe('http://127.0.0.1:4000/mcp')
     expect(streamEvent.eventType).toBe('thought')

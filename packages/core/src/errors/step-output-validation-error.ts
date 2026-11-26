@@ -24,12 +24,16 @@ export class StepOutputValidationError extends Error {
   readonly stepId: string
   readonly rawOutput: unknown
   readonly issues: z.core.$ZodIssue[]
+  readonly sessionId?: string
 
-  constructor(stepId: string, rawOutput: unknown, issues: z.core.$ZodIssue[]) {
+  constructor(stepId: string, rawOutput: unknown, issues: z.core.$ZodIssue[], sessionId?: string) {
     super(formatErrorMessage(stepId, issues))
     this.name = 'StepOutputValidationError'
     this.stepId = stepId
     this.rawOutput = rawOutput
     this.issues = issues
+    if (sessionId !== undefined) {
+      this.sessionId = sessionId
+    }
   }
 }

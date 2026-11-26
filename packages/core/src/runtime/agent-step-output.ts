@@ -1,6 +1,5 @@
 import type { DynamicProperty, StepContext } from '../types/context.js'
 import type { StepConfig } from '../types/harness.js'
-import { randomUUID } from 'node:crypto'
 import { StepOutputValidationError } from '../errors/step-output-validation-error.js'
 import { resolveDynamicProperty } from '../utils/resolve-dynamic-property.js'
 
@@ -26,10 +25,10 @@ export function createAgentStepOutput(validatedOutput: unknown, sessionId: strin
     : { value: validatedOutput, sessionId }
 }
 
-export async function resolveSessionId(
-  sessionIdProp: DynamicProperty<string | undefined> | undefined,
-  ctx: StepContext,
-): Promise<string> {
+export async function resolveConfiguredSessionId<TContext = StepContext>(
+  sessionIdProp: DynamicProperty<string | undefined, TContext> | undefined,
+  ctx: TContext,
+): Promise<string | undefined> {
   if (sessionIdProp !== undefined) {
     const raw = await resolveDynamicProperty(sessionIdProp, ctx)
     const trimmed = raw?.trim()
@@ -37,5 +36,5 @@ export async function resolveSessionId(
       return trimmed
     }
   }
-  return `session-${randomUUID()}`
+  return undefined
 }
