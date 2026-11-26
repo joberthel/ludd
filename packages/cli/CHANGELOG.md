@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/joberthel/ludd/compare/cli-v0.1.1...cli-v0.2.0) (2026-11-26)
+
+
+### Features
+
+* implement stdio MCP bridge (ludd mcp-bridge) ([584f3a7](https://github.com/joberthel/ludd/commit/584f3a75065f45a4e976adef4788d96e8190f095)), closes [#94](https://github.com/joberthel/ludd/issues/94)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @luddjs/agents bumped to 0.2.0
+    * @luddjs/core bumped to 0.2.0
+    * @luddjs/guardrails bumped to 0.1.2
+
 ## [0.1.1](https://github.com/joberthel/ludd/compare/cli-v0.1.0...cli-v0.1.1) (2026-11-22)
 
 

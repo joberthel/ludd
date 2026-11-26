@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0](https://github.com/joberthel/ludd/compare/core-v0.1.1...core-v0.2.0) (2026-11-26)
+
+
+### Features
+
+* add ACP session resumption and presets ([622bb70](https://github.com/joberthel/ludd/commit/622bb70d79a418a2a345578475d223dc6daa4061)), closes [#96](https://github.com/joberthel/ludd/issues/96)
+* **core:** add explicit host execution config and thin host spawn ([6febf3b](https://github.com/joberthel/ludd/commit/6febf3bf0ff11fe92b3e7c019487885bfdba8390)), closes [#100](https://github.com/joberthel/ludd/issues/100)
+* implement stdio MCP bridge (ludd mcp-bridge) ([584f3a7](https://github.com/joberthel/ludd/commit/584f3a75065f45a4e976adef4788d96e8190f095)), closes [#94](https://github.com/joberthel/ludd/issues/94)
+
 ## [0.1.1](https://github.com/joberthel/ludd/compare/core-v0.1.0...core-v0.1.1) (2026-11-22)
 
 
